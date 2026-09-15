@@ -1,7 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 streamlit
 gigachat==0.2.1
 chromadb
 sentence-transformers
-torch==2.6.0
+torch==2.6.0+cpu
 curl_cffi
 beautifulsoup4
