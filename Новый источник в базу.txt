@@ -1,0 +1,28 @@
+Как добавить новый источник
+Пример: хочешь добавить страницу про эльдарских Арлекинов.
+
+Открой sources_config.py.
+
+Найди блок "eldar": { ... }.
+
+Добавь новый ключ:
+
+python
+"harlequins_extra": {
+    "source": "lexicanum",
+    "urls": [
+        "https://wh40k.lexicanum.com/wiki/Harlequin",
+    ],
+    "folder": "eldar",
+    "name": "harlequins_extra",
+    "description": "Дополнение по Арлекинам.",
+},
+Сохрани.
+
+Запусти: python scraper.py --key eldar.harlequins_extra
+
+Запусти: python build_embeddings.py
+
+Перезапусти сайт.
+
+Всё. Никакого кода.

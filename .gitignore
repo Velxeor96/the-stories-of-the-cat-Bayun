@@ -1,0 +1,24 @@
+# === СЕКРЕТЫ (НЕ ПОПАДУТ В GITHUB) ===
+.streamlit/secrets.toml
+API ключ.txt
+*.key
+
+# === БАЗА ДАННЫХ (СЛИШКОМ БОЛЬШАЯ) ===
+chroma_db/
+data_backup/
+
+# === ЛОКАЛЬНЫЕ ПЕРСОНАЖИ (не нужны в репо) ===
+characters/
+
+# === ВРЕМЕННЫЕ ФАЙЛЫ ===
+__pycache__/
+*.py[cod]
+*.log
+tests/results_*.json
+tests/report_*.txt
+
+# === СИСТЕМНОЕ ===
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/��ਭ�/ 
