@@ -114,7 +114,7 @@ THEMES = {
         "heading": "#d0ffa0", "link": "#a8ff60",
     },
     "orks": {
-        "label": "🪖 Орки",
+        "label": "💪 Орки",
         "bg_deep": "#161a20", "bg_mid": "#1d222c", "bg_light": "#262d3a",
         "bg_card": "#222834", "bg_chat": "#262d3a",
         "accent": "#b5d334", "accent_dim": "#6b7d3a", "accent_bright": "#d4ec5a",
@@ -248,8 +248,6 @@ section.main > div,
 /* =====================================================
    7. TERMINAL UI — панели, скобки, свечение
    ===================================================== */
-
-/* --- Скошенная панель — стиль game-UI --- */
 [data-testid="stVerticalBlockBorderWrapper"] {
     position: relative;
     background: linear-gradient(135deg,
@@ -274,8 +272,6 @@ section.main > div,
                 0 0 22px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent),
                 0 6px 24px rgba(0,0,0,0.55);
 }
-
-/* --- Угловые скобки для панелей --- */
 [data-testid="stVerticalBlockBorderWrapper"]::before {
     content: '';
     position: absolute;
@@ -300,8 +296,6 @@ section.main > div,
 /* =====================================================
    8. ТЕРМИНАЛ — статус-бар, hero, заголовки секций
    ===================================================== */
-
-/* --- Статус-бар --- */
 .terminal-status {
     display: flex;
     justify-content: space-between;
@@ -321,9 +315,7 @@ section.main > div,
         transparent 100%);
 }
 .terminal-status span { white-space: nowrap; }
-.terminal-status .dot { color: var(--accent, #c9a961); margin: 0 8px; }
 
-/* --- Hero-панель --- */
 .hero-panel {
     position: relative;
     padding: 28px 36px 26px 36px;
@@ -368,7 +360,6 @@ section.main > div,
     max-width: 200px;
 }
 
-/* --- Заголовок секции: [ 01 ]  TITLE  ──────── --- */
 .section-header {
     display: flex;
     align-items: center;
@@ -573,6 +564,7 @@ h4, h5, h6 {
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] > * { color: var(--ink) !important; }
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] * { color: var(--ink-dim) !important; }
 
+/* === КНОПКИ === */
 .stButton > button, [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"] {
     letter-spacing: 0.05em;
     font-weight: 600 !important;
@@ -654,6 +646,7 @@ h4, h5, h6 {
     color: var(--ink) !important;
 }
 
+/* === CHAT MESSAGE === */
 [data-testid="stChatMessage"] {
     background: var(--bg-chat) !important;
     border: 1px solid var(--accent-dim) !important;
@@ -676,23 +669,60 @@ h4, h5, h6 {
     color: var(--ink-dim) !important;
 }
 
-[data-testid="stChatInput"] {
+/* === CHAT INPUT — усиленные селекторы === */
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div,
+[data-testid="stChatInput"] > div > div > div,
+.stChatInput,
+.stChatInputContainer,
+.stChatInputContainer > div {
     background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
+    border-color: var(--accent-dim) !important;
+    box-shadow: none !important;
+}
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+.stChatInput {
     border: 1px solid var(--accent-dim) !important;
     border-radius: 6px !important;
 }
-[data-testid="stChatInput"] textarea {
+[data-testid="stChatInput"] [data-baseweb="textarea"],
+[data-testid="stChatInput"] [data-baseweb="base-input"],
+[data-testid="stChatInput"] [data-baseweb="textarea"] > div,
+[data-testid="stChatInput"] [data-baseweb="base-input"] > div {
     background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+}
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInputTextArea"],
+.stChatInput textarea,
+textarea[data-testid="stChatInputTextArea"] {
+    background: transparent !important;
+    background-color: transparent !important;
     color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
     caret-color: var(--accent) !important;
     font-size: clamp(1rem, 0.95rem + 0.25vw, 1.15rem) !important;
 }
-[data-testid="stChatInput"] textarea::placeholder {
+[data-testid="stChatInput"] textarea::placeholder,
+[data-testid="stChatInputTextArea"]::placeholder,
+.stChatInput textarea::placeholder,
+textarea[data-testid="stChatInputTextArea"]::placeholder {
     color: var(--ink-faint) !important;
+    -webkit-text-fill-color: var(--ink-faint) !important;
+    opacity: 1 !important;
     font-style: italic;
 }
-[data-testid="stChatInput"] button { color: var(--accent) !important; background: transparent !important; }
+[data-testid="stChatInput"] button,
+[data-testid="stChatInputSubmitButton"] {
+    color: var(--accent) !important;
+    background: transparent !important;
+}
 
+/* === ALERTS === */
 [data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
 [data-testid="stAlert"] * { font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important; }
 [data-testid="stAlert"][kind="success"] * { color: #0a2e0a !important; }
@@ -700,54 +730,140 @@ h4, h5, h6 {
 [data-testid="stAlert"][kind="info"] * { color: #0a1a2e !important; }
 [data-testid="stAlert"][kind="warning"] * { color: #2e220a !important; }
 
+/* === TEXT INPUT / TEXTAREA === */
 .stTextInput input, .stTextArea textarea,
 [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea {
     background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
     color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
     border: 1px solid var(--accent-dim) !important;
     border-radius: 4px !important;
     font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
+    caret-color: var(--accent) !important;
 }
-.stTextInput input:focus, .stTextArea textarea:focus {
+.stTextInput input:focus, .stTextArea textarea:focus,
+[data-testid="stTextInput"] input:focus, [data-testid="stTextArea"] textarea:focus {
     border-color: var(--accent) !important;
     box-shadow: 0 0 0 1px var(--accent) !important;
+    outline: none !important;
 }
-.stTextInput input::placeholder, .stTextArea textarea::placeholder {
+.stTextInput input::placeholder, .stTextArea textarea::placeholder,
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder {
     color: var(--ink-faint) !important;
+    -webkit-text-fill-color: var(--ink-faint) !important;
+    opacity: 1 !important;
     font-style: italic;
 }
 [data-testid="stWidgetLabel"] > div,
-[data-testid="stWidgetLabel"] > div > div {
+[data-testid="stWidgetLabel"] > div > div,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] label {
     color: var(--accent) !important;
     font-size: clamp(0.88rem, 0.85rem + 0.1vw, 1rem) !important;
     text-transform: uppercase;
     letter-spacing: 0.1em;
 }
 
-[data-baseweb="select"] input { color: var(--ink) !important; }
-[data-baseweb="select"] [role="button"] { color: var(--ink) !important; background: var(--bg-light) !important; }
-[data-baseweb="popover"] { background: var(--bg-light) !important; }
-[data-baseweb="popover"] * { color: var(--ink) !important; background: transparent !important; }
-[data-baseweb="menu"] { background: var(--bg-light) !important; }
-[data-baseweb="menu"] * { color: var(--ink) !important; }
-[data-testid="stRadio"] label p { color: var(--ink) !important; }
-[data-testid="stCheckbox"] label p { color: var(--ink) !important; }
+/* === SELECTBOX — усиленные селекторы === */
+[data-testid="stSelectbox"] > div,
+[data-testid="stSelectbox"] > div > div,
+[data-testid="stSelectbox"] [data-baseweb="select"],
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
+[data-baseweb="select"] > div,
+[data-baseweb="select"] > div > div,
+[data-baseweb="select"] [role="button"],
+[data-baseweb="select"] [role="combobox"] {
+    background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
+    color: var(--ink) !important;
+    border-color: var(--accent-dim) !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"],
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-baseweb="select"] > div {
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 4px !important;
+}
+[data-testid="stSelectbox"] input,
+[data-baseweb="select"] input {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    caret-color: var(--accent) !important;
+}
+[data-testid="stSelectbox"] input::placeholder,
+[data-baseweb="select"] input::placeholder {
+    color: var(--ink-faint) !important;
+    -webkit-text-fill-color: var(--ink-faint) !important;
+    opacity: 1 !important;
+}
+[data-testid="stSelectbox"] svg,
+[data-baseweb="select"] svg {
+    fill: var(--accent) !important;
+    color: var(--accent) !important;
+}
 
-[data-testid="stFileUploader"] section {
+/* Dropdown-меню */
+[data-baseweb="popover"],
+[data-baseweb="popover"] > div,
+[data-baseweb="popover"] > div > div,
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] ul,
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="menu"],
+[data-baseweb="menu"] > div,
+[data-baseweb="menu"] ul,
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] [role="option"] {
+    background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
+    color: var(--ink) !important;
+    border-color: var(--accent-dim) !important;
+}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="popover"] [role="option"][aria-selected="true"],
+[data-baseweb="popover"] [role="option"][aria-selected="true"] *,
+[data-baseweb="menu"] [role="option"]:hover,
+[data-baseweb="menu"] [role="option"][aria-selected="true"],
+[data-baseweb="menu"] [role="option"][aria-selected="true"] * {
+    background: var(--accent-dim) !important;
+    background-color: var(--accent-dim) !important;
+    color: var(--accent-bright) !important;
+}
+
+/* === RADIO / CHECKBOX === */
+[data-testid="stRadio"] label p,
+[data-testid="stRadio"] label * { color: var(--ink) !important; }
+[data-testid="stCheckbox"] label p,
+[data-testid="stCheckbox"] label * { color: var(--ink) !important; }
+
+/* === FILE UPLOADER === */
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploaderDropzone"] {
     background: color-mix(in srgb, var(--bg-mid) 80%, transparent) !important;
     border: 1px dashed var(--accent-dim) !important;
     border-radius: 4px !important;
 }
-[data-testid="stFileUploader"] section * { color: var(--ink) !important; }
+[data-testid="stFileUploader"] section *,
+[data-testid="stFileUploaderDropzone"] * { color: var(--ink) !important; }
 
+/* === PROGRESS === */
 [data-testid="stProgress"] > div > div > div {
     background: linear-gradient(90deg, var(--accent-dim), var(--accent)) !important;
 }
 
+/* === SCROLLBAR === */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg-deep); }
 ::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* === LINKS / HR === */
 a { color: var(--link) !important; }
 a:hover { color: var(--accent-bright) !important; }
 hr { border-color: var(--accent-dim) !important; margin: 14px 0 !important; }
@@ -1514,12 +1630,10 @@ def render_start_screen(localS):
     render_status_bar()
     render_hero_panel()
 
-    # Селектор темы под hero, справа
     col_l, col_theme = st.columns([3, 1])
     with col_theme:
         render_theme_selector(localS, location="main")
 
-    # ---- 01 · НОВАЯ ИГРА ----
     render_section_header("01", "НОВАЯ ИГРА")
 
     col1, col2 = st.columns(2)
@@ -1580,7 +1694,6 @@ def render_start_screen(localS):
                 except Exception as e:
                     st.error(f"Ошибка чтения файла: {e}")
 
-    # ---- 02 · ПЕРСОНАЖИ ----
     chars = cc.list_characters()
     meta = f"{len(chars)} ЗАПИСЬ" if chars else "ПУСТО"
     render_section_header("02", "ПЕРСОНАЖИ", meta)
@@ -1645,7 +1758,6 @@ def render_start_screen(localS):
                         cc.delete_chat_history(c["name"])
                         st.rerun()
 
-    # ---- ХВОСТ ----
     st.write("")
     st.write("")
     col_a, col_b, col_c = st.columns([3, 2, 3])
