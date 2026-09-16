@@ -22,19 +22,14 @@ from knowledge import KnowledgeBase
 import factions_data
 import character_creation as cc
 
-from init_db import ensure_db
-
 
 # ============================================================
 # НАСТРОЙКИ
 # ============================================================
-# Ключ GigaChat читается из .streamlit/secrets.toml (локально)
-# или из st.secrets (Streamlit Cloud).
-# Fallback — для служебных скриптов, запускаемых без Streamlit-контекста.
 try:
     API_KEY = st.secrets["GIGACHAT_API_KEY"]
 except Exception:
-    API_KEY = "MDFhMDk2NGctZGQ0Yi03NGJiLTkzNWEtODgzMWEwNjZjZDYzOjBkNDViZDZmLTYxYzQtNGYyNC1hYzFlLTczZGY5OWI5MDZiMw=="
+    API_KEY = "MDFhMDk2NGMtZGQ0Yi03NGJiLTkzNWEtODgzMWEwNjZjZDYzOjBkNDViZDZmLTYxYzQtNGYyNC1hYzFlLTczZGY5OWI5MDZiMw=="
 
 MODEL = "GigaChat-2-Pro"
 MAX_FUNCTION_ITERATIONS = 15
@@ -728,11 +723,6 @@ def render_chat():
 # ГЛАВНАЯ
 # ============================================================
 def main():
-    # Один раз при старте проверяем / собираем векторную базу
-    if "db_ready" not in st.session_state:
-        ensure_db()
-        st.session_state.db_ready = True
-
     if "character" not in st.session_state: st.session_state.character = None
     if "in_wizard" not in st.session_state: st.session_state.in_wizard = False
     if "show_last_request" not in st.session_state: st.session_state.show_last_request = False
