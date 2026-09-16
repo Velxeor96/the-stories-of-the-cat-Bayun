@@ -1,12 +1,5 @@
 # character_creation.py
-# Логика создания персонажа: генерация характеристик, сборка листа через LLM+RAG,
-# сохранение/загрузка JSON.
-# Использует модель GigaChat-2-Pro.
-#
-# ВАЖНО:
-# - armour, wounds, fate_points, talents, weapons, equipment ВСЕГДА берутся из fallback.
-# - GigaChat генерирует только skills и background (он тут справляется лучше).
-# - Есть починка JSON и ретрай при ошибке парсинга.
+# Логика создания персонажа: генерация, сборка листа, сохранение, история чата.
 
 import os
 import json
@@ -18,6 +11,11 @@ import streamlit as st
 
 from gigachat import GigaChat
 from gigachat.models import Chat, Messages, MessagesRole
+
+from fallbacks_archetypes import FALLBACK_BY_ARCHETYPE
+from fallbacks_subfactions import FALLBACK_BY_SUBFACTION, DEFAULT_FALLBACK, ULTIMATE_FALLBACK
+from fallbacks_ships import SHIP_BY_SUBFACTION, DEFAULT_SHIP
+from fallbacks_currencies import CURRENCY_BY_FACTION, DEFAULT_CURRENCY
 
 
 # ============================================================
@@ -31,19 +29,14 @@ except Exception:
 MODEL_NAME = "GigaChat-2-Pro"
 
 CHARACTERS_DIR = "characters"
+CHAT_SUFFIX = ".chat.json"
 
 CHARACTERISTICS = ["WS", "BS", "S", "T", "Ag", "Int", "Per", "WP", "Fel"]
 
 CHARACTERISTIC_NAMES_RU = {
-    "WS": "Ближний бой (WS)",
-    "BS": "Дальний бой (BS)",
-    "S":  "Сила (S)",
-    "T":  "Выносливость (T)",
-    "Ag": "Ловкость (Ag)",
-    "Int":"Интеллект (Int)",
-    "Per":"Восприятие (Per)",
-    "WP": "Сила воли (WP)",
-    "Fel":"Обаяние (Fel)",
+    "WS": "Ближний бой (WS)", "BS": "Дальний бой (BS)", "S": "Сила (S)",
+    "T": "Выносливость (T)", "Ag": "Ловкость (Ag)", "Int": "Интеллект (Int)",
+    "Per": "Восприятие (Per)", "WP": "Сила воли (WP)", "Fel": "Обаяние (Fel)",
 }
 
 
@@ -73,17 +66,20 @@ def char_bonus(value: int) -> int:
 
 
 # ============================================================
-# СОХРАНЕНИЕ / ЗАГРУЗКА
+# ФАЙЛОВАЯ СИСТЕМА
 # ============================================================
 def ensure_characters_dir():
     os.makedirs(CHARACTERS_DIR, exist_ok=True)
 
 
+def _safe_character_name(name: str) -> str:
+    safe = "".join(c for c in str(name) if c.isalnum() or c in "-_ ").strip()
+    return safe or "unnamed"
+
+
 def save_character(character: dict):
     ensure_characters_dir()
-    safe_name = "".join(c for c in character["name"] if c.isalnum() or c in "-_ ").strip()
-    if not safe_name:
-        safe_name = "unnamed"
+    safe_name = _safe_character_name(character.get("name", "unnamed"))
     path = os.path.join(CHARACTERS_DIR, safe_name + ".json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(character, f, ensure_ascii=False, indent=2)
@@ -95,6 +91,8 @@ def list_characters() -> list:
     items = []
     for fname in sorted(os.listdir(CHARACTERS_DIR)):
         if not fname.endswith(".json"):
+            continue
+        if fname.endswith(CHAT_SUFFIX):
             continue
         path = os.path.join(CHARACTERS_DIR, fname)
         try:
@@ -125,297 +123,130 @@ def delete_character(path: str):
 
 
 # ============================================================
+# ИСТОРИЯ ЧАТА
+# ============================================================
+def chat_history_path(character_name: str) -> str:
+    ensure_characters_dir()
+    return os.path.join(CHARACTERS_DIR, _safe_character_name(character_name) + CHAT_SUFFIX)
+
+
+def save_chat_history(character_name: str, chat_history: list) -> str:
+    path = chat_history_path(character_name)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({
+            "character_name": character_name,
+            "updated_at": datetime.now().isoformat(),
+            "messages": chat_history,
+        }, f, ensure_ascii=False, indent=2)
+    return path
+
+
+def load_chat_history(character_name: str) -> list:
+    path = chat_history_path(character_name)
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("messages", [])
+    except Exception:
+        return []
+
+
+def delete_chat_history(character_name: str):
+    path = chat_history_path(character_name)
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+
+# ============================================================
 # ПСАЙКЕРЫ
 # ============================================================
 PSYKER_ARCHETYPES = {
-    "astropath":   2,
-    "sorcerer":    2,
-    "seer":        2,
-    "dreamer":     2,
-    "worldsinger": 2,
-    "shadowseer":  2,
-    "weirdboy":    1,
-    "navigator":   1,
+    "astropath": 2, "sorcerer": 2, "seer": 2, "dreamer": 2,
+    "worldsinger": 2, "shadowseer": 2, "weirdboy": 1, "navigator": 1,
 }
 
 PSYKER_PSYCHIC_POWERS = {
-    "astropath":   ["Мысленная связь", "Астро-телепатия", "Внушение"],
-    "sorcerer":    ["Разрушитель", "Ободрение", "Усиление"],
-    "seer":        ["Фортуна", "Боевая Судьба", "Погибель"],
-    "dreamer":     ["Режущий Свет", "Щит Духа", "Сканирование Души"],
-    "worldsinger": ["Щит Духа", "Ободрение", "Сокрытие"],
-    "shadowseer":  ["Сокрытие", "Палач", "Усиление"],
-    "weirdboy":    ["Da Jump", "Fists of Gork", "Warpath"],
-    "navigator":   ["Распахнутый взор", "Взгляд в бездну"],
+    "astropath":     ["Мысленная связь", "Астро-телепатия", "Внушение"],
+    "sorcerer":      ["Разрушитель", "Ободрение", "Усиление"],
+    "seer":          ["Фортуна", "Боевая Судьба", "Погибель"],
+    "dreamer":       ["Режущий Свет", "Щит Духа", "Сканирование Души"],
+    "worldsinger":   ["Щит Духа", "Ободрение", "Сокрытие"],
+    "shadowseer":    ["Сокрытие", "Палач", "Усиление"],
+    "weirdboy":      ["Da Jump", "Fists of Gork", "Warpath"],
+    "navigator":     ["Распахнутый взор", "Взгляд в бездну"],
+    "thousand_sons": ["Психический удар", "Взрыв разума", "Предвидение"],
+    "magus":         ["Телепатия", "Доминирование", "Ментальный клинок"],
+    "bonesinger":    ["Создание кости-призрака", "Восстановление", "Защита"],
+    "stonesinger":   ["Резонанс", "Защита духа", "Песнь Мира"],
+    "healer":        ["Исцеление", "Восстановление", "Очищение"],
 }
 
 
 # ============================================================
-# FALLBACK-ДАННЫЕ ПО СУБФРАКЦИЯМ
-# ============================================================
-FALLBACK_BY_SUBFACTION = {
-
-    "rogue_trader": {
-        "armour": {"head": 4, "body": 4, "arms": 3, "legs": 3, "notes": "Флак-броня с нагрудником"},
-        "wounds": 12, "fate": 3,
-        "talents": ["Обострённые чувства (Зрение)", "Молниеносные рефлексы", "Сопротивление (Страх)", "Аура власти"],
-        "weapons": [
-            {"name": "Лазпистолет", "stats": "30м, О/3/-, 1d10+2 E, Пробой 0", "weight": "1.5 кг", "notes": "Надёжное"},
-            {"name": "Силовой меч", "stats": "Ближний бой, 1d10+5 E, Пробой 6", "weight": "3 кг", "notes": "Сбалансированное, Силовое поле"},
-        ],
-        "equipment": ["Плащ-хамелеолин", "Вокс-кастер", "Инфопланшет", "Медальон династии"],
-    },
-
-    "space_marine": {
-        "armour": {"head": 8, "body": 8, "arms": 8, "legs": 8, "notes": "Силовая броня Астартес, Марк VII"},
-        "wounds": 22, "fate": 3,
-        "talents": ["Обострённые чувства (Зрение, Слух)", "Амбидекстрия", "Сопротивление (Страх)", "Сопротивление (Психика)", "Стальные нервы", "Быстрое выхватывание"],
-        "weapons": [
-            {"name": "Болтер Астартес", "stats": "100м, О/3/-, 1d10+9 X, Пробой 5", "weight": "7 кг", "notes": "Разрывающее"},
-            {"name": "Боевой нож Астартес", "stats": "Ближний бой, 1d10+2 R, Пробой 0", "weight": "1 кг", "notes": "—"},
-        ],
-        "equipment": ["Силовая броня Марк VII", "4 магазина к болтеру", "3 фраг-гранаты", "3 крак-гранаты", "Ремонтная паста"],
-    },
-
-    "imperial_guard": {
-        "armour": {"head": 2, "body": 4, "arms": 2, "legs": 2, "notes": "Флак-броня Имперской Гвардии"},
-        "wounds": 13, "fate": 2,
-        "talents": ["Молниеносные рефлексы", "Сопротивление (Страх)", "Крепкое телосложение"],
-        "weapons": [
-            {"name": "Лазган", "stats": "100м, О/3/-, 1d10+3 E, Пробой 0", "weight": "2 кг", "notes": "Надёжное"},
-            {"name": "Боевой нож", "stats": "Ближний бой, 1d10+2 R, Пробой 0", "weight": "1 кг", "notes": "—"},
-        ],
-        "equipment": ["Флак-броня", "Шлем с вокс-связью", "3 осколочных гранаты", "Фляга"],
-    },
-
-    "mechanicus": {
-        "armour": {"head": 5, "body": 6, "arms": 5, "legs": 5, "notes": "Карапасная броня Механикус с имплантами"},
-        "wounds": 13, "fate": 2,
-        "talents": ["Технический удар", "Ремесленник", "Полное воспоминание", "Железная воля"],
-        "weapons": [
-            {"name": "Силовая секира", "stats": "Ближний бой, 1d10+7 E, Пробой 8", "weight": "6 кг", "notes": "Силовое поле, Медленное"},
-            {"name": "Лазпистолет", "stats": "30м, О/-/-, 1d10+2 E, Пробой 0", "weight": "1 кг", "notes": "Надёжное"},
-        ],
-        "equipment": ["Роба Механикус", "Механодендрит (утилитарный)", "Набор инструментов", "Дата-планшет", "Фиал Священного Машинного Масла"],
-    },
-
-    "sororitas": {
-        "armour": {"head": 8, "body": 8, "arms": 8, "legs": 8, "notes": "Силовая броня Сороритас"},
-        "wounds": 14, "fate": 3,
-        "talents": ["Чистая вера", "Литания Ненависти", "Сопротивление (Страх)", "Сопротивление (Психика)"],
-        "weapons": [
-            {"name": "Болтер Годвин-Де'аз", "stats": "100м, О/3/-, 1d10+9 X, Пробой 5", "weight": "7 кг", "notes": "Разрывающее"},
-            {"name": "Цепной меч", "stats": "Ближний бой, 1d10+3 R, Пробой 3", "weight": "6 кг", "notes": "Цепное, Разрывающее"},
-        ],
-        "equipment": ["Силовая броня Сороритас", "Розарий", "3 фраг-гранаты", "Молитвенник"],
-    },
-
-    "arbites": {
-        "armour": {"head": 6, "body": 7, "arms": 6, "legs": 6, "notes": "Карапасная броня Адептус Арбитрес"},
-        "wounds": 13, "fate": 2,
-        "talents": ["Сопротивление (Страх)", "Железная воля", "Точный выстрел", "Непреклонная воля"],
-        "weapons": [
-            {"name": "Боевой дробовик", "stats": "30м, О/3/-, 1d10+4 I, Пробой 0", "weight": "6 кг", "notes": "Надёжное, Разброс"},
-            {"name": "Силовой молот", "stats": "Ближний бой, 1d10+5 E, Пробой 6", "weight": "5 кг", "notes": "Силовое поле, Шоковое (2)"},
-        ],
-        "equipment": ["Карапасная броня", "Щит Адептус Арбитрес", "Наручники", "Печать Арбитрес"],
-    },
-
-    "chaos_marine": {
-        "armour": {"head": 8, "body": 9, "arms": 8, "legs": 8, "notes": "Силовая броня Космодесанта Хаоса, осквернённая"},
-        "wounds": 22, "fate": 3,
-        "talents": ["Обострённые чувства (Зрение, Слух)", "Амбидекстрия", "Сопротивление (Страх)", "Мастер боя", "Стальные нервы", "Быстрое выхватывание"],
-        "weapons": [
-            {"name": "Болтер Хаоса", "stats": "100м, О/3/-, 1d10+9 X, Пробой 5", "weight": "7 кг", "notes": "Разрывающее, Осквернённое"},
-            {"name": "Цепной топор", "stats": "Ближний бой, 1d10+5 R, Пробой 3", "weight": "8 кг", "notes": "Цепное, Разрывающее"},
-        ],
-        "equipment": ["Силовая броня Хаоса", "4 магазина к болтеру", "Трофейный череп", "Метка Хаоса"],
-    },
-
-    "dark_mechanicum": {
-        "armour": {"head": 6, "body": 7, "arms": 6, "legs": 6, "notes": "Тёмная броня Тёмного Механикума"},
-        "wounds": 13, "fate": 2,
-        "talents": ["Технический удар", "Ремесленник", "Запретные знания (Варп)", "Железная воля"],
-        "weapons": [
-            {"name": "Демонический механодендрит", "stats": "Ближний бой, 1d10+5 E, Пробой 5", "weight": "3 кг", "notes": "Силовое поле"},
-            {"name": "Плазменный пистолет", "stats": "30м, О/-/-, 2d10+6 E, Пробой 5", "weight": "4 кг", "notes": "Опасное (Overheats)"},
-        ],
-        "equipment": ["Роба Тёмного Механикума", "Механодендрит (оружие)", "Набор запретных инструментов", "Дата-планшет"],
-    },
-
-    "cultist": {
-        "armour": {"head": 3, "body": 4, "arms": 3, "legs": 3, "notes": "Осквернённая флак-броня"},
-        "wounds": 11, "fate": 2,
-        "talents": ["Сопротивление (Страх)", "Фанатик", "Мастер боя", "Железная воля"],
-        "weapons": [
-            {"name": "Автопистолет", "stats": "30м, О/3/-, 1d10+2 I, Пробой 0", "weight": "1.5 кг", "notes": "—"},
-            {"name": "Жертвенный кинжал", "stats": "Ближний бой, 1d10+2 R, Пробой 0", "weight": "1 кг", "notes": "—"},
-        ],
-        "equipment": ["Осквернённая броня", "Символ бога Хаоса", "Свечи для ритуала", "Книга запретных молитв"],
-    },
-
-    "asuryani": {
-        "armour": {"head": 6, "body": 6, "arms": 6, "legs": 6, "notes": "Сетчатый бодисьют эльдар"},
-        "wounds": 14, "fate": 2,
-        "talents": ["Обострённые чувства (Зрение, Слух)", "Тёмное зрение", "Спринт", "Падение с высоты", "Сверхъестественная ловкость (x2)"],
-        "weapons": [
-            {"name": "Сюрикен-катапульта", "stats": "60м, О/3/-, 1d10+4 R, Пробой 3", "weight": "2.5 кг", "notes": "Надёжное"},
-            {"name": "Эльдарский силовой меч", "stats": "Ближний бой, 1d10+4 E, Пробой 6", "weight": "2 кг", "notes": "Сбалансированное, Силовое поле"},
-        ],
-        "equipment": ["Сетчатый бодисьют эльдар", "Камень Души", "Плащ-хамелеолин", "Шлем с психо-усилителями"],
-    },
-
-    "drukhari": {
-        "armour": {"head": 5, "body": 5, "arms": 5, "legs": 5, "notes": "Броня Каббалита"},
-        "wounds": 13, "fate": 2,
-        "talents": ["Обострённые чувства (Зрение, Слух)", "Тёмное зрение", "Спринт", "Падение с высоты", "Сверхъестественная ловкость (x2)", "Сила через Боль"],
-        "weapons": [
-            {"name": "Сюрикен-винтовка", "stats": "80м, О/3/5, 1d10+2 R, Пробой 3", "weight": "2.5 кг", "notes": "Токсичное"},
-            {"name": "Моно-меч", "stats": "Ближний бой, 1d10+5 R, Пробой 4", "weight": "1 кг", "notes": "Сбалансированное"},
-        ],
-        "equipment": ["Броня Каббалита", "Микро-бусина", "Транслокатор", "2 дозы яда"],
-    },
-
-    "harlequin": {
-        "armour": {"head": 6, "body": 6, "arms": 6, "legs": 6, "notes": "Голо-костюм Арлекина"},
-        "wounds": 13, "fate": 3,
-        "talents": ["Обострённые чувства (Зрение, Слух)", "Тёмное зрение", "Спринт", "Падение с высоты", "Сверхъестественная ловкость (x2)", "Молниеносные рефлексы", "Трудная цель"],
-        "weapons": [
-            {"name": "Поцелуй Арлекина", "stats": "Ближний бой, 2d10+8 R, Пробой 8", "weight": "1.5 кг", "notes": "Силовое поле, Рвущее"},
-            {"name": "Сюрикен-пистолет", "stats": "30м, О/3/-, 1d10+2 R, Пробой 3", "weight": "1.5 кг", "notes": "Надёжное"},
-        ],
-        "equipment": ["Голо-костюм", "Флип-пояс", "Маска Арлекина", "Маска Смеющегося Бога"],
-    },
-
-    "exodite": {
-        "armour": {"head": 5, "body": 6, "arms": 5, "legs": 5, "notes": "Сетчатая и костяная броня"},
-        "wounds": 14, "fate": 2,
-        "talents": ["Обострённые чувства (Зрение, Слух)", "Тёмное зрение", "Спринт", "Сверхъестественная ловкость (x2)", "Мастер-наездник"],
-        "weapons": [
-            {"name": "Длинная винтовка Рейнджера", "stats": "200м, О/-/-, 1d10+3 E, Пробой 2", "weight": "2 кг", "notes": "Точное, Индивидуализированное"},
-            {"name": "Силовой клинок", "stats": "Ближний бой, 1d10+5 E, Пробой 5", "weight": "3 кг", "notes": "Силовое поле"},
-        ],
-        "equipment": ["Сетчатая броня", "Костяная броня", "Плащ-хамелеолин", "Кристаллы Мирового Духа"],
-    },
-
-    "freebooter": {
-        "armour": {"head": 5, "body": 6, "arms": 4, "legs": 4, "notes": "'Эви Армор"},
-        "wounds": 17, "fate": 2,
-        "talents": ["Крепкое телосложение (x2)", "Неестественная выносливость (x2)", "Железная челюсть", "Сопротивление (Яды)", "Внимание"],
-        "weapons": [
-            {"name": "Слагга", "stats": "20м, О/-/-, 1d10+4 I, Пробой 1", "weight": "3 кг", "notes": "Неточное"},
-            {"name": "Чоппа", "stats": "Ближний бой, 1d10+3 R, Пробой 2", "weight": "4 кг", "notes": "Несбалансированное"},
-        ],
-        "equipment": ["'Эви Армор", "3 стикк-бомбы", "Сквиг-гончая", "Фляга с грибным пивом"],
-    },
-
-    "tau": {
-        "armour": {"head": 4, "body": 4, "arms": 4, "legs": 4, "notes": "Броня Касты Огня"},
-        "wounds": 12, "fate": 2,
-        "talents": ["Обострённые чувства (Зрение)", "Молниеносные рефлексы", "Трудная цель", "Мастер боя", "Точный выстрел"],
-        "weapons": [
-            {"name": "Импульсная винтовка", "stats": "150м, О/2/4, 2d10+3 E, Пробой 4", "weight": "8 кг", "notes": "Гироскопически стабилизированное"},
-            {"name": "Импульсный пистолет", "stats": "30м, О/-/-, 2d10+2 E, Пробой 4", "weight": "2 кг", "notes": "—"},
-        ],
-        "equipment": ["Броня Касты Огня", "Дрон-щит", "Маркерный маяк", "Фотонная граната"],
-    },
-
-    "necron": {
-        "armour": {"head": 9, "body": 9, "arms": 9, "legs": 9, "notes": "Некродермис с усилением"},
-        "wounds": 40, "fate": 3,
-        "talents": ["Тёмное зрение", "Машина", "Регенерация 10", "Страх 4", "Неестественная Сила (x2)", "Неестественная Выносливость (x2)"],
-        "weapons": [
-            {"name": "Коса Войны", "stats": "Ближний бой, 2d10+17 E, Пробой 9", "weight": "5 кг", "notes": "Силовое поле, Фазовое оружие"},
-            {"name": "Посох Света", "stats": "Ближний бой, 1d10+5 E, Пробой 6; дальний: 30м, 1d10+4 E", "weight": "2 кг", "notes": "Силовое поле"},
-        ],
-        "equipment": ["Некродермис (AP 9)", "Филактерия", "Фазовый Сдвигатель", "Вуаль Тьмы"],
-    },
-
-    "genestealer": {
-        "armour": {"head": 6, "body": 6, "arms": 6, "legs": 6, "notes": "Хитиновый панцирь"},
-        "wounds": 15, "fate": 2,
-        "talents": ["Тёмное зрение", "Иммунитет к Страху", "Иммунитет к Пыткам", "Иммунитет к Психическим Силам", "Неестественная Сила (x2)", "Неестественная Выносливость (x2)", "Скрытность", "Бесшумное передвижение"],
-        "weapons": [
-            {"name": "Косы-когти", "stats": "Ближний бой, 1d10+4 R, Пробой 3", "weight": "—", "notes": "Рвущее, Сбалансированное"},
-            {"name": "Костяной меч", "stats": "Ближний бой, 1d10+5 E, Пробой 6", "weight": "1 кг", "notes": "Силовое поле, Психическое"},
-        ],
-        "equipment": ["Хитиновый панцирь (AP 6)", "Кислотная кровь", "Симбиотические рипперы"],
-    },
-}
-
-DEFAULT_FALLBACK = "rogue_trader"
-
-ULTIMATE_FALLBACK = {
-    "armour": {"head": 4, "body": 4, "arms": 4, "legs": 4, "notes": "Стандартная броня"},
-    "wounds": 12, "fate": 2,
-    "talents": ["Обострённые чувства (Зрение)", "Молниеносные рефлексы"],
-    "weapons": [
-        {"name": "Лазган", "stats": "100м, О/3/-, 1d10+3 E, Пробой 0", "weight": "2 кг", "notes": "Надёжное"},
-    ],
-    "equipment": ["Флак-броня", "Респиратор", "Рюкзак", "Фляга"],
-}
-
-
-# ============================================================
-# BACKGROUND: шаблоны по расам (если GigaChat вернёт чушь)
+# BACKGROUND И ФРАКЦИИ
 # ============================================================
 BACKGROUND_BY_FACTION = {
     "eldar": (
-        "Ты родился на Крафтворлде, среди костей-призраков и вечного сияния Бесконечного Circuit. "
-        "Твой народ угасает, но ты идёшь по Пути, чтобы обуздать свои страсти и не дать Слаанеш поглотить твою душу. "
-        "Теперь твой путь лежит через холодную тьму галактики, где каждый встречный — либо враг, либо инструмент."
+        "Ты родился на Крафтворлде, среди костей-призраков и вечного сияния "
+        "Бесконечного Цикла. Твой народ угасает, но ты идёшь по Пути, чтобы "
+        "обуздать свои страсти и не дать Слаанеш поглотить твою душу. Теперь "
+        "твой путь лежит через холодную тьму галактики, где каждый встречный — "
+        "либо враг, либо инструмент."
     ),
     "imperium": (
-        "Ты родился в Империуме Человечества — колоссальной империи, которой правит Император с Золотого Трона. "
-        "Ты служишь человечеству, зная, что вокруг только ксеносы, еретики и демоны. "
-        "Каждый твой шаг — во имя Императора, и каждый враг — угроза для всего, что ты защищаешь."
+        "Ты родился в Империуме Человечества — колоссальной империи, которой "
+        "правит Император с Золотого Трона. Ты служишь человечеству, зная, что "
+        "вокруг только ксеносы, еретики и демоны. Каждый твой шаг — во имя "
+        "Императора, и каждый враг — угроза для всего, что ты защищаешь."
     ),
     "chaos": (
-        "Ты отверг Императора и принял Тёмные Боги. Варп шепчет тебе, обещая силу и бессмертие. "
-        "Твои враги — весь Империум, а твои союзники — лишь до тех пор, пока ты сильнее их. "
-        "Ты идёшь по пути проклятых, и обратной дороги нет."
+        "Ты отверг Императора и принял Тёмные Боги. Варп шепчет тебе, обещая "
+        "силу и бессмертие. Твои враги — весь Империум, а твои союзники — лишь "
+        "до тех пор, пока ты сильнее их. Ты идёшь по пути проклятых, и обратной "
+        "дороги нет."
     ),
     "orks": (
-        "Ты — орк. Ты родился из споры в грязи, вырос в драках, и вся твоя жизнь — это война. "
-        "Ты покинул свой клан, чтобы искать новых врагов, новые зубы и новую славу. "
-        "ДАККА! Больше дакки! Вот что делает тебя счастливым."
+        "Ты — орк. Ты родился из споры в грязи, вырос в драках, и вся твоя "
+        "жизнь — это война. Ты покинул свой клан, чтобы искать новых врагов, "
+        "новые зубы и новую славу. ДАККА! Больше дакки! Вот что делает тебя "
+        "счастливым."
     ),
     "tau": (
-        "Ты — тау, дитя Империи Тау, служащее Высшему Благу. Ты веришь, что все разумные расы "
-        "могут объединиться ради общего процветания. Ты обучен, дисциплинирован и предан. "
-        "Твой путь лежит в дикие земли, где другие расы ещё не познали свет Tau'va."
+        "Ты — тау, дитя Империи Тау, служащее Высшему Благу. Ты веришь, что "
+        "все разумные расы могут объединиться ради общего процветания. Ты "
+        "обучен, дисциплинирован и предан. Твой путь лежит в дикие земли, где "
+        "другие расы ещё не познали свет Tau'va."
     ),
     "necrons": (
-        "Ты — древний некрон, пробудившийся от шестидесятимиллионнолетнего сна. Твоя плоть давно стала металлом, "
-        "а душа — лишь эхо в некродермисе. Твоя династия требует восстановления былой славы. "
-        "Галактика забыла, кто здесь истинный хозяин. Ты напомнишь ей."
+        "Ты — древний некрон, пробудившийся от шестидесятимиллионнолетнего сна. "
+        "Твоя плоть давно стала металлом, а душа — лишь эхо в некродермисе. "
+        "Твоя династия требует восстановления былой славы. Галактика забыла, "
+        "кто здесь истинный хозяин. Ты напомнишь ей."
     ),
     "tyranids": (
-        "Ты — дитя Сверхразума, часть бесконечного роя. Ты был послан вперёд, чтобы подготовить путь "
-        "для флотов-ульев. Твоя цель — поглощать, размножаться и расширяться. "
-        "Вселенная — это пища. Ты — её пожиратель."
+        "Ты — дитя Сверхразума, часть бесконечного роя. Ты был послан вперёд, "
+        "чтобы подготовить путь для флотов-ульев. Твоя цель — поглощать, "
+        "размножаться и расширяться. Вселенная — это пища. Ты — её пожиратель."
     ),
 }
 
-
-# ============================================================
-# МАППИНГ СУБФРАКЦИЯ → ФРАКЦИЯ (для background и фильтров)
-# ============================================================
 SUBFACTION_TO_FACTION_KEY = {
     "rogue_trader": "imperium", "space_marine": "imperium", "imperial_guard": "imperium",
     "mechanicus": "imperium", "sororitas": "imperium", "arbites": "imperium",
     "chaos_marine": "chaos", "dark_mechanicum": "chaos", "cultist": "chaos",
     "asuryani": "eldar", "drukhari": "eldar", "harlequin": "eldar", "exodite": "eldar",
-    "freebooter": "orks",
-    "tau": "tau",
-    "necron": "necrons",
-    "genestealer": "tyranids",
+    "freebooter": "orks", "tau": "tau", "necron": "necrons", "genestealer": "tyranids",
 }
 
 CROSS_FACTION_WORDS = {
-    "eldar":    ["космодесантник", "космический десантник", "астартес", "инквизитор", "механикус", "сороритас", "арбитр", "орк ", " тау", "некрон", "тиранид", "хаосит", "империум"],
+    "eldar":    ["космодесантник", "астартес", "инквизитор", "механикус", "сороритас", "орк ", " тау", "некрон", "тиранид", "хаосит", "империум"],
     "imperium": ["эльдар", "аэльдари", "асуриани", "друкхари", "орк ", " тау", "некрон", "тиранид", "хаосит", "кхорн", "тзинч", "нургл"],
-    "chaos":    ["эльдар", "асуриани", "орк ", " тау", "некрон", "тиранид", "астартес лояльн", "император-защитник"],
+    "chaos":    ["эльдар", "асуриани", "орк ", " тау", "некрон", "тиранид", "астартес лояльн"],
     "orks":     ["эльдар", "асуриани", "космодесантник", "астартес", "империум", "тау", "некрон", "тиранид"],
     "tau":      ["эльдар", "космодесантник", "астартес", "империум", "орк ", "некрон", "тиранид", "хаосит"],
     "necrons":  ["эльдар", "космодесантник", "астартес", "империум", "орк ", "тау", "тиранид", "хаосит"],
@@ -427,49 +258,27 @@ CROSS_FACTION_WORDS = {
 # ПОЧИНКА JSON
 # ============================================================
 def _repair_json_text(text: str) -> str:
-    """
-    Пытается починить частые ошибки GigaChat в JSON:
-    - Лишние кавычки перед `{` или `[` внутри массивов
-    - Лишние кавычки после `}` или `]`
-    - Незакрытые строки
-    """
     if not text:
         return text
-
-    # Убираем markdown-обёртки
     if "```json" in text:
         text = text.split("```json", 1)[1].split("```", 1)[0]
     elif "```" in text:
         text = text.split("```", 1)[1].split("```", 1)[0]
-
     text = text.strip()
-
-    # 1. Убираем лишние кавычки перед { или [ в начале элементов массива
     text = re.sub(r'"(\s*\{)', r'\1', text)
     text = re.sub(r'"(\s*\[)', r'\1', text)
-
-    # 2. Убираем лишние кавычки после } или ] перед запятой
     text = re.sub(r'(\}\s*)"(\s*,)', r'\1\2', text)
     text = re.sub(r'(\]\s*)"(\s*,)', r'\1\2', text)
-
-    # 3. Иногда GigaChat пишет `{name": ...}` без открывающей кавычки у ключа
     text = re.sub(r'([{,]\s*)(\w+)"(\s*:)', r'\1"\2"\3', text)
-
-    # 4. Убираем trailing запятые перед ] или }
     text = re.sub(r',(\s*[\]}])', r'\1', text)
-
     return text
 
 
 def _try_parse_json(text: str) -> dict:
-    """Пытается распарсить JSON, при неудаче — починить и попробовать ещё раз."""
-    # Попытка 1: как есть
     try:
         return json.loads(text.strip())
     except json.JSONDecodeError:
         pass
-
-    # Попытка 2: с починкой
     repaired = _repair_json_text(text)
     try:
         return json.loads(repaired)
@@ -481,15 +290,15 @@ def _try_parse_json(text: str) -> dict:
 # ПРИМЕНЕНИЕ FALLBACK
 # ============================================================
 def apply_fallbacks(sheet: dict, subfaction_id: str, archetype_id: str) -> dict:
-    """
-    Жёсткая валидация и подстановка каноничных данных.
-    ВСЁ, кроме skills и background, берётся из fallback.
-    """
-    fallback = FALLBACK_BY_SUBFACTION.get(subfaction_id)
+    """Приоритет: архетип → субфракция → универсальный."""
+    fallback = None
+    if subfaction_id in FALLBACK_BY_ARCHETYPE:
+        fallback = FALLBACK_BY_ARCHETYPE[subfaction_id].get(archetype_id)
+    if not fallback:
+        fallback = FALLBACK_BY_SUBFACTION.get(subfaction_id)
     if not fallback:
         fallback = FALLBACK_BY_SUBFACTION.get(DEFAULT_FALLBACK, ULTIMATE_FALLBACK)
 
-    # ---- ВСЕГДА из fallback ----
     sheet["armour"] = dict(fallback["armour"])
     wounds_max = fallback.get("wounds", 12)
     sheet["wounds"] = {"current": wounds_max, "max": wounds_max}
@@ -511,10 +320,9 @@ def apply_fallbacks(sheet: dict, subfaction_id: str, archetype_id: str) -> dict:
             {"name": "Общие знания", "characteristic": "Int", "value": chars.get("Int", 30)},
         ]
 
-    # Исправление привязки навыков
     skill_to_char = {
         "скрытность": "Ag", "акробатика": "Ag",
-        "внимание": "Per", "бдительность": "Per", "восприятие": "Per", "психознание": "Per",
+        "внимание": "Per", "бдительность": "Per", "восприятие": "Per",
         "выживание": "Int", "слежка": "Int", "выслеживание": "Int", "навигация": "Int",
         "общие знания": "Int", "запретные знания": "Int", "логика": "Int",
         "медицина": "Int", "техноиспользование": "Int",
@@ -543,17 +351,26 @@ def apply_fallbacks(sheet: dict, subfaction_id: str, archetype_id: str) -> dict:
                 s["value"] = base + 5
 
     # ---- Пси-рейтинг ----
-    if archetype_id in PSYKER_ARCHETYPES:
+    if "psy_rating" in fallback:
+        sheet["psy_rating"] = fallback["psy_rating"]
+        sheet["psychic_powers"] = list(PSYKER_PSYCHIC_POWERS.get(archetype_id, []))
+    elif archetype_id in PSYKER_ARCHETYPES:
         sheet["psy_rating"] = PSYKER_ARCHETYPES[archetype_id]
         sheet["psychic_powers"] = list(PSYKER_PSYCHIC_POWERS.get(archetype_id, []))
     else:
         sheet["psy_rating"] = 0
         sheet["psychic_powers"] = []
 
-    sheet["corruption"] = 0
+    # ---- Порча ----
+    if "corruption" in fallback:
+        sheet["corruption"] = fallback["corruption"]
+    else:
+        fk = SUBFACTION_TO_FACTION_KEY.get(subfaction_id, "imperium")
+        sheet["corruption"] = {"chaos": 3}.get(fk, 0)
+
     sheet["insanity"] = 0
 
-    # ---- Background: проверка на чужие фракции ----
+    # ---- Background ----
     faction_key = SUBFACTION_TO_FACTION_KEY.get(subfaction_id, "imperium")
     bg = sheet.get("background", "")
     forbidden = CROSS_FACTION_WORDS.get(faction_key, [])
@@ -572,6 +389,50 @@ def apply_fallbacks(sheet: dict, subfaction_id: str, archetype_id: str) -> dict:
             f"из {sheet.get('subfaction', 'неизвестных земель')}."
         )
 
+    # ---- Деньги и ресурсы ----
+    if "money" not in sheet:
+        cur = CURRENCY_BY_FACTION.get(faction_key, DEFAULT_CURRENCY)
+        sheet["money"] = cur.get("currency_start", 0)
+        sheet["currency"] = cur.get("currency_name", "Троны")
+        sheet["special_resources"] = dict(cur.get("special_resources", {}))
+        sheet.setdefault("extra_currencies", {})
+
+    # ---- Корабль ----
+    if "ship" not in sheet:
+        ship = SHIP_BY_SUBFACTION.get(subfaction_id, DEFAULT_SHIP)
+        if ship.get("name"):
+            sheet["ship"] = {
+                "name": ship["name"],
+                "class": ship["class"],
+                "type": ship["type"],
+                "description": ship["description"],
+                "hull": dict(ship["hull"]),
+                "crew": dict(ship["crew"]),
+                "weapons": list(ship["weapons"]),
+                "features": list(ship["features"]),
+                "status": "В строю",
+            }
+        else:
+            sheet["ship"] = None
+
+    # ---- Мир и состояние ----
+    sheet.setdefault("location", "")
+    sheet.setdefault("game_date", "Начало приключения")
+    sheet.setdefault("quests", [])
+    sheet.setdefault("npcs", [])
+    sheet.setdefault("effects", [])
+    sheet.setdefault("companions", [])
+    sheet.setdefault("goals", [])
+    sheet.setdefault("journal", [])
+    sheet.setdefault("notes", "")
+
+    if "reputation" not in sheet:
+        sheet["reputation"] = {
+            "Империум": 0, "Механикус": 0, "Инквизиция": 0,
+            "Эльдары": 0, "Друкхари": 0, "Орки": 0,
+            "Тау": 0, "Некроны": 0, "Хаос": 0, "Тираниды": 0,
+        }
+
     return sheet
 
 
@@ -579,25 +440,11 @@ def apply_fallbacks(sheet: dict, subfaction_id: str, archetype_id: str) -> dict:
 # ГЕНЕРАЦИЯ ПОЛНОГО ЛИСТА ЧЕРЕЗ LLM + RAG
 # ============================================================
 def generate_full_sheet(
-    kb,
-    faction_id: str,
-    subfaction_id: str,
-    archetype_id: str,
-    faction_name: str,
-    subfaction_name: str,
-    archetype_name: str,
-    extra_choices: dict,
-    characteristics: dict,
-    name: str,
-    age: str = "",
-    appearance: str = "",
-    background: str = "",
+    kb, faction_id, subfaction_id, archetype_id,
+    faction_name, subfaction_name, archetype_name,
+    extra_choices, characteristics, name,
+    age="", appearance="", background="",
 ) -> dict:
-    """
-    Отправляет промт в GigaChat, просит вернуть skills и background.
-    Всё остальное (talents/weapons/equipment/armour/wounds/fate) берётся
-    из fallback по субфракции.
-    """
     rag_query = f"{faction_name} {subfaction_name} {archetype_name}"
     if extra_choices:
         rag_query += " " + " ".join(str(v) for v in extra_choices.values() if v)
@@ -644,7 +491,6 @@ def generate_full_sheet(
 5. НЕ добавляй поля armour, weapons, talents, equipment — их добавлять не нужно.
 """
 
-    # ---- Ретрай: до 2 попыток ----
     last_error = None
     for attempt in range(2):
         try:
@@ -666,7 +512,6 @@ def generate_full_sheet(
                 continue
             raise ValueError(f"Не удалось получить JSON от GigaChat после 2 попыток: {last_error}")
 
-    # Метаданные
     data["name"] = name
     data["age"] = age
     data["appearance"] = appearance
@@ -684,7 +529,5 @@ def generate_full_sheet(
     data["rank"] = 1
     data["user_background"] = background
 
-    # Жёсткий fallback — всё, кроме skills и background, ставится канонично
     data = apply_fallbacks(data, subfaction_id, archetype_id)
-
     return data
