@@ -151,6 +151,39 @@ DEFAULT_THEME = "grimdark"
 
 
 # ============================================================
+# АВАТАРЫ ФРАКЦИЙ — для чата
+# ============================================================
+FACTION_AVATARS = {
+    "империум": "🛡️",
+    "космодесант": "🛡️",
+    "инквизиц": "🛡️",
+    "эльдар": "✨",
+    "аэльдар": "✨",
+    "друкхар": "💜",
+    "орк": "💪",
+    "некро": "💀",
+    "тау": "🔵",
+    "тиран": "🦠",
+    "хаос": "🔥",
+    "сорорит": "🩸",
+    "механик": "⚙️",
+}
+
+DEFAULT_AVATAR_MASTER = "🎲"
+
+
+def get_faction_avatar(sheet) -> str:
+    """Возвращает emoji-аватар по фракции персонажа."""
+    if not sheet:
+        return DEFAULT_AVATAR_MASTER
+    faction = str(sheet.get("faction", "")).lower()
+    for key, emoji in FACTION_AVATARS.items():
+        if key in faction:
+            return emoji
+    return DEFAULT_AVATAR_MASTER
+
+
+# ============================================================
 # BASE CSS
 # ============================================================
 BASE_CSS = """
@@ -423,6 +456,7 @@ section.main > div,
     .hero-panel .hero-sub { letter-spacing: 0.2em; }
     .section-header .title { letter-spacing: 0.15em; font-size: 0.9rem; }
     .section-header .meta { display: none; }
+    .chat-name { font-size: 0.65rem; letter-spacing: 0.15em; }
 }
 
 /* =====================================================
@@ -646,15 +680,41 @@ h4, h5, h6 {
     color: var(--ink) !important;
 }
 
-/* === CHAT MESSAGE === */
+/* === CHAT MESSAGE — роль-зависимый стиль (ПАКЕТ 1) === */
 [data-testid="stChatMessage"] {
     background: var(--bg-chat) !important;
     border: 1px solid var(--accent-dim) !important;
     border-radius: 6px;
     padding: 16px 20px !important;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    transition: box-shadow 0.2s ease;
 }
+
+/* Мастер — левая акцентная полоса */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
+    border-left: 3px solid var(--accent) !important;
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--bg-chat) 92%, var(--accent) 8%),
+        var(--bg-chat)) !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]):hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45),
+                0 0 20px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* Игрок — правая акцентная полоса */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+    border-right: 3px solid var(--accent-bright) !important;
+    background: linear-gradient(270deg,
+        color-mix(in srgb, var(--bg-chat) 92%, var(--accent-bright) 8%),
+        var(--bg-chat)) !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]):hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45),
+                0 0 20px color-mix(in srgb, var(--accent-bright) 18%, transparent);
+}
+
 [data-testid="stChatMessage"] p,
 [data-testid="stChatMessage"] li {
     color: var(--ink) !important;
@@ -667,6 +727,29 @@ h4, h5, h6 {
 }
 [data-testid="stChatMessage"] em, [data-testid="stChatMessage"] i {
     color: var(--ink-dim) !important;
+}
+
+/* Метка роли над репликой */
+.chat-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.chat-name--master { color: var(--accent); }
+.chat-name--user { color: var(--accent-bright); }
+.chat-name .chat-name-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
 }
 
 /* === CHAT INPUT — усиленные селекторы === */
@@ -722,7 +805,7 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     background: transparent !important;
 }
 
-/* === ALERTS === */
+/* === ALERTS (используются для бросков) === */
 [data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
 [data-testid="stAlert"] * { font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important; }
 [data-testid="stAlert"][kind="success"] * { color: #0a2e0a !important; }
@@ -766,7 +849,7 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     letter-spacing: 0.1em;
 }
 
-/* === SELECTBOX — усиленные селекторы === */
+/* === SELECTBOX === */
 [data-testid="stSelectbox"] > div,
 [data-testid="stSelectbox"] > div > div,
 [data-testid="stSelectbox"] [data-baseweb="select"],
@@ -807,7 +890,6 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     color: var(--accent) !important;
 }
 
-/* Dropdown-меню */
 [data-baseweb="popover"],
 [data-baseweb="popover"] > div,
 [data-baseweb="popover"] > div > div,
@@ -834,6 +916,43 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     background: var(--accent-dim) !important;
     background-color: var(--accent-dim) !important;
     color: var(--accent-bright) !important;
+}
+
+/* === СЛАЙДЕРЫ === */
+[data-testid="stSlider"] [data-testid="stWidgetLabel"],
+[data-testid="stSlider"] [data-testid="stWidgetLabel"] *,
+[data-testid="stSlider"] label,
+[data-testid="stSlider"] label * {
+    color: var(--accent-bright) !important;
+    font-weight: 600 !important;
+    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.05rem) !important;
+    opacity: 1 !important;
+}
+[data-testid="stSlider"] [data-testid="stThumbValue"],
+[data-testid="stSlider"] [data-testid="stThumbValue"] *,
+[data-testid="stSlider"] div[aria-live="polite"] {
+    color: var(--accent-bright) !important;
+    font-weight: 700 !important;
+    font-size: 1.05rem !important;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"],
+[data-testid="stSlider"] [data-testid="stTickBarMin"] *,
+[data-testid="stSlider"] [data-testid="stTickBarMax"] * {
+    color: var(--ink-dim) !important;
+    font-size: 0.85rem !important;
+    opacity: 1 !important;
+}
+[data-testid="stSlider"] [role="slider"] {
+    background: var(--accent) !important;
+    border: 2px solid var(--accent-bright) !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent) !important;
+    outline: none !important;
+}
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div:first-child {
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent)) !important;
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent) !important;
 }
 
 /* === RADIO / CHECKBOX === */
@@ -1376,11 +1495,23 @@ def render_section_header(num: str, title: str, meta: str = ""):
     )
 
 
+def render_chat_name(role: str, player_name: str = "Игрок"):
+    """Метка роли над репликой: точка + имя."""
+    label = "МАСТЕР" if role == "assistant" else player_name.upper()
+    cls = "chat-name--master" if role == "assistant" else "chat-name--user"
+    st.markdown(
+        f'<div class="chat-name {cls}">'
+        f'<span class="chat-name-dot"></span>'
+        f'<span>{label}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
 # ============================================================
 # АВАТАРКИ
 # ============================================================
 AVATAR_USER = "🧑"
-AVATAR_MASTER = "🎲"
 
 
 # ============================================================
@@ -2134,6 +2265,10 @@ def render_chat(localS):
         render_character_inline(st.session_state.character, kb, localS,
                                 st.session_state.chat_history)
 
+    # Аватар фракции + имя игрока
+    faction_avatar = get_faction_avatar(st.session_state.character)
+    player_name = (st.session_state.character or {}).get("name", "Игрок")
+
     if not st.session_state.chat_history:
         intro_user = build_intro_message(st.session_state.character)
         with st.spinner("Мастер готовит вступление..."):
@@ -2163,9 +2298,12 @@ def render_chat(localS):
             except Exception as e:
                 st.error(f"Ошибка вступления: {e}")
 
+    # Отрисовка истории с метками роли
     for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"],
-                             avatar=AVATAR_USER if msg["role"] == "user" else AVATAR_MASTER):
+        role = msg["role"]
+        avatar = AVATAR_USER if role == "user" else faction_avatar
+        with st.chat_message(role, avatar=avatar):
+            render_chat_name(role, player_name)
             for r in msg.get("rolls", []):
                 render_roll(r)
             st.markdown(msg["content"])
@@ -2176,6 +2314,7 @@ def render_chat(localS):
 
     st.session_state.chat_history.append({"role": "user", "content": user_input, "rolls": []})
     with st.chat_message("user", avatar=AVATAR_USER):
+        render_chat_name("user", player_name)
         st.markdown(user_input)
     cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
                          st.session_state.chat_history)
@@ -2191,17 +2330,18 @@ def render_chat(localS):
     giga_messages = [Messages(role=MessagesRole.SYSTEM, content=master_prompt)]
     last_idx = len(st.session_state.chat_history) - 1
     for i, m in enumerate(st.session_state.chat_history):
-        role = MessagesRole.USER if m["role"] == "user" else MessagesRole.ASSISTANT
+        role_enum = MessagesRole.USER if m["role"] == "user" else MessagesRole.ASSISTANT
         content = m["content"]
         if i == last_idx and m["role"] == "user":
             content = enriched
-        giga_messages.append(Messages(role=role, content=content))
+        giga_messages.append(Messages(role=role_enum, content=content))
 
     last_user_msg = next(
         (m.content for m in reversed(giga_messages) if m.role == MessagesRole.USER), "")
     st.session_state.last_request_to_giga = last_user_msg
 
-    with st.chat_message("assistant", avatar=AVATAR_MASTER):
+    with st.chat_message("assistant", avatar=faction_avatar):
+        render_chat_name("assistant", player_name)
         rolls_to_render = []; final_text = None
         with st.spinner("Мастер думает..."):
             for _ in range(MAX_FUNCTION_ITERATIONS):
