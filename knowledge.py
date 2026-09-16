@@ -1,18 +1,13 @@
 # knowledge.py
-# RAG-поиск через локальные эмбеддинги intfloat/multilingual-e5-small + ChromaDB.
-# Использует GPU (CUDA) если доступен, иначе CPU.
-# Если база не построена — автоматически падает на word-overlap fallback.
+# RAG-поиск:
+# - Векторный режим (ChromaDB + sentence-transformers) — если база собрана.
+# - Fallback: word-overlap по data/*.txt — если базы нет.
+#
+# ВАЖНО: torch и sentence-transformers импортируются ЛЕНИВО, только когда
+# реально нужны. Это критично для Streamlit Cloud (1 ГБ RAM), где
+# модульный импорт torch может уронить приложение.
 
 import os
-import torch
-import chromadb
-from sentence_transformers import SentenceTransformer
-
-
-# ============================================================
-# УСТРОЙСТВО
-# ============================================================
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 # ============================================================
@@ -99,20 +94,45 @@ class KnowledgeBase:
         self._ready = False
         self._collection = None
         self._model = None
+        self._device = None
         self._fallback_chunks = []
 
+        self._try_init_vector_mode()
+
+        if not self._ready:
+            self._fallback_chunks = self._load_fallback_chunks()
+
+    def _try_init_vector_mode(self):
+        """
+        Пытается поднять векторный режим. При любой ошибке — молча откат
+        на fallback. torch и sentence-transformers импортируются ТОЛЬКО здесь,
+        и только если есть непустой chroma_db.
+        """
         try:
+            if not os.path.isdir(CHROMA_DIR):
+                return
+
+            import chromadb
             client = chromadb.PersistentClient(path=CHROMA_DIR)
-            self._collection = client.get_collection(name=COLLECTION_NAME)
-            if self._collection.count() > 0:
-                self._ready = True
+            collection = client.get_collection(name=COLLECTION_NAME)
+            if collection.count() == 0:
+                return
+
+            import torch
+            from sentence_transformers import SentenceTransformer
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            model = SentenceTransformer(MODEL_NAME, device=device)
+
+            self._collection = collection
+            self._model = model
+            self._device = device
+            self._ready = True
         except Exception:
             self._ready = False
-
-        if self._ready:
-            self._model = SentenceTransformer(MODEL_NAME, device=DEVICE)
-        else:
-            self._fallback_chunks = self._load_fallback_chunks()
+            self._collection = None
+            self._model = None
+            self._device = None
 
     @property
     def chunk_count(self):
@@ -170,7 +190,7 @@ class KnowledgeBase:
 
         try:
             query_emb = self._model.encode(
-                [query], normalize_embeddings=True, device=DEVICE
+                [query], normalize_embeddings=True, device=self._device
             ).tolist()
             n_fetch = min(top_k * 8, max(self._collection.count(), top_k))
             res = self._collection.query(
