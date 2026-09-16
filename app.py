@@ -1,6 +1,7 @@
 # app.py
 # Streamlit: визард + чат с Мастером.
-# Темы: 12 палитр. Шрифт — дефолтный Streamlit (не ломает Material Icons).
+# Темы: 12 палитр. Универсальная типографика через clamp().
+# Единый ритм масштабирования — от телефона до 4K.
 
 import json
 import re
@@ -113,22 +114,13 @@ THEMES = {
         "text": "#e0d8e8", "text_dim": "#a090b0", "text_faint": "#68587a",
         "heading": "#d0ffa0", "link": "#a8ff60",
     },
-    # ОРКИ — палитра из референса: тёмно-синий / оливковый / яркий лайм
     "orks": {
         "label": "🪖 Орки",
-        "bg_deep": "#161a20",
-        "bg_mid": "#1d222c",
-        "bg_light": "#262d3a",
-        "bg_card": "#222834",
-        "bg_chat": "#262d3a",
-        "accent": "#b5d334",
-        "accent_dim": "#6b7d3a",
-        "accent_bright": "#d4ec5a",
-        "text": "#e8eef0",
-        "text_dim": "#a8b0b8",
-        "text_faint": "#6d7580",
-        "heading": "#d4ec5a",
-        "link": "#b5d334",
+        "bg_deep": "#161a20", "bg_mid": "#1d222c", "bg_light": "#262d3a",
+        "bg_card": "#222834", "bg_chat": "#262d3a",
+        "accent": "#b5d334", "accent_dim": "#6b7d3a", "accent_bright": "#d4ec5a",
+        "text": "#e8eef0", "text_dim": "#a8b0b8", "text_faint": "#6d7580",
+        "heading": "#d4ec5a", "link": "#b5d334",
     },
     "tau": {
         "label": "🔵 Тау",
@@ -160,12 +152,32 @@ DEFAULT_THEME = "grimdark"
 
 
 # ============================================================
-# BASE CSS — фиксы полос и сайдбар-табов
-# ВАЖНО: не трогаем font-family у * и у svg — иначе ломаются Material Icons
+# BASE CSS — УНИВЕРСАЛЬНАЯ ТИПОГРАФИКА
 # ============================================================
 BASE_CSS = """
 <style>
-/* Убираем полосы сверху */
+/* =====================================================
+   1. КОРНЕВОЙ РАЗМЕР — единый ритм всего интерфейса
+   ===================================================== */
+html {
+    font-size: clamp(15px, 0.5vw + 12px, 18px) !important;
+}
+
+/* =====================================================
+   2. ШИРИНА КОНТЕНТА — нет пустот по бокам
+   ===================================================== */
+.block-container {
+    padding-top: 1rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: min(1700px, 94vw) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* =====================================================
+   3. Убираем полосы сверху
+   ===================================================== */
 header[data-testid="stHeader"], [data-testid="stHeader"] {
     background: transparent !important;
     height: 0 !important;
@@ -174,7 +186,9 @@ header[data-testid="stHeader"], [data-testid="stHeader"] {
 [data-testid="stToolbar"] { top: 0.5rem !important; right: 0.8rem !important; }
 [data-testid="stDecoration"] { display: none !important; }
 
-/* Убираем светлые панели снизу */
+/* =====================================================
+   4. Убираем светлые панели снизу
+   ===================================================== */
 [data-testid="stBottom"],
 [data-testid="stBottom"] > div,
 [data-testid="stBottom"] > div > div,
@@ -191,7 +205,9 @@ section.main > div,
     background: transparent !important;
 }
 
-/* === Сайдбар-табы: компактно, с переносом, без наездов === */
+/* =====================================================
+   5. Сайдбар-табы: wrap + компактно
+   ===================================================== */
 [data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
     display: flex !important;
     flex-wrap: wrap !important;
@@ -201,7 +217,7 @@ section.main > div,
     background: transparent !important;
 }
 [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
-    font-size: 0.74rem !important;
+    font-size: clamp(0.72rem, 0.68rem + 0.1vw, 0.85rem) !important;
     padding: 4px 7px !important;
     white-space: nowrap !important;
     min-width: unset !important;
@@ -210,17 +226,66 @@ section.main > div,
     line-height: 1.2 !important;
 }
 [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] p {
-    font-size: 0.74rem !important;
+    font-size: clamp(0.72rem, 0.68rem + 0.1vw, 0.85rem) !important;
     margin: 0 !important;
     padding: 0 !important;
     line-height: 1.2 !important;
+}
+
+/* =====================================================
+   6. Safety: длинные слова, pre-блоки
+   ===================================================== */
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] li,
+.stMarkdown p,
+.stMarkdown li {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+.stMarkdown pre,
+.stMarkdown code {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+}
+
+/* =====================================================
+   7. Мобильный (< 768px)
+   ===================================================== */
+@media (max-width: 768px) {
+    html { font-size: 15px !important; }
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+    h1 { font-size: 1.6rem !important; }
+    h2 { font-size: 1.3rem !important; }
+    [data-testid="stChatMessage"] { padding: 12px 14px !important; }
+    [data-testid="stChatMessage"] p,
+    [data-testid="stChatMessage"] li { font-size: 1rem !important; }
+    [data-testid="stMetricValue"] > div,
+    [data-testid="stMetricValue"] > div > div { font-size: 1.3rem !important; }
+    [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+        font-size: 0.7rem !important;
+        padding: 3px 5px !important;
+    }
+}
+
+/* =====================================================
+   8. Ультравайд (> 2000px)
+   ===================================================== */
+@media (min-width: 2000px) {
+    html { font-size: 19px !important; }
+    h1 { font-size: 2.4rem !important; }
+    h2 { font-size: 1.8rem !important; }
+    h3 { font-size: 1.4rem !important; }
+    .block-container { max-width: 1800px !important; }
 }
 </style>
 """
 
 
 # ============================================================
-# THEME CSS — ТОЛЬКО цвета, никакого font-family, никаких * на svg
+# THEME CSS — шаблон с адаптивными размерами и подстановкой цветов
 # ============================================================
 THEME_CSS_TEMPLATE = """
 <style>
@@ -240,11 +305,8 @@ THEME_CSS_TEMPLATE = """
     --link:      __LINK__;
 }
 
-/* Фон приложения */
-.stApp {
-    background: var(--bg-deep) !important;
-    color: var(--ink) !important;
-}
+/* Фон */
+.stApp { background: var(--bg-deep) !important; color: var(--ink) !important; }
 
 /* Нижняя панель под цвет темы */
 [data-testid="stBottom"],
@@ -258,12 +320,25 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--heading) !important;
     font-weight: 700;
 }
-h1 { font-size: 2.1rem !important; border-bottom: 1px solid var(--accent-dim); padding-bottom: .4rem; }
-h2 { font-size: 1.5rem !important; color: var(--accent) !important; }
-h3 { font-size: 1.25rem !important; color: var(--accent) !important; }
-h4, h5, h6 { color: var(--accent-dim) !important; }
+h1 {
+    font-size: clamp(1.8rem, 1.5rem + 1vw, 2.6rem) !important;
+    border-bottom: 1px solid var(--accent-dim);
+    padding-bottom: .4rem;
+}
+h2 {
+    font-size: clamp(1.35rem, 1.1rem + 0.6vw, 1.9rem) !important;
+    color: var(--accent) !important;
+}
+h3 {
+    font-size: clamp(1.15rem, 1rem + 0.4vw, 1.5rem) !important;
+    color: var(--accent) !important;
+}
+h4, h5, h6 {
+    font-size: clamp(1rem, 0.9rem + 0.2vw, 1.25rem) !important;
+    color: var(--accent-dim) !important;
+}
 
-/* === Текстовые блоки (только контент, не иконки) === */
+/* === Основной текст === */
 .stMarkdown p, .stMarkdown li {
     font-size: 1.05rem;
     line-height: 1.65;
@@ -280,32 +355,44 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
     border-radius: 3px;
 }
 
+/* === Caption === */
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] *,
 .stCaption, .stCaption * {
     color: var(--ink-dim) !important;
-    font-size: 0.92rem !important;
+    font-size: clamp(0.85rem, 0.8rem + 0.1vw, 1rem) !important;
 }
 
-/* === Метрики === */
+/* === Метрики — с emoji, защита от наездов === */
 [data-testid="stMetric"] {
     background: var(--bg-card) !important;
     border: 1px solid var(--accent-dim) !important;
     border-radius: 6px;
-    padding: 10px 12px;
+    padding: 10px 14px !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+}
+[data-testid="stMetricLabel"] {
+    overflow: visible !important;
 }
 [data-testid="stMetricLabel"] > div,
 [data-testid="stMetricLabel"] > div > div {
     color: var(--accent) !important;
-    font-size: 0.76rem !important;
+    font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.85rem) !important;
     text-transform: uppercase;
     font-weight: 600 !important;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    line-height: 1.3 !important;
+    display: inline-block !important;
 }
 [data-testid="stMetricValue"] > div,
 [data-testid="stMetricValue"] > div > div {
     color: var(--accent-bright) !important;
     font-weight: 700 !important;
-    font-size: 1.5rem !important;
+    font-size: clamp(1.3rem, 1.1rem + 0.6vw, 1.9rem) !important;
+    line-height: 1.2 !important;
 }
 [data-testid="stMetricDelta"] { color: var(--ink-dim) !important; }
 
@@ -332,7 +419,8 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
     border: 1px solid var(--accent-dim) !important;
     border-radius: 4px;
     transition: all 0.18s ease;
-    font-size: 0.94rem !important;
+    font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important;
+    white-space: nowrap !important;
 }
 .stButton > button:hover, [data-testid="stBaseButton-secondary"]:hover {
     border-color: var(--accent) !important;
@@ -352,16 +440,17 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
     background: var(--bg-light) !important;
     color: var(--accent-bright) !important;
     border: 1px solid var(--accent-dim) !important;
+    font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important;
 }
 
-/* === Табы (не сайдбар) === */
+/* === Табы === */
 .stTabs [data-baseweb="tab-list"] { border-bottom: 1px solid var(--accent-dim); gap: 4px; }
 .stTabs [data-baseweb="tab"] {
     color: var(--ink-dim) !important;
     background: transparent !important;
     padding: 8px 12px;
     font-weight: 600;
-    font-size: 0.92rem !important;
+    font-size: clamp(0.88rem, 0.85rem + 0.1vw, 1rem) !important;
 }
 .stTabs [data-baseweb="tab"]:hover { color: var(--accent-bright) !important; }
 .stTabs [aria-selected="true"] {
@@ -370,7 +459,7 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
 }
 .stTabs [data-baseweb="tab-highlight"] { background-color: var(--accent) !important; }
 
-/* === Expander — только text/summary, НЕ трогаем SVG и внутренности через * === */
+/* === Expander === */
 [data-testid="stExpander"] {
     border: 1px solid var(--accent-dim) !important;
     border-radius: 5px;
@@ -379,10 +468,12 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
 [data-testid="stExpander"] summary {
     color: var(--accent) !important;
     font-weight: 600 !important;
+    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
 }
 [data-testid="stExpander"] summary p {
     color: var(--accent) !important;
     font-weight: 600 !important;
+    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
 }
 [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
     background: var(--bg-mid) !important;
@@ -392,7 +483,7 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
     color: var(--ink) !important;
 }
 
-/* === Чат-сообщения — крупнее и читаемо === */
+/* === Чат-сообщения — крупнее === */
 [data-testid="stChatMessage"] {
     background: var(--bg-chat) !important;
     border: 1px solid var(--accent-dim) !important;
@@ -404,7 +495,7 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
 [data-testid="stChatMessage"] p,
 [data-testid="stChatMessage"] li {
     color: var(--ink) !important;
-    font-size: 1.15rem !important;
+    font-size: clamp(1.05rem, 1rem + 0.3vw, 1.25rem) !important;
     line-height: 1.7 !important;
 }
 [data-testid="stChatMessage"] strong, [data-testid="stChatMessage"] b {
@@ -425,7 +516,7 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
     background: transparent !important;
     color: var(--ink) !important;
     caret-color: var(--accent) !important;
-    font-size: 1.1rem !important;
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.15rem) !important;
 }
 [data-testid="stChatInput"] textarea::placeholder {
     color: var(--ink-faint) !important;
@@ -435,7 +526,7 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
 
 /* === Alerts === */
 [data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
-[data-testid="stAlert"] * { font-size: 1rem !important; }
+[data-testid="stAlert"] * { font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important; }
 [data-testid="stAlert"][kind="success"] * { color: #0a2e0a !important; }
 [data-testid="stAlert"][kind="error"] * { color: #2e0a0a !important; }
 [data-testid="stAlert"][kind="info"] * { color: #0a1a2e !important; }
@@ -448,7 +539,7 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
     color: var(--ink) !important;
     border: 1px solid var(--accent-dim) !important;
     border-radius: 4px !important;
-    font-size: 1.05rem !important;
+    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
 }
 .stTextInput input:focus, .stTextArea textarea:focus {
     border-color: var(--accent) !important;
@@ -461,10 +552,10 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
 [data-testid="stWidgetLabel"] > div,
 [data-testid="stWidgetLabel"] > div > div {
     color: var(--accent) !important;
-    font-size: 0.92rem !important;
+    font-size: clamp(0.88rem, 0.85rem + 0.1vw, 1rem) !important;
 }
 
-/* === Selectbox / radio / checkbox === */
+/* === Select / radio / checkbox === */
 [data-baseweb="select"] input { color: var(--ink) !important; }
 [data-baseweb="select"] [role="button"] { color: var(--ink) !important; background: var(--bg-light) !important; }
 [data-baseweb="popover"] { background: var(--bg-light) !important; }
@@ -484,7 +575,6 @@ h4, h5, h6 { color: var(--accent-dim) !important; }
 }
 
 /* === Прочее === */
-.block-container { padding-top: 1rem !important; max-width: 1400px; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg-deep); }
 ::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 5px; }
@@ -963,7 +1053,7 @@ def render_theme_selector(localS, location="sidebar"):
 
 
 # ============================================================
-# АВАТАРКИ ДЛЯ ЧАТА
+# АВАТАРКИ
 # ============================================================
 AVATAR_USER = "🧑"
 AVATAR_MASTER = "🎲"
@@ -1255,7 +1345,7 @@ def render_start_screen(localS):
     else:
         for c in chars:
             with st.container(border=True):
-                cols = st.columns([4, 1, 1, 1])
+                cols = st.columns([5, 2, 2, 2])
                 with cols[0]:
                     st.markdown(f"**{c['name']}**")
                     st.caption(f"{c.get('faction','')} → {c.get('subfaction','')} → {c.get('archetype','')}")
@@ -1274,16 +1364,20 @@ def render_start_screen(localS):
                         sheet_data = cc.load_character(c["path"])
                         chat_data = cc.load_chat_history(c["name"])
                         payload = _download_save_payload(sheet_data, chat_data)
-                        st.download_button("💾", data=payload,
-                                           file_name=f"{c['name']}_save.json",
-                                           mime="application/json",
-                                           key=f"dl_{c['name']}",
-                                           use_container_width=True,
-                                           help="Скачать сохранение")
+                        st.download_button(
+                            "💾 Скачать",
+                            data=payload,
+                            file_name=f"{c['name']}_save.json",
+                            mime="application/json",
+                            key=f"dl_{c['name']}",
+                            use_container_width=True,
+                            help="Скачать сохранение (лист + история)",
+                        )
                     except Exception:
                         st.caption("—")
                 with cols[3]:
-                    if st.button("🗑", key=f"del_{c['name']}", use_container_width=True,
+                    if st.button("🗑 Удалить", key=f"del_{c['name']}",
+                                 use_container_width=True,
                                  help="Удалить персонажа"):
                         cc.delete_character(c["path"])
                         cc.delete_chat_history(c["name"])
@@ -1344,11 +1438,11 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
     wounds = sheet.get("wounds", {"current": 0, "max": 0})
     fate = sheet.get("fate_points", {"current": 0, "max": 0})
     c1, c2 = st.columns(2)
-    c1.metric("Раны", f"{wounds.get('current', 0)}/{wounds.get('max', 0)}")
-    c2.metric("Судьба", f"{fate.get('current', 0)}/{fate.get('max', 0)}")
+    c1.metric("❤️ Раны", f"{wounds.get('current', 0)}/{wounds.get('max', 0)}")
+    c2.metric("🍀 Судьба", f"{fate.get('current', 0)}/{fate.get('max', 0)}")
     c1, c2 = st.columns(2)
-    c1.metric("Порча", sheet.get("corruption", 0))
-    c2.metric("Безумие", sheet.get("insanity", 0))
+    c1.metric("🌀 Порча", sheet.get("corruption", 0))
+    c2.metric("🧠 Безумие", sheet.get("insanity", 0))
 
     st.write("---")
     _render_quick_actions(sheet, chat_history, localS)
