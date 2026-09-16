@@ -1,10 +1,6 @@
 # app.py
 # Streamlit: визард + чат с Мастером.
-# Сохранение:
-#   - localStorage (автоматически, при каждом изменении)
-#   - JSON-файлы (ручной экспорт/импорт)
-# Расширенный [STATE]: wounds, fate, money, currency, quests, npcs, ship, etc.
-# Сайдбар с табами + быстрые действия.
+# Темы: 12 палитр. Шрифт — дефолтный Streamlit (не ломает Material Icons).
 
 import json
 import re
@@ -42,12 +38,487 @@ TOP_K_KNOWLEDGE = 5
 MASTER_PROMPT_PATH = "prompts/master.txt"
 
 LS_KEY = "wh40k_rpg_save"
+LS_THEME_KEY = "wh40k_theme"
 SAVE_FORMAT = "wh40k_rpg_save"
 SAVE_VERSION = 1
 
 st.set_page_config(page_title="Warhammer 40K — RPG с ИИ-Мастером", layout="wide")
 
 
+# ============================================================
+# ТЕМЫ — 12 палитр
+# ============================================================
+THEMES = {
+    "default": {
+        "label": "🎨 Стандартная",
+        "bg_deep": "#0e1117", "bg_mid": "#161a21", "bg_light": "#1e2229",
+        "bg_card": "#1c2028", "bg_chat": "#262a33",
+        "accent": "#ff4b4b", "accent_dim": "#b83737", "accent_bright": "#ff7a7a",
+        "text": "#fafafa", "text_dim": "#a0a4ab", "text_faint": "#6e7179",
+        "heading": "#fafafa", "link": "#ff4b4b",
+    },
+    "grimdark": {
+        "label": "⚔️ Grimdark",
+        "bg_deep": "#0e0e10", "bg_mid": "#16161a", "bg_light": "#1e1e24",
+        "bg_card": "#1c1c22", "bg_chat": "#26262c",
+        "accent": "#c9a961", "accent_dim": "#8a7444", "accent_bright": "#e8d9b8",
+        "text": "#ede4d3", "text_dim": "#b8ac92", "text_faint": "#8a8068",
+        "heading": "#e8d9b8", "link": "#c9a961",
+    },
+    "imperium": {
+        "label": "🛡️ Империум",
+        "bg_deep": "#080c1a", "bg_mid": "#0d1220", "bg_light": "#141a2a",
+        "bg_card": "#10162a", "bg_chat": "#161e30",
+        "accent": "#c9a961", "accent_dim": "#8a7444", "accent_bright": "#f5d99a",
+        "text": "#e8e4d0", "text_dim": "#a8a090", "text_faint": "#706858",
+        "heading": "#f5d99a", "link": "#c9a961",
+    },
+    "sororitas": {
+        "label": "🩸 Сороритас",
+        "bg_deep": "#140808", "bg_mid": "#1c0d0d", "bg_light": "#261212",
+        "bg_card": "#1d0f0f", "bg_chat": "#281616",
+        "accent": "#e0b04a", "accent_dim": "#8a6828", "accent_bright": "#f8dc9a",
+        "text": "#f0e0d0", "text_dim": "#bc9e88", "text_faint": "#7a6250",
+        "heading": "#f8dc9a", "link": "#e0b04a",
+    },
+    "mechanicus": {
+        "label": "⚙️ Механикус",
+        "bg_deep": "#141210", "bg_mid": "#1c1916", "bg_light": "#26221c",
+        "bg_card": "#1e1a16", "bg_chat": "#282320",
+        "accent": "#ff8c1a", "accent_dim": "#a05610", "accent_bright": "#ffc070",
+        "text": "#e8e0d0", "text_dim": "#b0a590", "text_faint": "#786d5a",
+        "heading": "#ffc070", "link": "#ff8c1a",
+    },
+    "chaos": {
+        "label": "🔥 Хаос",
+        "bg_deep": "#140406", "bg_mid": "#1c0608", "bg_light": "#260a0c",
+        "bg_card": "#1d0709", "bg_chat": "#260a0c",
+        "accent": "#d4a04a", "accent_dim": "#7a5520", "accent_bright": "#f5d08a",
+        "text": "#e8d4c0", "text_dim": "#b09a80", "text_faint": "#7a6a54",
+        "heading": "#f5d08a", "link": "#d4a04a",
+    },
+    "eldar": {
+        "label": "✨ Эльдары",
+        "bg_deep": "#0a1418", "bg_mid": "#0f1c22", "bg_light": "#162830",
+        "bg_card": "#122228", "bg_chat": "#1a2e38",
+        "accent": "#4dd0e1", "accent_dim": "#2a8a9a", "accent_bright": "#a0f0ff",
+        "text": "#d8e8ec", "text_dim": "#8fa8b0", "text_faint": "#5a6c74",
+        "heading": "#a0f0ff", "link": "#4dd0e1",
+    },
+    "drukhari": {
+        "label": "💜 Друкхари",
+        "bg_deep": "#0f0a14", "bg_mid": "#150d1c", "bg_light": "#1e1428",
+        "bg_card": "#1a1022", "bg_chat": "#221a2e",
+        "accent": "#a8ff60", "accent_dim": "#6a9a38", "accent_bright": "#d0ffa0",
+        "text": "#e0d8e8", "text_dim": "#a090b0", "text_faint": "#68587a",
+        "heading": "#d0ffa0", "link": "#a8ff60",
+    },
+    # ОРКИ — палитра из референса: тёмно-синий / оливковый / яркий лайм
+    "orks": {
+        "label": "🪖 Орки",
+        "bg_deep": "#161a20",
+        "bg_mid": "#1d222c",
+        "bg_light": "#262d3a",
+        "bg_card": "#222834",
+        "bg_chat": "#262d3a",
+        "accent": "#b5d334",
+        "accent_dim": "#6b7d3a",
+        "accent_bright": "#d4ec5a",
+        "text": "#e8eef0",
+        "text_dim": "#a8b0b8",
+        "text_faint": "#6d7580",
+        "heading": "#d4ec5a",
+        "link": "#b5d334",
+    },
+    "tau": {
+        "label": "🔵 Тау",
+        "bg_deep": "#0a1018", "bg_mid": "#0f1822", "bg_light": "#16202e",
+        "bg_card": "#111a26", "bg_chat": "#18222e",
+        "accent": "#4fc3f7", "accent_dim": "#2a80a8", "accent_bright": "#a0dcf5",
+        "text": "#e0e8f0", "text_dim": "#98a8b8", "text_faint": "#5a6878",
+        "heading": "#a0dcf5", "link": "#4fc3f7",
+    },
+    "necron": {
+        "label": "💀 Некроны",
+        "bg_deep": "#0a0d0c", "bg_mid": "#0f1413", "bg_light": "#161b1a",
+        "bg_card": "#131918", "bg_chat": "#1a2321",
+        "accent": "#3dd9a4", "accent_dim": "#2a9b76", "accent_bright": "#7effd0",
+        "text": "#d8e8e2", "text_dim": "#8fa89f", "text_faint": "#5a6f68",
+        "heading": "#7effd0", "link": "#3dd9a4",
+    },
+    "tyranids": {
+        "label": "🦠 Тираниды",
+        "bg_deep": "#100810", "bg_mid": "#180d18", "bg_light": "#221422",
+        "bg_card": "#1a101a", "bg_chat": "#241624",
+        "accent": "#9c5cff", "accent_dim": "#5a3888", "accent_bright": "#c8a0ff",
+        "text": "#e8d8f0", "text_dim": "#a898b8", "text_faint": "#685878",
+        "heading": "#c8a0ff", "link": "#9c5cff",
+    },
+}
+
+DEFAULT_THEME = "grimdark"
+
+
+# ============================================================
+# BASE CSS — фиксы полос и сайдбар-табов
+# ВАЖНО: не трогаем font-family у * и у svg — иначе ломаются Material Icons
+# ============================================================
+BASE_CSS = """
+<style>
+/* Убираем полосы сверху */
+header[data-testid="stHeader"], [data-testid="stHeader"] {
+    background: transparent !important;
+    height: 0 !important;
+    visibility: hidden !important;
+}
+[data-testid="stToolbar"] { top: 0.5rem !important; right: 0.8rem !important; }
+[data-testid="stDecoration"] { display: none !important; }
+
+/* Убираем светлые панели снизу */
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottom"] > div > div,
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottomBlockContainer"] > div,
+[data-testid="stAppViewContainer"] > .main,
+section.main > div,
+.stApp > section {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+[data-testid="stMainBlockContainer"] {
+    padding-bottom: 2rem !important;
+    background: transparent !important;
+}
+
+/* === Сайдбар-табы: компактно, с переносом, без наездов === */
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 2px !important;
+    overflow: visible !important;
+    height: auto !important;
+    background: transparent !important;
+}
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+    font-size: 0.74rem !important;
+    padding: 4px 7px !important;
+    white-space: nowrap !important;
+    min-width: unset !important;
+    width: auto !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+}
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] p {
+    font-size: 0.74rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.2 !important;
+}
+</style>
+"""
+
+
+# ============================================================
+# THEME CSS — ТОЛЬКО цвета, никакого font-family, никаких * на svg
+# ============================================================
+THEME_CSS_TEMPLATE = """
+<style>
+:root {
+    --bg-deep:   __BG_DEEP__;
+    --bg-mid:    __BG_MID__;
+    --bg-light:  __BG_LIGHT__;
+    --bg-card:   __BG_CARD__;
+    --bg-chat:   __BG_CHAT__;
+    --accent:        __ACCENT__;
+    --accent-dim:    __ACCENT_DIM__;
+    --accent-bright: __ACCENT_BRIGHT__;
+    --ink:       __TEXT__;
+    --ink-dim:   __TEXT_DIM__;
+    --ink-faint: __TEXT_FAINT__;
+    --heading:   __HEADING__;
+    --link:      __LINK__;
+}
+
+/* Фон приложения */
+.stApp {
+    background: var(--bg-deep) !important;
+    color: var(--ink) !important;
+}
+
+/* Нижняя панель под цвет темы */
+[data-testid="stBottom"],
+[data-testid="stBottomBlockContainer"] {
+    background: var(--bg-deep) !important;
+    border-top: 1px solid var(--accent-dim) !important;
+}
+
+/* === Заголовки === */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--heading) !important;
+    font-weight: 700;
+}
+h1 { font-size: 2.1rem !important; border-bottom: 1px solid var(--accent-dim); padding-bottom: .4rem; }
+h2 { font-size: 1.5rem !important; color: var(--accent) !important; }
+h3 { font-size: 1.25rem !important; color: var(--accent) !important; }
+h4, h5, h6 { color: var(--accent-dim) !important; }
+
+/* === Текстовые блоки (только контент, не иконки) === */
+.stMarkdown p, .stMarkdown li {
+    font-size: 1.05rem;
+    line-height: 1.65;
+    color: var(--ink) !important;
+}
+.stMarkdown strong, .stMarkdown b { color: var(--accent-bright) !important; font-weight: 700; }
+.stMarkdown em, .stMarkdown i { color: var(--ink-dim) !important; font-style: italic; }
+.stMarkdown a { color: var(--link) !important; text-decoration: underline; }
+.stMarkdown a:hover { color: var(--accent-bright) !important; }
+.stMarkdown code {
+    background: rgba(128,128,128,0.15);
+    color: var(--accent-bright) !important;
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] *,
+.stCaption, .stCaption * {
+    color: var(--ink-dim) !important;
+    font-size: 0.92rem !important;
+}
+
+/* === Метрики === */
+[data-testid="stMetric"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+[data-testid="stMetricLabel"] > div,
+[data-testid="stMetricLabel"] > div > div {
+    color: var(--accent) !important;
+    font-size: 0.76rem !important;
+    text-transform: uppercase;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em;
+}
+[data-testid="stMetricValue"] > div,
+[data-testid="stMetricValue"] > div > div {
+    color: var(--accent-bright) !important;
+    font-weight: 700 !important;
+    font-size: 1.5rem !important;
+}
+[data-testid="stMetricDelta"] { color: var(--ink-dim) !important; }
+
+/* === Сайдбар === */
+[data-testid="stSidebar"] {
+    background: var(--bg-mid) !important;
+    border-right: 1px solid var(--accent-dim);
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 { color: var(--accent) !important; }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] small,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] > * { color: var(--ink) !important; }
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] * { color: var(--ink-dim) !important; }
+
+/* === Кнопки === */
+.stButton > button, [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"] {
+    letter-spacing: 0.02em;
+    font-weight: 500 !important;
+    background: var(--bg-light) !important;
+    color: var(--accent-bright) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 4px;
+    transition: all 0.18s ease;
+    font-size: 0.94rem !important;
+}
+.stButton > button:hover, [data-testid="stBaseButton-secondary"]:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent-bright) !important;
+    box-shadow: 0 0 10px rgba(128,128,128,0.20);
+}
+[data-testid="stBaseButton-primary"] {
+    background: var(--accent-dim) !important;
+    border-color: var(--accent) !important;
+    color: #ffffff !important;
+}
+[data-testid="stBaseButton-primary"]:hover {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+}
+[data-testid="stDownloadButton"] > button {
+    background: var(--bg-light) !important;
+    color: var(--accent-bright) !important;
+    border: 1px solid var(--accent-dim) !important;
+}
+
+/* === Табы (не сайдбар) === */
+.stTabs [data-baseweb="tab-list"] { border-bottom: 1px solid var(--accent-dim); gap: 4px; }
+.stTabs [data-baseweb="tab"] {
+    color: var(--ink-dim) !important;
+    background: transparent !important;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 0.92rem !important;
+}
+.stTabs [data-baseweb="tab"]:hover { color: var(--accent-bright) !important; }
+.stTabs [aria-selected="true"] {
+    color: var(--accent-bright) !important;
+    border-bottom: 2px solid var(--accent) !important;
+}
+.stTabs [data-baseweb="tab-highlight"] { background-color: var(--accent) !important; }
+
+/* === Expander — только text/summary, НЕ трогаем SVG и внутренности через * === */
+[data-testid="stExpander"] {
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 5px;
+    background: var(--bg-card) !important;
+}
+[data-testid="stExpander"] summary {
+    color: var(--accent) !important;
+    font-weight: 600 !important;
+}
+[data-testid="stExpander"] summary p {
+    color: var(--accent) !important;
+    font-weight: 600 !important;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+    background: var(--bg-mid) !important;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] p,
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] li {
+    color: var(--ink) !important;
+}
+
+/* === Чат-сообщения — крупнее и читаемо === */
+[data-testid="stChatMessage"] {
+    background: var(--bg-chat) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 8px;
+    padding: 16px 20px !important;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] li {
+    color: var(--ink) !important;
+    font-size: 1.15rem !important;
+    line-height: 1.7 !important;
+}
+[data-testid="stChatMessage"] strong, [data-testid="stChatMessage"] b {
+    color: var(--accent-bright) !important;
+    font-weight: 700;
+}
+[data-testid="stChatMessage"] em, [data-testid="stChatMessage"] i {
+    color: var(--ink-dim) !important;
+}
+
+/* === Чат-инпут === */
+[data-testid="stChatInput"] {
+    background: var(--bg-light) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 6px !important;
+}
+[data-testid="stChatInput"] textarea {
+    background: transparent !important;
+    color: var(--ink) !important;
+    caret-color: var(--accent) !important;
+    font-size: 1.1rem !important;
+}
+[data-testid="stChatInput"] textarea::placeholder {
+    color: var(--ink-faint) !important;
+    font-style: italic;
+}
+[data-testid="stChatInput"] button { color: var(--accent) !important; background: transparent !important; }
+
+/* === Alerts === */
+[data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
+[data-testid="stAlert"] * { font-size: 1rem !important; }
+[data-testid="stAlert"][kind="success"] * { color: #0a2e0a !important; }
+[data-testid="stAlert"][kind="error"] * { color: #2e0a0a !important; }
+[data-testid="stAlert"][kind="info"] * { color: #0a1a2e !important; }
+[data-testid="stAlert"][kind="warning"] * { color: #2e220a !important; }
+
+/* === Формы === */
+.stTextInput input, .stTextArea textarea,
+[data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea {
+    background: var(--bg-light) !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 4px !important;
+    font-size: 1.05rem !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 1px var(--accent) !important;
+}
+.stTextInput input::placeholder, .stTextArea textarea::placeholder {
+    color: var(--ink-faint) !important;
+    font-style: italic;
+}
+[data-testid="stWidgetLabel"] > div,
+[data-testid="stWidgetLabel"] > div > div {
+    color: var(--accent) !important;
+    font-size: 0.92rem !important;
+}
+
+/* === Selectbox / radio / checkbox === */
+[data-baseweb="select"] input { color: var(--ink) !important; }
+[data-baseweb="select"] [role="button"] { color: var(--ink) !important; background: var(--bg-light) !important; }
+[data-baseweb="popover"] { background: var(--bg-light) !important; }
+[data-baseweb="popover"] * { color: var(--ink) !important; background: transparent !important; }
+[data-baseweb="menu"] { background: var(--bg-light) !important; }
+[data-baseweb="menu"] * { color: var(--ink) !important; }
+[data-testid="stRadio"] label p { color: var(--ink) !important; }
+[data-testid="stCheckbox"] label p { color: var(--ink) !important; }
+
+/* === File uploader === */
+[data-testid="stFileUploader"] section { background: var(--bg-mid) !important; border: 1px dashed var(--accent-dim) !important; }
+[data-testid="stFileUploader"] section * { color: var(--ink) !important; }
+
+/* === Progress === */
+[data-testid="stProgress"] > div > div > div {
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent)) !important;
+}
+
+/* === Прочее === */
+.block-container { padding-top: 1rem !important; max-width: 1400px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+a { color: var(--link) !important; }
+a:hover { color: var(--accent-bright) !important; }
+hr { border-color: var(--accent-dim) !important; }
+</style>
+"""
+
+
+def inject_custom_css(theme_key: str = DEFAULT_THEME):
+    st.markdown(BASE_CSS, unsafe_allow_html=True)
+    if theme_key == "default":
+        return
+
+    theme = THEMES.get(theme_key, THEMES[DEFAULT_THEME])
+    css = THEME_CSS_TEMPLATE
+    for k, v in {
+        "__BG_DEEP__": theme["bg_deep"], "__BG_MID__": theme["bg_mid"],
+        "__BG_LIGHT__": theme["bg_light"], "__BG_CARD__": theme["bg_card"],
+        "__BG_CHAT__": theme["bg_chat"], "__ACCENT__": theme["accent"],
+        "__ACCENT_DIM__": theme["accent_dim"], "__ACCENT_BRIGHT__": theme["accent_bright"],
+        "__TEXT__": theme["text"], "__TEXT_DIM__": theme["text_dim"],
+        "__TEXT_FAINT__": theme["text_faint"], "__HEADING__": theme["heading"],
+        "__LINK__": theme["link"],
+    }.items():
+        css = css.replace(k, v)
+    st.markdown(css, unsafe_allow_html=True)
+
+
+# ============================================================
+# КЭШ
+# ============================================================
 @st.cache_resource
 def get_kb():
     return KnowledgeBase()
@@ -70,18 +541,15 @@ def get_master_prompt():
 
 
 # ============================================================
-# LOCALSTORAGE — сохранение/загрузка
+# LOCALSTORAGE
 # ============================================================
 def _ls_save(localS, sheet, chat_history):
-    """Сохраняет персонажа и историю в localStorage."""
     if not HAS_LS or sheet is None:
         return
     try:
         payload = json.dumps({
-            "format": SAVE_FORMAT,
-            "version": SAVE_VERSION,
-            "character": sheet,
-            "chat_history": chat_history,
+            "format": SAVE_FORMAT, "version": SAVE_VERSION,
+            "character": sheet, "chat_history": chat_history,
             "saved_at": datetime.now().isoformat(),
         }, ensure_ascii=False)
         localS.setItem(LS_KEY, payload)
@@ -90,7 +558,6 @@ def _ls_save(localS, sheet, chat_history):
 
 
 def _ls_load(localS):
-    """Возвращает dict {character, chat_history} или None."""
     if not HAS_LS:
         return None
     try:
@@ -100,10 +567,8 @@ def _ls_load(localS):
         data = json.loads(raw)
         if data.get("format") != SAVE_FORMAT:
             return None
-        return {
-            "character": data.get("character"),
-            "chat_history": data.get("chat_history", []),
-        }
+        return {"character": data.get("character"),
+                "chat_history": data.get("chat_history", [])}
     except Exception as e:
         print(f"[LS] ошибка загрузки: {e}")
         return None
@@ -116,6 +581,27 @@ def _ls_clear(localS):
         localS.deleteItem(LS_KEY)
     except Exception:
         pass
+
+
+def _ls_save_theme(localS, theme_key):
+    if not HAS_LS:
+        return
+    try:
+        localS.setItem(LS_THEME_KEY, theme_key)
+    except Exception:
+        pass
+
+
+def _ls_load_theme(localS):
+    if not HAS_LS:
+        return None
+    try:
+        raw = localS.getItem(LS_THEME_KEY)
+        if raw and raw in THEMES:
+            return raw
+    except Exception:
+        pass
+    return None
 
 
 # ============================================================
@@ -219,8 +705,7 @@ def parse_state_block(text: str):
         if not line or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip()
+        key = key.strip(); value = value.strip()
         if key:
             updates[key] = value
     cleaned = _STATE_RE.sub("", text).strip()
@@ -309,24 +794,18 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             else:
                 rep[fac] = val
 
-    if "location" in updates:
-        sheet["location"] = updates["location"]
-    if "date" in updates:
-        sheet["game_date"] = updates["date"]
+    if "location" in updates: sheet["location"] = updates["location"]
+    if "date" in updates: sheet["game_date"] = updates["date"]
 
     for short in ["quest", "npc", "effect", "companion", "goal"]:
-        plural = {
-            "quest": "quests", "npc": "npcs", "effect": "effects",
-            "companion": "companions", "goal": "goals",
-        }[short]
-        add_key = f"{short}_add"
-        rem_key = f"{short}_remove"
+        plural = {"quest": "quests", "npc": "npcs", "effect": "effects",
+                  "companion": "companions", "goal": "goals"}[short]
+        add_key = f"{short}_add"; rem_key = f"{short}_remove"
         if add_key in updates:
             items = [i.strip() for i in updates[add_key].split(";") if i.strip()]
             lst = sheet.setdefault(plural, [])
             for it in items:
-                if it not in lst:
-                    lst.append(it)
+                if it not in lst: lst.append(it)
         if rem_key in updates:
             items = [i.strip() for i in updates[rem_key].split(";") if i.strip()]
             sheet[plural] = [x for x in sheet.get(plural, []) if x not in items]
@@ -375,14 +854,10 @@ def format_roll_text(r: dict) -> str:
     success = r.get("success")
     margin = r.get("margin", 0)
     header = f"🎲 Бросок {expr}"
-    if reason:
-        header += f" ({reason})"
+    if reason: header += f" ({reason})"
     header += ": "
     roll1 = rolls[0] if rolls else total
-    if mod:
-        detail = f"выпало [{roll1}] + {mod} = {total}"
-    else:
-        detail = f"выпало [{roll1}]"
+    detail = f"выпало [{roll1}] + {mod} = {total}" if mod else f"выпало [{roll1}]"
     if "1d100" in expr.lower() and difficulty > 0 and success is not None:
         if success:
             detail += f" — ✅ УСПЕХ (сложность {difficulty}, степеней успеха: {margin})"
@@ -393,11 +868,9 @@ def format_roll_text(r: dict) -> str:
 
 def render_roll(r: dict):
     if not isinstance(r, dict):
-        st.warning(f"Некорректный результат броска: {r}")
-        return
+        st.warning(f"Некорректный результат броска: {r}"); return
     if "error" in r:
-        st.error(f"Ошибка броска: {r['error']}")
-        return
+        st.error(f"Ошибка броска: {r['error']}"); return
     text = format_roll_text(r)
     expr = r.get("expression", "").lower()
     difficulty = r.get("difficulty", 0)
@@ -429,29 +902,24 @@ def quick_fate_point(sheet):
 
 def quick_grenade(sheet):
     idx, item = _find_in_equipment(sheet, ["гранат"])
-    if idx is None:
-        return None, "Нет гранат"
+    if idx is None: return None, "Нет гранат"
     sheet["equipment"].pop(idx)
     return f"Игрок использовал гранату: {item}. Опиши взрыв.", None
 
 
 def quick_medkit(sheet):
     idx, item = _find_in_equipment(sheet, ["аптеч", "медипак", "медпак"])
-    if idx is None:
-        return None, "Нет аптечки"
+    if idx is None: return None, "Нет аптечки"
     sheet["equipment"].pop(idx)
     w = sheet.get("wounds", {})
-    before = w.get("current", 0)
-    max_w = w.get("max", before)
-    after = min(max_w, before + 2)
-    w["current"] = after
+    before = w.get("current", 0); max_w = w.get("max", before)
+    after = min(max_w, before + 2); w["current"] = after
     return f"Игрок использовал аптечку ({item}). Раны: {before} → {after}.", None
 
 
 def quick_stimulant(sheet):
     idx, item = _find_in_equipment(sheet, ["стимул", "боевой наркотик"])
-    if idx is None:
-        return None, "Нет стимуляторов"
+    if idx is None: return None, "Нет стимуляторов"
     sheet["equipment"].pop(idx)
     sheet.setdefault("effects", []).append("Стимулятор (+10 Ag, 3 хода)")
     return f"Игрок принял стимулятор: {item}. Добавлен эффект «Стимулятор (+10 Ag, 3 хода)».", None
@@ -466,11 +934,39 @@ def quick_remove_effect(sheet, effect_name):
 
 
 def _send_quick_action(msg, sheet, chat_history, localS):
-    """Отправляет [ДЕЙСТВИЕ] как user-сообщение и сохраняет."""
     chat_history.append({"role": "user", "content": f"[ДЕЙСТВИЕ] {msg}", "rolls": []})
     cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
     cc.save_character(sheet)
     _ls_save(localS, sheet, chat_history)
+
+
+# ============================================================
+# ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ
+# ============================================================
+def render_theme_selector(localS, location="sidebar"):
+    current = st.session_state.get("theme", DEFAULT_THEME)
+    theme_keys = list(THEMES.keys())
+    key_name = "theme_selector_sidebar" if location == "sidebar" else "theme_selector_main"
+
+    chosen = st.selectbox(
+        "🎨 Тема",
+        options=theme_keys,
+        index=theme_keys.index(current) if current in theme_keys else 0,
+        format_func=lambda k: THEMES[k]["label"],
+        key=key_name,
+    )
+
+    if chosen != current:
+        st.session_state.theme = chosen
+        _ls_save_theme(localS, chosen)
+        st.rerun()
+
+
+# ============================================================
+# АВАТАРКИ ДЛЯ ЧАТА
+# ============================================================
+AVATAR_USER = "🧑"
+AVATAR_MASTER = "🎲"
 
 
 # ============================================================
@@ -592,8 +1088,7 @@ def render_wizard(localS):
                 st.write(f"Бросок **2d10 + {dice_mod}**.")
                 if st.button("🎲 Бросить кубики", use_container_width=True):
                     data["characteristics"] = cc.generate_by_dice(dice_mod)
-                    data["dice_rolled_once"] = True
-                    st.rerun()
+                    data["dice_rolled_once"] = True; st.rerun()
             else:
                 for ch in cc.CHARACTERISTICS:
                     val = data["characteristics"][ch]
@@ -605,8 +1100,7 @@ def render_wizard(localS):
                                       format_func=lambda x: "—" if x == "—" else cc.CHARACTERISTIC_NAMES_RU[x])
                     if st.button("Перебросить") and rt != "—":
                         data["characteristics"] = cc.reroll_one(data["characteristics"], rt, dice_mod)
-                        data["reroll_used"] = True
-                        st.rerun()
+                        data["reroll_used"] = True; st.rerun()
                 cols = st.columns(2)
                 with cols[0]:
                     if st.button("← Назад"):
@@ -619,8 +1113,7 @@ def render_wizard(localS):
             pv = st.session_state.pointbuy_values
             for ch in cc.CHARACTERISTICS:
                 pv[ch] = st.slider(cc.CHARACTERISTIC_NAMES_RU[ch], 25, 45, pv[ch], key=f"pb_{ch}")
-            spent = sum(v - 25 for v in pv.values())
-            left = 100 - spent
+            spent = sum(v - 25 for v in pv.values()); left = 100 - spent
             st.write(f"**Осталось: {left}**")
             cols = st.columns(2)
             with cols[0]:
@@ -641,10 +1134,8 @@ def render_wizard(localS):
             if st.button("← Назад"): wizard_go(5); st.rerun()
         with cols[1]:
             if st.button("Собрать лист →", use_container_width=True):
-                if not data["name"].strip():
-                    st.error("Введи имя")
-                else:
-                    wizard_go(7); st.rerun()
+                if not data["name"].strip(): st.error("Введи имя")
+                else: wizard_go(7); st.rerun()
 
     elif step == 7:
         st.header("Лист персонажа")
@@ -673,28 +1164,21 @@ def render_wizard(localS):
         sheet = data["sheet"]
         st.subheader(sheet["name"])
         st.caption(f"{sheet.get('faction','')} → {sheet.get('subfaction','')} → {sheet.get('archetype','')}")
-
         cols = st.columns(9)
         for i, ch in enumerate(cc.CHARACTERISTICS):
             cols[i].metric(ch, f"{sheet['characteristics'][ch]}", f"+{sheet['bonuses'][ch]}")
-
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Раны", f"{sheet['wounds']['current']}/{sheet['wounds']['max']}")
         c2.metric("Судьба", f"{sheet['fate_points']['current']}/{sheet['fate_points']['max']}")
         c3.metric("Порча", sheet.get("corruption", 0))
         c4.metric("Пси-Рейтинг", sheet.get("psy_rating", 0))
-
         c1, c2 = st.columns(2)
         c1.metric(f"💰 {sheet.get('currency','Троны')}", sheet.get("money", 0))
         c2.metric("🚀 Корабль", sheet["ship"]["name"] if sheet.get("ship") else "нет")
-
         with st.expander("Снаряжение"):
             for e in sheet.get("equipment", []): st.write(f"- {e}")
-
         if sheet.get("background"):
-            with st.expander("Предыстория"):
-                st.write(sheet["background"])
-
+            with st.expander("Предыстория"): st.write(sheet["background"])
         st.write("---")
         cols = st.columns([1, 1, 2])
         with cols[0]:
@@ -709,7 +1193,7 @@ def render_wizard(localS):
                 st.session_state.character_path = path
                 st.session_state.chat_history = []
                 cc.save_chat_history(sheet.get("name", "unnamed"), [])
-                _ls_save(localS, sheet, [])  # перезаписать LS новым
+                _ls_save(localS, sheet, [])
                 st.session_state.wizard_step = 0
                 st.session_state.wizard_data = {}
                 st.session_state.in_wizard = False
@@ -721,19 +1205,18 @@ def render_wizard(localS):
 # ============================================================
 def _download_save_payload(sheet, chat_history):
     return json.dumps({
-        "format": SAVE_FORMAT,
-        "version": SAVE_VERSION,
-        "character": sheet,
-        "chat_history": chat_history,
+        "format": SAVE_FORMAT, "version": SAVE_VERSION,
+        "character": sheet, "chat_history": chat_history,
         "saved_at": datetime.now().isoformat(),
     }, ensure_ascii=False, indent=2)
 
 
 def render_start_screen(localS):
     st.title("⚔️ Warhammer 40,000 — RPG с ИИ-Мастером")
-
+    with st.expander("🎨 Тема", expanded=False):
+        render_theme_selector(localS, location="main")
+    st.write("---")
     col1, col2 = st.columns(2)
-
     with col1:
         st.subheader("🆕 Новая игра")
         if st.button("Создать персонажа", type="primary", use_container_width=True):
@@ -741,7 +1224,6 @@ def render_start_screen(localS):
             st.session_state.wizard_data = {}
             st.session_state.in_wizard = True
             st.rerun()
-
     with col2:
         st.subheader("📥 Загрузить из файла")
         uploaded = st.file_uploader("JSON-файл сохранения", type=["json"],
@@ -765,10 +1247,8 @@ def render_start_screen(localS):
                     st.rerun()
             except Exception as e:
                 st.error(f"Ошибка чтения файла: {e}")
-
     st.write("---")
     st.subheader("📂 Продолжить")
-
     chars = cc.list_characters()
     if not chars:
         st.info("Нет сохранённых персонажей.")
@@ -790,20 +1270,16 @@ def render_start_screen(localS):
                         _ls_save(localS, sheet, chat)
                         st.rerun()
                 with cols[2]:
-                    # Скачать сейв (лист + история)
                     try:
                         sheet_data = cc.load_character(c["path"])
                         chat_data = cc.load_chat_history(c["name"])
                         payload = _download_save_payload(sheet_data, chat_data)
-                        st.download_button(
-                            "💾",
-                            data=payload,
-                            file_name=f"{c['name']}_save.json",
-                            mime="application/json",
-                            key=f"dl_{c['name']}",
-                            use_container_width=True,
-                            help="Скачать сохранение (лист + история)",
-                        )
+                        st.download_button("💾", data=payload,
+                                           file_name=f"{c['name']}_save.json",
+                                           mime="application/json",
+                                           key=f"dl_{c['name']}",
+                                           use_container_width=True,
+                                           help="Скачать сохранение")
                     except Exception:
                         st.caption("—")
                 with cols[3]:
@@ -812,14 +1288,11 @@ def render_start_screen(localS):
                         cc.delete_character(c["path"])
                         cc.delete_chat_history(c["name"])
                         st.rerun()
-
     st.write("---")
-
-    # Кнопка очистки localStorage
     cols = st.columns([3, 2, 3])
     with cols[1]:
         if st.button("🗑 Очистить сохранение в браузере", use_container_width=True,
-                     help="Удаляет автосохранение. Файлы на диске не тронутся."):
+                     help="Удаляет автосохранение"):
             _ls_clear(localS)
             st.toast("Автосохранение очищено", icon="✅")
 
@@ -828,55 +1301,39 @@ def render_start_screen(localS):
 # САЙДБАР
 # ============================================================
 def _render_quick_actions(sheet, chat_history, localS):
-    st.markdown("**⚡ Быстрые действия**")
+    st.markdown("**⚡ Действия**")
     cols = st.columns(2)
     with cols[0]:
-        if st.button("🔥 Очко Судьбы", use_container_width=True, help="Потратить Очко Судьбы"):
+        if st.button("🔥 Судьба", use_container_width=True, help="Потратить Очко Судьбы"):
             msg, err = quick_fate_point(sheet)
-            if err:
-                st.toast(err, icon="⚠️")
-            else:
-                _send_quick_action(msg, sheet, chat_history, localS)
-                st.rerun()
+            if err: st.toast(err, icon="⚠️")
+            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
     with cols[1]:
         if st.button("💣 Граната", use_container_width=True):
             msg, err = quick_grenade(sheet)
-            if err:
-                st.toast(err, icon="⚠️")
-            else:
-                _send_quick_action(msg, sheet, chat_history, localS)
-                st.rerun()
+            if err: st.toast(err, icon="⚠️")
+            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
     cols = st.columns(2)
     with cols[0]:
         if st.button("🏥 Аптечка", use_container_width=True):
             msg, err = quick_medkit(sheet)
-            if err:
-                st.toast(err, icon="⚠️")
-            else:
-                _send_quick_action(msg, sheet, chat_history, localS)
-                st.rerun()
+            if err: st.toast(err, icon="⚠️")
+            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
     with cols[1]:
-        if st.button("⚡ Стимулятор", use_container_width=True):
+        if st.button("⚡ Стим", use_container_width=True):
             msg, err = quick_stimulant(sheet)
-            if err:
-                st.toast(err, icon="⚠️")
-            else:
-                _send_quick_action(msg, sheet, chat_history, localS)
-                st.rerun()
+            if err: st.toast(err, icon="⚠️")
+            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
 
     effects = sheet.get("effects", [])
     if effects:
-        eff_to_remove = st.selectbox(
-            "Снять эффект", options=["—"] + effects,
-            key="effect_remove_select", label_visibility="collapsed",
-        )
-        if eff_to_remove != "—" and st.button("✖️ Снять эффект", use_container_width=True):
+        eff_to_remove = st.selectbox("Снять эффект", options=["—"] + effects,
+                                     key="effect_remove_select",
+                                     label_visibility="collapsed")
+        if eff_to_remove != "—" and st.button("✖️ Снять", use_container_width=True):
             msg, err = quick_remove_effect(sheet, eff_to_remove)
-            if err:
-                st.toast(err, icon="⚠️")
-            else:
-                _send_quick_action(msg, sheet, chat_history, localS)
-                st.rerun()
+            if err: st.toast(err, icon="⚠️")
+            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
 
 
 def render_character_sidebar(sheet, kb, model, localS, chat_history):
@@ -886,19 +1343,18 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
 
     wounds = sheet.get("wounds", {"current": 0, "max": 0})
     fate = sheet.get("fate_points", {"current": 0, "max": 0})
-
     c1, c2 = st.columns(2)
-    c1.metric("❤️ Раны", f"{wounds.get('current', 0)}/{wounds.get('max', 0)}")
-    c2.metric("🍀 Судьба", f"{fate.get('current', 0)}/{fate.get('max', 0)}")
+    c1.metric("Раны", f"{wounds.get('current', 0)}/{wounds.get('max', 0)}")
+    c2.metric("Судьба", f"{fate.get('current', 0)}/{fate.get('max', 0)}")
     c1, c2 = st.columns(2)
-    c1.metric("🌀 Порча", sheet.get("corruption", 0))
-    c2.metric("🧠 Безумие", sheet.get("insanity", 0))
+    c1.metric("Порча", sheet.get("corruption", 0))
+    c2.metric("Безумие", sheet.get("insanity", 0))
 
     st.write("---")
     _render_quick_actions(sheet, chat_history, localS)
     st.write("---")
 
-    tabs = st.tabs(["👤 Перс", "🎒 Инвент", "🌍 Мир", "🚀 Корабль", "📝 Заметки"])
+    tabs = st.tabs(["Перс", "Инвент", "Мир", "Корабль", "Заметки"])
 
     with tabs[0]:
         with st.expander("📊 Характеристики", expanded=False):
@@ -955,8 +1411,7 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
             for c in companions: st.write(f"• {c}")
 
     with tabs[2]:
-        loc = sheet.get("location", "")
-        date = sheet.get("game_date", "")
+        loc = sheet.get("location", ""); date = sheet.get("game_date", "")
         if loc: st.markdown(f"📍 **Локация:** {loc}")
         if date: st.markdown(f"⏱️ **Время:** {date}")
         quests = sheet.get("quests", [])
@@ -992,8 +1447,7 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
             st.caption(f"{ship.get('class','')} • {ship.get('type','')}")
             if ship.get("status"): st.write(f"**Статус:** {ship['status']}")
             st.write(ship.get("description", ""))
-            hull = ship.get("hull", {})
-            crew = ship.get("crew", {})
+            hull = ship.get("hull", {}); crew = ship.get("crew", {})
             c1, c2 = st.columns(2)
             c1.metric("Корпус", f"{hull.get('current',0)}/{hull.get('max',0)}")
             c2.metric("Экипаж", f"{crew.get('current',0)}/{crew.get('max',0)}")
@@ -1004,8 +1458,7 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
                 st.markdown("**Особенности:**")
                 for f in ship["features"]: st.write(f"• {f}")
             if ship.get("notes"):
-                st.markdown("**Заметки:**")
-                st.write(ship["notes"])
+                st.markdown("**Заметки:**"); st.write(ship["notes"])
 
     with tabs[4]:
         notes_key = f"notes_field_{sheet.get('name', 'unnamed')}"
@@ -1021,33 +1474,29 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
             except Exception:
                 pass
 
-        st.markdown("**📝 Мои заметки**")
+        st.markdown("**📝 Заметки**")
         st.text_area("Заметки", key=notes_key, height=200,
                      label_visibility="collapsed",
-                     placeholder="Имена NPC, планы, зацепки, долги...",
+                     placeholder="Имена NPC, планы, зацепки...",
                      on_change=_save_notes)
         journal = sheet.get("journal", [])
         if journal:
-            st.markdown("**📖 Дневник событий**")
+            st.markdown("**📖 Дневник**")
             for entry in journal: st.write(f"• {entry}")
 
     st.write("---")
     st.caption(f"📚 Чанков: {kb.chunk_count} | 💬 Ходов: {len(chat_history)}")
 
-    # ---- Экспорт / импорт ----
     with st.expander("⚙️ Экспорт / Импорт"):
         try:
             payload = _download_save_payload(sheet, chat_history)
-            st.download_button(
-                "💾 Скачать сейв (лист + история)",
-                data=payload,
-                file_name=f"{sheet.get('name','unnamed')}_save.json",
-                mime="application/json",
-                use_container_width=True,
-            )
+            st.download_button("💾 Скачать сейв",
+                               data=payload,
+                               file_name=f"{sheet.get('name','unnamed')}_save.json",
+                               mime="application/json",
+                               use_container_width=True)
         except Exception as e:
             st.caption(f"Ошибка: {e}")
-
         uploaded = st.file_uploader("📥 Загрузить сейв", type=["json"],
                                      key="sidebar_upload",
                                      label_visibility="collapsed")
@@ -1064,32 +1513,31 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
             except Exception as e:
                 st.error(f"Ошибка: {e}")
 
+    with st.expander("🎨 Тема"):
+        render_theme_selector(localS, location="sidebar")
+
     with st.expander("🛠 Отладка"):
         log_data = {
-            "character": sheet,
-            "chat_history": chat_history,
+            "character": sheet, "chat_history": chat_history,
             "meta": {"model": model, "chunks_in_db": kb.chunk_count,
                      "vector_mode": kb.is_vector_mode,
                      "exported_at": datetime.now().isoformat()},
         }
-        st.download_button(
-            "📥 Скачать логи",
-            data=json.dumps(log_data, ensure_ascii=False, indent=2),
-            file_name=f"session_{sheet.get('name','unnamed')}.json",
-            mime="application/json", use_container_width=True,
-        )
+        st.download_button("📥 Скачать логи",
+                           data=json.dumps(log_data, ensure_ascii=False, indent=2),
+                           file_name=f"session_{sheet.get('name','unnamed')}.json",
+                           mime="application/json", use_container_width=True)
         if st.button("👁 Последний запрос", use_container_width=True):
             st.session_state.show_last_request = not st.session_state.get("show_last_request", False)
         if st.session_state.get("show_last_request"):
             st.code(st.session_state.get("last_request_to_giga", "—"), language="text")
 
     st.write("---")
-    if st.button("🔄 Начать историю заново", use_container_width=True):
+    if st.button("🔄 Заново", use_container_width=True, help="Начать историю заново"):
         st.session_state.chat_history = []
         cc.save_chat_history(sheet.get("name", "unnamed"), [])
         _ls_save(localS, sheet, [])
         st.rerun()
-
     if st.button("Выйти в меню", use_container_width=True):
         cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
         _ls_save(localS, sheet, chat_history)
@@ -1113,15 +1561,13 @@ def build_intro_message(sheet: dict) -> str:
         f"Архетип: {sheet.get('archetype','?')}.\n"
         f"2. Окружение ДОЛЖНО соответствовать расе.\n"
         f"3. Длина: 3-5 предложений. Закончи на моменте для решения игрока.\n"
-        f"4. Не вводи NPC, чуждых расе персонажа."
+        f"4. Не вводи NPC, чуждых расе персонажа.\n"
+        f"5. ОБЯЗАТЕЛЬНО укажи в [STATE] поля location= и date= для первой сцены."
     )
 
 
 def render_chat(localS):
-    kb = get_kb()
-    giga = get_giga()
-    master_prompt = get_master_prompt()
-
+    kb = get_kb(); giga = get_giga(); master_prompt = get_master_prompt()
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
@@ -1161,7 +1607,8 @@ def render_chat(localS):
                 st.error(f"Ошибка вступления: {e}")
 
     for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
+        with st.chat_message(msg["role"],
+                             avatar=AVATAR_USER if msg["role"] == "user" else AVATAR_MASTER):
             for r in msg.get("rolls", []):
                 render_roll(r)
             st.markdown(msg["content"])
@@ -1171,7 +1618,7 @@ def render_chat(localS):
         return
 
     st.session_state.chat_history.append({"role": "user", "content": user_input, "rolls": []})
-    with st.chat_message("user"):
+    with st.chat_message("user", avatar=AVATAR_USER):
         st.markdown(user_input)
     cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
                          st.session_state.chat_history)
@@ -1180,8 +1627,7 @@ def render_chat(localS):
     context = kb.format_context(user_input, top_k=TOP_K_KNOWLEDGE)
     sheet_json = json.dumps(st.session_state.character, ensure_ascii=False, indent=2)
     parts = [f"=== АКТУАЛЬНЫЙ ЛИСТ ПЕРСОНАЖА ===\n{sheet_json}"]
-    if context:
-        parts.append(context)
+    if context: parts.append(context)
     parts.append(f"=== СООБЩЕНИЕ ИГРОКА ===\n{user_input}")
     enriched = "\n\n".join(parts)
 
@@ -1198,9 +1644,8 @@ def render_chat(localS):
         (m.content for m in reversed(giga_messages) if m.role == MessagesRole.USER), "")
     st.session_state.last_request_to_giga = last_user_msg
 
-    with st.chat_message("assistant"):
-        rolls_to_render = []
-        final_text = None
+    with st.chat_message("assistant", avatar=AVATAR_MASTER):
+        rolls_to_render = []; final_text = None
         with st.spinner("Мастер думает..."):
             for _ in range(MAX_FUNCTION_ITERATIONS):
                 try:
@@ -1213,8 +1658,7 @@ def render_chat(localS):
                     try:
                         resp = giga.chat(Chat(messages=giga_messages))
                     except Exception as e2:
-                        st.error(f"Ошибка GigaChat: {e2}")
-                        break
+                        st.error(f"Ошибка GigaChat: {e2}"); break
                 msg = resp.choices[0].message
                 if getattr(msg, "function_call", None):
                     fn_name = msg.function_call.name
@@ -1236,8 +1680,7 @@ def render_chat(localS):
                 final_text = msg.content
                 break
 
-        state_updates = {}
-        text_rolls = []
+        state_updates = {}; text_rolls = []
         if final_text:
             final_text, state_updates = parse_state_block(final_text)
             final_text, text_rolls = parse_rolls_from_text(final_text)
@@ -1276,12 +1719,17 @@ def render_chat(localS):
 def main():
     localS = LocalStorage() if HAS_LS else None
 
+    if "theme" not in st.session_state:
+        saved = _ls_load_theme(localS) if localS else None
+        st.session_state.theme = saved if saved else DEFAULT_THEME
+
+    inject_custom_css(st.session_state.theme)
+
     if "character" not in st.session_state: st.session_state.character = None
     if "in_wizard" not in st.session_state: st.session_state.in_wizard = False
     if "chat_history" not in st.session_state: st.session_state.chat_history = []
     if "show_last_request" not in st.session_state: st.session_state.show_last_request = False
 
-        # ---- Автовосстановление из localStorage ----
     if localS and not st.session_state.get("ls_restore_done") and not st.session_state.character:
         attempts = st.session_state.get("ls_attempts", 0)
         if attempts < 4:
@@ -1289,8 +1737,6 @@ def main():
             if loaded and loaded.get("character"):
                 char = loaded["character"]
                 chat = loaded.get("chat_history", [])
-
-                # Если LS вернул пустую историю — пробуем подтянуть из файла
                 if not chat:
                     try:
                         file_chat = cc.load_chat_history(char.get("name", ""))
@@ -1298,7 +1744,6 @@ def main():
                             chat = file_chat
                     except Exception:
                         pass
-
                 st.session_state.character = char
                 st.session_state.chat_history = chat
                 st.session_state.ls_restore_done = True
@@ -1308,7 +1753,6 @@ def main():
         else:
             st.session_state.ls_restore_done = True
 
-    # ---- Роутинг ----
     if st.session_state.character:
         render_chat(localS)
     elif st.session_state.in_wizard:
