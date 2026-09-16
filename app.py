@@ -1,16 +1,22 @@
 # app.py
 # Streamlit: визард + чат с Мастером.
-# Особенности:
-# - Расширенный [STATE]-блок (деньги, квесты, NPC, локация, корабль и т.д.)
-# - Сайдбар с табами: Персонаж / Инвентарь / Мир / Корабль / Заметки
-# - Быстрые действия (Очко Судьбы, граната, аптечка, стимулятор, снять эффект)
-# - Персистентность истории чата в characters/<имя>.chat.json
+# Сохранение:
+#   - localStorage (автоматически, при каждом изменении)
+#   - JSON-файлы (ручной экспорт/импорт)
+# Расширенный [STATE]: wounds, fate, money, currency, quests, npcs, ship, etc.
+# Сайдбар с табами + быстрые действия.
 
 import json
 import re
 from datetime import datetime
 
 import streamlit as st
+
+try:
+    from streamlit_local_storage import LocalStorage
+    HAS_LS = True
+except Exception:
+    HAS_LS = False
 
 from gigachat import GigaChat
 from gigachat.models import Chat, Messages, MessagesRole, Function
@@ -33,9 +39,11 @@ except Exception:
 MODEL = "GigaChat-2-Pro"
 MAX_FUNCTION_ITERATIONS = 15
 TOP_K_KNOWLEDGE = 5
-
 MASTER_PROMPT_PATH = "prompts/master.txt"
 
+LS_KEY = "wh40k_rpg_save"
+SAVE_FORMAT = "wh40k_rpg_save"
+SAVE_VERSION = 1
 
 st.set_page_config(page_title="Warhammer 40K — RPG с ИИ-Мастером", layout="wide")
 
@@ -59,6 +67,55 @@ def get_giga():
 def get_master_prompt():
     with open(MASTER_PROMPT_PATH, encoding="utf-8") as f:
         return f.read()
+
+
+# ============================================================
+# LOCALSTORAGE — сохранение/загрузка
+# ============================================================
+def _ls_save(localS, sheet, chat_history):
+    """Сохраняет персонажа и историю в localStorage."""
+    if not HAS_LS or sheet is None:
+        return
+    try:
+        payload = json.dumps({
+            "format": SAVE_FORMAT,
+            "version": SAVE_VERSION,
+            "character": sheet,
+            "chat_history": chat_history,
+            "saved_at": datetime.now().isoformat(),
+        }, ensure_ascii=False)
+        localS.setItem(LS_KEY, payload)
+    except Exception as e:
+        print(f"[LS] ошибка сохранения: {e}")
+
+
+def _ls_load(localS):
+    """Возвращает dict {character, chat_history} или None."""
+    if not HAS_LS:
+        return None
+    try:
+        raw = localS.getItem(LS_KEY)
+        if not raw:
+            return None
+        data = json.loads(raw)
+        if data.get("format") != SAVE_FORMAT:
+            return None
+        return {
+            "character": data.get("character"),
+            "chat_history": data.get("chat_history", []),
+        }
+    except Exception as e:
+        print(f"[LS] ошибка загрузки: {e}")
+        return None
+
+
+def _ls_clear(localS):
+    if not HAS_LS:
+        return
+    try:
+        localS.deleteItem(LS_KEY)
+    except Exception:
+        pass
 
 
 # ============================================================
@@ -102,7 +159,6 @@ _LINE_PATTERN = re.compile(
     r"(?:\s*=\s*\[?(?P<total>\d+)\]?)?",
     re.IGNORECASE,
 )
-
 _DIFF_PATTERN = re.compile(r"сложность\s+(\d+)", re.IGNORECASE)
 
 
@@ -117,8 +173,7 @@ def _compute_check_result(formula, total, difficulty):
 def parse_rolls_from_text(text: str):
     if not text:
         return text, []
-    found_rolls = []
-    cleaned_lines = []
+    found_rolls, cleaned_lines = [], []
     for line in text.split("\n"):
         if "🎲" in line and "Бросок" in line:
             match = _LINE_PATTERN.search(line)
@@ -174,7 +229,6 @@ def parse_state_block(text: str):
 
 
 def _parse_signed_int(value: str):
-    """Возвращает int или None. Поддерживает +N, -N, N."""
     try:
         return int(value)
     except (ValueError, TypeError):
@@ -182,11 +236,9 @@ def _parse_signed_int(value: str):
 
 
 def apply_state_updates(sheet: dict, updates: dict) -> dict:
-    """Применяет [STATE] к листу."""
     if not updates or not isinstance(sheet, dict):
         return sheet
 
-    # ---- Прямые числовые поля ----
     if "wounds" in updates:
         val = _parse_signed_int(updates["wounds"])
         if val is not None:
@@ -209,7 +261,6 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             if val is not None:
                 sheet[key] = val
 
-    # ---- Деньги (родная валюта) ----
     if "money" in updates:
         val = _parse_signed_int(updates["money"])
         if val is not None:
@@ -218,7 +269,6 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             else:
                 sheet["money"] = val
 
-    # ---- Чужие валюты: extra_money_<валюта> ----
     for key, value in updates.items():
         if key.startswith("extra_money_"):
             currency = key[len("extra_money_"):].strip()
@@ -233,7 +283,6 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             if extra[currency] <= 0:
                 extra.pop(currency, None)
 
-    # ---- Особые ресурсы: special_<имя> ----
     for key, value in updates.items():
         if key.startswith("special_"):
             res = key[len("special_"):].strip()
@@ -248,7 +297,6 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             if sr[res] <= 0:
                 sr.pop(res, None)
 
-    # ---- Репутация: reputation_<фракция> ----
     for key, value in updates.items():
         if key.startswith("reputation_"):
             fac = key[len("reputation_"):].strip()
@@ -261,15 +309,12 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             else:
                 rep[fac] = val
 
-    # ---- Строковые поля ----
     if "location" in updates:
         sheet["location"] = updates["location"]
     if "date" in updates:
         sheet["game_date"] = updates["date"]
 
-    # ---- Списки: add/remove ----
-    list_keys = ["quest", "npc", "effect", "companion", "goal"]
-    for short in list_keys:
+    for short in ["quest", "npc", "effect", "companion", "goal"]:
         plural = {
             "quest": "quests", "npc": "npcs", "effect": "effects",
             "companion": "companions", "goal": "goals",
@@ -286,13 +331,11 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             items = [i.strip() for i in updates[rem_key].split(";") if i.strip()]
             sheet[plural] = [x for x in sheet.get(plural, []) if x not in items]
 
-    # ---- Дневник ----
     if "journal" in updates:
         entry = updates["journal"].strip()
         if entry:
             sheet.setdefault("journal", []).append(entry)
 
-    # ---- Характеристики ----
     for ch in cc.CHARACTERISTICS:
         key = f"characteristic_{ch.lower()}"
         if key in updates:
@@ -301,7 +344,6 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
                 sheet.setdefault("characteristics", {})[ch] = val
                 sheet.setdefault("bonuses", {})[ch] = val // 10
 
-    # ---- Корабль ----
     if sheet.get("ship"):
         ship = sheet["ship"]
         if "ship_hull" in updates:
@@ -366,10 +408,9 @@ def render_roll(r: dict):
 
 
 # ============================================================
-# БЫСТРЫЕ ДЕЙСТВИЯ (возвращают текст для [ДЕЙСТВИЕ]-сообщения)
+# БЫСТРЫЕ ДЕЙСТВИЯ
 # ============================================================
 def _find_in_equipment(sheet, roots):
-    """Ищет в equipment предмет, содержащий любой из корней. Возвращает (index, item)."""
     for i, e in enumerate(sheet.get("equipment", [])):
         el = e.lower()
         for root in roots:
@@ -383,13 +424,13 @@ def quick_fate_point(sheet):
     if fate.get("current", 0) < 1:
         return None, "Нет Очков Судьбы"
     fate["current"] -= 1
-    return f"Игрок потратил 1 Очко Судьбы. Опиши, как судьба повернулась в его пользу.", None
+    return "Игрок потратил 1 Очко Судьбы. Опиши, как судьба повернулась в его пользу.", None
 
 
 def quick_grenade(sheet):
     idx, item = _find_in_equipment(sheet, ["гранат"])
     if idx is None:
-        return None, "Нет гранат в инвентаре"
+        return None, "Нет гранат"
     sheet["equipment"].pop(idx)
     return f"Игрок использовал гранату: {item}. Опиши взрыв.", None
 
@@ -397,7 +438,7 @@ def quick_grenade(sheet):
 def quick_medkit(sheet):
     idx, item = _find_in_equipment(sheet, ["аптеч", "медипак", "медпак"])
     if idx is None:
-        return None, "Нет аптечки в инвентаре"
+        return None, "Нет аптечки"
     sheet["equipment"].pop(idx)
     w = sheet.get("wounds", {})
     before = w.get("current", 0)
@@ -410,10 +451,9 @@ def quick_medkit(sheet):
 def quick_stimulant(sheet):
     idx, item = _find_in_equipment(sheet, ["стимул", "боевой наркотик"])
     if idx is None:
-        return None, "Нет стимуляторов в инвентаре"
+        return None, "Нет стимуляторов"
     sheet["equipment"].pop(idx)
-    sheet.setdefault("effects", [])
-    sheet["effects"].append("Стимулятор (+10 Ag, 3 хода)")
+    sheet.setdefault("effects", []).append("Стимулятор (+10 Ag, 3 хода)")
     return f"Игрок принял стимулятор: {item}. Добавлен эффект «Стимулятор (+10 Ag, 3 хода)».", None
 
 
@@ -423,6 +463,14 @@ def quick_remove_effect(sheet, effect_name):
         effects.remove(effect_name)
         return f"Игрок снял эффект: {effect_name}.", None
     return None, "Эффект не найден"
+
+
+def _send_quick_action(msg, sheet, chat_history, localS):
+    """Отправляет [ДЕЙСТВИЕ] как user-сообщение и сохраняет."""
+    chat_history.append({"role": "user", "content": f"[ДЕЙСТВИЕ] {msg}", "rolls": []})
+    cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
+    cc.save_character(sheet)
+    _ls_save(localS, sheet, chat_history)
 
 
 # ============================================================
@@ -444,7 +492,7 @@ def wizard_go(step: int):
     st.session_state.wizard_step = step
 
 
-def render_wizard():
+def render_wizard(localS):
     init_wizard()
     step = st.session_state.wizard_step
     data = st.session_state.wizard_data
@@ -661,6 +709,7 @@ def render_wizard():
                 st.session_state.character_path = path
                 st.session_state.chat_history = []
                 cc.save_chat_history(sheet.get("name", "unnamed"), [])
+                _ls_save(localS, sheet, [])  # перезаписать LS новым
                 st.session_state.wizard_step = 0
                 st.session_state.wizard_data = {}
                 st.session_state.in_wizard = False
@@ -670,9 +719,21 @@ def render_wizard():
 # ============================================================
 # СТАРТОВЫЙ ЭКРАН
 # ============================================================
-def render_start_screen():
+def _download_save_payload(sheet, chat_history):
+    return json.dumps({
+        "format": SAVE_FORMAT,
+        "version": SAVE_VERSION,
+        "character": sheet,
+        "chat_history": chat_history,
+        "saved_at": datetime.now().isoformat(),
+    }, ensure_ascii=False, indent=2)
+
+
+def render_start_screen(localS):
     st.title("⚔️ Warhammer 40,000 — RPG с ИИ-Мастером")
+
     col1, col2 = st.columns(2)
+
     with col1:
         st.subheader("🆕 Новая игра")
         if st.button("Создать персонажа", type="primary", use_container_width=True):
@@ -680,71 +741,111 @@ def render_start_screen():
             st.session_state.wizard_data = {}
             st.session_state.in_wizard = True
             st.rerun()
+
     with col2:
-        st.subheader("📂 Продолжить")
-        chars = cc.list_characters()
-        if not chars:
-            st.info("Нет сохранённых персонажей.")
-        else:
-            for c in chars:
-                with st.container(border=True):
-                    cols = st.columns([5, 1, 1])
-                    with cols[0]:
-                        st.markdown(f"**{c['name']}**")
-                        st.caption(f"{c.get('faction','')} → {c.get('subfaction','')} → {c.get('archetype','')}")
-                    with cols[1]:
-                        if st.button("Играть", key=f"load_{c['name']}"):
-                            sheet = cc.load_character(c["path"])
-                            chat = cc.load_chat_history(c["name"])
-                            st.session_state.character = sheet
-                            st.session_state.character_path = c["path"]
-                            st.session_state.chat_history = chat
-                            st.session_state.in_wizard = False
-                            st.rerun()
-                    with cols[2]:
-                        if st.button("🗑", key=f"del_{c['name']}"):
-                            cc.delete_character(c["path"])
-                            cc.delete_chat_history(c["name"])
-                            st.rerun()
+        st.subheader("📥 Загрузить из файла")
+        uploaded = st.file_uploader("JSON-файл сохранения", type=["json"],
+                                     label_visibility="collapsed")
+        if uploaded is not None:
+            try:
+                data = json.loads(uploaded.read().decode("utf-8"))
+                if data.get("format") != SAVE_FORMAT:
+                    st.error("Не наш формат сохранения.")
+                elif not data.get("character"):
+                    st.error("Файл без персонажа.")
+                else:
+                    st.session_state.character = data["character"]
+                    st.session_state.chat_history = data.get("chat_history", [])
+                    st.session_state.in_wizard = False
+                    cc.save_character(data["character"])
+                    cc.save_chat_history(data["character"].get("name", "unnamed"),
+                                         st.session_state.chat_history)
+                    _ls_save(localS, data["character"], st.session_state.chat_history)
+                    st.success("Персонаж загружен!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Ошибка чтения файла: {e}")
+
+    st.write("---")
+    st.subheader("📂 Продолжить")
+
+    chars = cc.list_characters()
+    if not chars:
+        st.info("Нет сохранённых персонажей.")
+    else:
+        for c in chars:
+            with st.container(border=True):
+                cols = st.columns([4, 1, 1, 1])
+                with cols[0]:
+                    st.markdown(f"**{c['name']}**")
+                    st.caption(f"{c.get('faction','')} → {c.get('subfaction','')} → {c.get('archetype','')}")
+                with cols[1]:
+                    if st.button("▶️ Играть", key=f"load_{c['name']}", use_container_width=True):
+                        sheet = cc.load_character(c["path"])
+                        chat = cc.load_chat_history(c["name"])
+                        st.session_state.character = sheet
+                        st.session_state.character_path = c["path"]
+                        st.session_state.chat_history = chat
+                        st.session_state.in_wizard = False
+                        _ls_save(localS, sheet, chat)
+                        st.rerun()
+                with cols[2]:
+                    # Скачать сейв (лист + история)
+                    try:
+                        sheet_data = cc.load_character(c["path"])
+                        chat_data = cc.load_chat_history(c["name"])
+                        payload = _download_save_payload(sheet_data, chat_data)
+                        st.download_button(
+                            "💾",
+                            data=payload,
+                            file_name=f"{c['name']}_save.json",
+                            mime="application/json",
+                            key=f"dl_{c['name']}",
+                            use_container_width=True,
+                            help="Скачать сохранение (лист + история)",
+                        )
+                    except Exception:
+                        st.caption("—")
+                with cols[3]:
+                    if st.button("🗑", key=f"del_{c['name']}", use_container_width=True,
+                                 help="Удалить персонажа"):
+                        cc.delete_character(c["path"])
+                        cc.delete_chat_history(c["name"])
+                        st.rerun()
+
+    st.write("---")
+
+    # Кнопка очистки localStorage
+    cols = st.columns([3, 2, 3])
+    with cols[1]:
+        if st.button("🗑 Очистить сохранение в браузере", use_container_width=True,
+                     help="Удаляет автосохранение. Файлы на диске не тронутся."):
+            _ls_clear(localS)
+            st.toast("Автосохранение очищено", icon="✅")
 
 
 # ============================================================
 # САЙДБАР
 # ============================================================
-def _render_quick_actions(sheet, chat_history: list):
-    """Кнопки быстрых действий. Возвращает True, если что-то нажали."""
+def _render_quick_actions(sheet, chat_history, localS):
     st.markdown("**⚡ Быстрые действия**")
     cols = st.columns(2)
-
     with cols[0]:
-        if st.button("🔥 Очко Судьбы", use_container_width=True,
-                     help="Потратить 1 Очко Судьбы на переброс / автоуспех"):
+        if st.button("🔥 Очко Судьбы", use_container_width=True, help="Потратить Очко Судьбы"):
             msg, err = quick_fate_point(sheet)
             if err:
                 st.toast(err, icon="⚠️")
             else:
-                chat_history.append({
-                    "role": "user",
-                    "content": f"[ДЕЙСТВИЕ] {msg}",
-                    "rolls": [],
-                })
-                cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
-                st.session_state.character = sheet
-                cc.save_character(sheet)
+                _send_quick_action(msg, sheet, chat_history, localS)
                 st.rerun()
-
     with cols[1]:
         if st.button("💣 Граната", use_container_width=True):
             msg, err = quick_grenade(sheet)
             if err:
                 st.toast(err, icon="⚠️")
             else:
-                chat_history.append({"role": "user", "content": f"[ДЕЙСТВИЕ] {msg}", "rolls": []})
-                cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
-                st.session_state.character = sheet
-                cc.save_character(sheet)
+                _send_quick_action(msg, sheet, chat_history, localS)
                 st.rerun()
-
     cols = st.columns(2)
     with cols[0]:
         if st.button("🏥 Аптечка", use_container_width=True):
@@ -752,10 +853,7 @@ def _render_quick_actions(sheet, chat_history: list):
             if err:
                 st.toast(err, icon="⚠️")
             else:
-                chat_history.append({"role": "user", "content": f"[ДЕЙСТВИЕ] {msg}", "rolls": []})
-                cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
-                st.session_state.character = sheet
-                cc.save_character(sheet)
+                _send_quick_action(msg, sheet, chat_history, localS)
                 st.rerun()
     with cols[1]:
         if st.button("⚡ Стимулятор", use_container_width=True):
@@ -763,34 +861,25 @@ def _render_quick_actions(sheet, chat_history: list):
             if err:
                 st.toast(err, icon="⚠️")
             else:
-                chat_history.append({"role": "user", "content": f"[ДЕЙСТВИЕ] {msg}", "rolls": []})
-                cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
-                st.session_state.character = sheet
-                cc.save_character(sheet)
+                _send_quick_action(msg, sheet, chat_history, localS)
                 st.rerun()
 
-    # Снять эффект
     effects = sheet.get("effects", [])
     if effects:
         eff_to_remove = st.selectbox(
-            "Снять эффект",
-            options=["—"] + effects,
-            key="effect_remove_select",
-            label_visibility="collapsed",
+            "Снять эффект", options=["—"] + effects,
+            key="effect_remove_select", label_visibility="collapsed",
         )
-        if eff_to_remove != "—" and st.button("✖️ Снять выбранный эффект", use_container_width=True):
+        if eff_to_remove != "—" and st.button("✖️ Снять эффект", use_container_width=True):
             msg, err = quick_remove_effect(sheet, eff_to_remove)
             if err:
                 st.toast(err, icon="⚠️")
             else:
-                chat_history.append({"role": "user", "content": f"[ДЕЙСТВИЕ] {msg}", "rolls": []})
-                cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
-                st.session_state.character = sheet
-                cc.save_character(sheet)
+                _send_quick_action(msg, sheet, chat_history, localS)
                 st.rerun()
 
 
-def render_character_sidebar(sheet: dict, kb, model: str):
+def render_character_sidebar(sheet, kb, model, localS, chat_history):
     st.header("👤 Персонаж")
     st.write(f"**{sheet['name']}**")
     st.caption(f"{sheet.get('faction','')} → {sheet.get('subfaction','')} → {sheet.get('archetype','')}")
@@ -806,118 +895,86 @@ def render_character_sidebar(sheet: dict, kb, model: str):
     c2.metric("🧠 Безумие", sheet.get("insanity", 0))
 
     st.write("---")
-    chat_history = st.session_state.get("chat_history", [])
-    _render_quick_actions(sheet, chat_history)
+    _render_quick_actions(sheet, chat_history, localS)
     st.write("---")
 
-    tabs = st.tabs(["👤 Персонаж", "🎒 Инвентарь", "🌍 Мир", "🚀 Корабль", "📝 Заметки"])
+    tabs = st.tabs(["👤 Перс", "🎒 Инвент", "🌍 Мир", "🚀 Корабль", "📝 Заметки"])
 
-    # ==== ТАБ 1: Персонаж ====
     with tabs[0]:
         with st.expander("📊 Характеристики", expanded=False):
             for ch in cc.CHARACTERISTICS:
                 val = sheet["characteristics"].get(ch, 0)
                 bon = sheet.get("bonuses", {}).get(ch, val // 10)
                 st.write(f"**{ch}**: {val} (+{bon})")
-
         arm = sheet.get("armour", {})
         if arm:
             with st.expander("🛡️ Броня", expanded=False):
                 st.write(f"Голова: **{arm.get('head', 0)}** | Тело: **{arm.get('body', 0)}**")
                 st.write(f"Руки: **{arm.get('arms', 0)}** | Ноги: **{arm.get('legs', 0)}**")
-                if arm.get("notes"):
-                    st.caption(arm["notes"])
-
+                if arm.get("notes"): st.caption(arm["notes"])
         weapons = sheet.get("weapons", [])
         if weapons:
             with st.expander(f"⚔️ Оружие ({len(weapons)})", expanded=False):
                 for w in weapons:
                     st.markdown(f"**{w.get('name','')}**")
                     st.caption(w.get("stats", ""))
-                    if w.get("notes"):
-                        st.caption(f"_{w['notes']}_")
-
+                    if w.get("notes"): st.caption(f"_{w['notes']}_")
         talents = sheet.get("talents", [])
         if talents:
             with st.expander(f"✨ Таланты ({len(talents)})", expanded=False):
-                for t in talents:
-                    st.write(f"• {t}")
-
+                for t in talents: st.write(f"• {t}")
         skills = sheet.get("skills", [])
         if skills:
             with st.expander(f"📖 Навыки ({len(skills)})", expanded=False):
                 for s in skills:
                     st.write(f"• **{s['name']}** ({s.get('characteristic','')}): {s.get('value','')}")
-
         powers = sheet.get("psychic_powers", [])
         if powers:
             with st.expander(f"🔮 Психосилы ({len(powers)})", expanded=False):
-                for p in powers:
-                    st.write(f"• {p}")
+                for p in powers: st.write(f"• {p}")
 
-    # ==== ТАБ 2: Инвентарь ====
     with tabs[1]:
         st.markdown(f"### 💰 {sheet.get('currency', 'Троны')}: **{sheet.get('money', 0)}**")
-
         extra = sheet.get("extra_currencies", {})
         if extra:
             st.markdown("**Чужие валюты:**")
-            for cur, amt in extra.items():
-                st.write(f"• {cur}: **{amt}**")
-
+            for cur, amt in extra.items(): st.write(f"• {cur}: **{amt}**")
         sr = sheet.get("special_resources", {})
         if sr:
             st.markdown("**Особые ресурсы:**")
-            for res, amt in sr.items():
-                st.write(f"• {res}: **{amt}**")
-
+            for res, amt in sr.items(): st.write(f"• {res}: **{amt}**")
         equipment = sheet.get("equipment", [])
         st.markdown(f"### 🎒 Снаряжение ({len(equipment)})")
         if equipment:
-            for e in equipment:
-                st.write(f"• {e}")
+            for e in equipment: st.write(f"• {e}")
         else:
             st.caption("— пусто —")
-
         companions = sheet.get("companions", [])
         if companions:
             st.markdown("**🐾 Спутники:**")
-            for c in companions:
-                st.write(f"• {c}")
+            for c in companions: st.write(f"• {c}")
 
-    # ==== ТАБ 3: Мир ====
     with tabs[2]:
         loc = sheet.get("location", "")
         date = sheet.get("game_date", "")
-        if loc:
-            st.markdown(f"📍 **Локация:** {loc}")
-        if date:
-            st.markdown(f"⏱️ **Время:** {date}")
-
+        if loc: st.markdown(f"📍 **Локация:** {loc}")
+        if date: st.markdown(f"⏱️ **Время:** {date}")
         quests = sheet.get("quests", [])
         if quests:
             st.markdown("**📋 Задачи:**")
-            for q in quests:
-                st.write(f"• {q}")
-
+            for q in quests: st.write(f"• {q}")
         npcs = sheet.get("npcs", [])
         if npcs:
             st.markdown("**👥 NPC:**")
-            for n in npcs:
-                st.write(f"• {n}")
-
+            for n in npcs: st.write(f"• {n}")
         effects = sheet.get("effects", [])
         if effects:
             st.markdown("**⚡ Эффекты:**")
-            for e in effects:
-                st.write(f"• {e}")
-
+            for e in effects: st.write(f"• {e}")
         goals = sheet.get("goals", [])
         if goals:
             st.markdown("**🎯 Цели:**")
-            for g in goals:
-                st.write(f"• {g}")
-
+            for g in goals: st.write(f"• {g}")
         rep = sheet.get("reputation", {})
         if rep:
             st.markdown("**🌍 Репутация:**")
@@ -926,7 +983,6 @@ def render_character_sidebar(sheet: dict, kb, model: str):
                     sign = "+" if v > 0 else ""
                     st.write(f"• {k}: **{sign}{v}**")
 
-    # ==== ТАБ 4: Корабль ====
     with tabs[3]:
         ship = sheet.get("ship")
         if not ship:
@@ -934,29 +990,23 @@ def render_character_sidebar(sheet: dict, kb, model: str):
         else:
             st.markdown(f"### 🚀 {ship['name']}")
             st.caption(f"{ship.get('class','')} • {ship.get('type','')}")
-            if ship.get("status"):
-                st.write(f"**Статус:** {ship['status']}")
+            if ship.get("status"): st.write(f"**Статус:** {ship['status']}")
             st.write(ship.get("description", ""))
-
             hull = ship.get("hull", {})
             crew = ship.get("crew", {})
             c1, c2 = st.columns(2)
             c1.metric("Корпус", f"{hull.get('current',0)}/{hull.get('max',0)}")
             c2.metric("Экипаж", f"{crew.get('current',0)}/{crew.get('max',0)}")
-
             if ship.get("weapons"):
                 st.markdown("**Оружие:**")
-                for w in ship["weapons"]:
-                    st.write(f"• {w}")
+                for w in ship["weapons"]: st.write(f"• {w}")
             if ship.get("features"):
                 st.markdown("**Особенности:**")
-                for f in ship["features"]:
-                    st.write(f"• {f}")
+                for f in ship["features"]: st.write(f"• {f}")
             if ship.get("notes"):
                 st.markdown("**Заметки:**")
                 st.write(ship["notes"])
 
-    # ==== ТАБ 5: Заметки + Дневник ====
     with tabs[4]:
         notes_key = f"notes_field_{sheet.get('name', 'unnamed')}"
         if notes_key not in st.session_state:
@@ -966,25 +1016,53 @@ def render_character_sidebar(sheet: dict, kb, model: str):
             st.session_state.character["notes"] = st.session_state[notes_key]
             try:
                 cc.save_character(st.session_state.character)
+                _ls_save(localS, st.session_state.character,
+                         st.session_state.get("chat_history", []))
             except Exception:
                 pass
 
         st.markdown("**📝 Мои заметки**")
-        st.text_area(
-            "Заметки", key=notes_key, height=200,
-            label_visibility="collapsed",
-            placeholder="Имена NPC, планы, зацепки, долги...",
-            on_change=_save_notes,
-        )
-
+        st.text_area("Заметки", key=notes_key, height=200,
+                     label_visibility="collapsed",
+                     placeholder="Имена NPC, планы, зацепки, долги...",
+                     on_change=_save_notes)
         journal = sheet.get("journal", [])
         if journal:
             st.markdown("**📖 Дневник событий**")
-            for entry in journal:
-                st.write(f"• {entry}")
+            for entry in journal: st.write(f"• {entry}")
 
     st.write("---")
     st.caption(f"📚 Чанков: {kb.chunk_count} | 💬 Ходов: {len(chat_history)}")
+
+    # ---- Экспорт / импорт ----
+    with st.expander("⚙️ Экспорт / Импорт"):
+        try:
+            payload = _download_save_payload(sheet, chat_history)
+            st.download_button(
+                "💾 Скачать сейв (лист + история)",
+                data=payload,
+                file_name=f"{sheet.get('name','unnamed')}_save.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.caption(f"Ошибка: {e}")
+
+        uploaded = st.file_uploader("📥 Загрузить сейв", type=["json"],
+                                     key="sidebar_upload",
+                                     label_visibility="collapsed")
+        if uploaded is not None:
+            try:
+                data = json.loads(uploaded.read().decode("utf-8"))
+                if data.get("format") != SAVE_FORMAT:
+                    st.error("Не наш формат.")
+                else:
+                    st.session_state.character = data["character"]
+                    st.session_state.chat_history = data.get("chat_history", [])
+                    _ls_save(localS, data["character"], st.session_state.chat_history)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Ошибка: {e}")
 
     with st.expander("🛠 Отладка"):
         log_data = {
@@ -1009,10 +1087,12 @@ def render_character_sidebar(sheet: dict, kb, model: str):
     if st.button("🔄 Начать историю заново", use_container_width=True):
         st.session_state.chat_history = []
         cc.save_chat_history(sheet.get("name", "unnamed"), [])
+        _ls_save(localS, sheet, [])
         st.rerun()
+
     if st.button("Выйти в меню", use_container_width=True):
-        cc.save_chat_history(sheet.get("name", "unnamed"),
-                             st.session_state.get("chat_history", []))
+        cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
+        _ls_save(localS, sheet, chat_history)
         st.session_state.character = None
         st.session_state.chat_history = []
         st.session_state.show_last_request = False
@@ -1037,19 +1117,20 @@ def build_intro_message(sheet: dict) -> str:
     )
 
 
-def render_chat():
+def render_chat(localS):
     kb = get_kb()
     giga = get_giga()
     master_prompt = get_master_prompt()
 
-    with st.sidebar:
-        render_character_sidebar(st.session_state.character, kb, MODEL)
-
-    st.title("🎲 Игра")
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Вступление
+    with st.sidebar:
+        render_character_sidebar(st.session_state.character, kb, MODEL,
+                                 localS, st.session_state.chat_history)
+
+    st.title("🎲 Игра")
+
     if not st.session_state.chat_history:
         intro_user = build_intro_message(st.session_state.character)
         with st.spinner("Мастер готовит вступление..."):
@@ -1074,6 +1155,8 @@ def render_chat():
                 })
                 cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
                                      st.session_state.chat_history)
+                _ls_save(localS, st.session_state.character,
+                         st.session_state.chat_history)
             except Exception as e:
                 st.error(f"Ошибка вступления: {e}")
 
@@ -1092,6 +1175,7 @@ def render_chat():
         st.markdown(user_input)
     cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
                          st.session_state.chat_history)
+    _ls_save(localS, st.session_state.character, st.session_state.chat_history)
 
     context = kb.format_context(user_input, top_k=TOP_K_KNOWLEDGE)
     sheet_json = json.dumps(st.session_state.character, ensure_ascii=False, indent=2)
@@ -1165,7 +1249,7 @@ def render_chat():
                 new_path = cc.save_character(st.session_state.character)
                 st.session_state.character_path = new_path
             except Exception as e:
-                print(f"[STATE] Ошибка: {e}")
+                print(f"[STATE] ошибка: {e}")
 
         all_rolls = rolls_to_render + text_rolls
         for r in all_rolls:
@@ -1178,6 +1262,8 @@ def render_chat():
             })
             cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
                                  st.session_state.chat_history)
+            _ls_save(localS, st.session_state.character,
+                     st.session_state.chat_history)
             if state_updates:
                 st.rerun()
         elif not all_rolls:
@@ -1188,16 +1274,47 @@ def render_chat():
 # ГЛАВНАЯ
 # ============================================================
 def main():
+    localS = LocalStorage() if HAS_LS else None
+
     if "character" not in st.session_state: st.session_state.character = None
     if "in_wizard" not in st.session_state: st.session_state.in_wizard = False
+    if "chat_history" not in st.session_state: st.session_state.chat_history = []
     if "show_last_request" not in st.session_state: st.session_state.show_last_request = False
 
+        # ---- Автовосстановление из localStorage ----
+    if localS and not st.session_state.get("ls_restore_done") and not st.session_state.character:
+        attempts = st.session_state.get("ls_attempts", 0)
+        if attempts < 4:
+            loaded = _ls_load(localS)
+            if loaded and loaded.get("character"):
+                char = loaded["character"]
+                chat = loaded.get("chat_history", [])
+
+                # Если LS вернул пустую историю — пробуем подтянуть из файла
+                if not chat:
+                    try:
+                        file_chat = cc.load_chat_history(char.get("name", ""))
+                        if file_chat:
+                            chat = file_chat
+                    except Exception:
+                        pass
+
+                st.session_state.character = char
+                st.session_state.chat_history = chat
+                st.session_state.ls_restore_done = True
+            else:
+                st.session_state.ls_attempts = attempts + 1
+                st.rerun()
+        else:
+            st.session_state.ls_restore_done = True
+
+    # ---- Роутинг ----
     if st.session_state.character:
-        render_chat()
+        render_chat(localS)
     elif st.session_state.in_wizard:
-        render_wizard()
+        render_wizard(localS)
     else:
-        render_start_screen()
+        render_start_screen(localS)
 
 
 if __name__ == "__main__":
