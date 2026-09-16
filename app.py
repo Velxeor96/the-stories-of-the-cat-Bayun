@@ -173,7 +173,6 @@ DEFAULT_AVATAR_MASTER = "🎲"
 
 
 def get_faction_avatar(sheet) -> str:
-    """Возвращает emoji-аватар по фракции персонажа."""
     if not sheet:
         return DEFAULT_AVATAR_MASTER
     faction = str(sheet.get("faction", "")).lower()
@@ -433,7 +432,189 @@ section.main > div,
 }
 
 /* =====================================================
-   9. Мобильный
+   9. БРОСКИ КУБИКОВ — карточки (ПАКЕТ 2)
+   ===================================================== */
+.roll-card {
+    position: relative;
+    margin: 12px 0 16px 0;
+    padding: 16px 24px 18px 24px;
+    background: var(--bg-card, #1c1c22);
+    border: 1px solid var(--accent-dim, #8a7444);
+    clip-path: polygon(
+        14px 0, 100% 0,
+        100% calc(100% - 14px), calc(100% - 14px) 100%,
+        0 100%, 0 14px
+    );
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    color: var(--accent, #c9a961);
+    transition: box-shadow 0.25s ease;
+}
+.roll-card::before {
+    content: '';
+    position: absolute;
+    top: 6px; left: 6px;
+    width: 16px; height: 16px;
+    border-top: 2px solid currentColor;
+    border-left: 2px solid currentColor;
+    opacity: 0.75;
+    pointer-events: none;
+}
+.roll-card::after {
+    content: '';
+    position: absolute;
+    bottom: 6px; right: 6px;
+    width: 16px; height: 16px;
+    border-bottom: 2px solid currentColor;
+    border-right: 2px solid currentColor;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.roll-card--success {
+    color: #6ee787;
+    border-color: rgba(110, 231, 135, 0.55);
+    background:
+        linear-gradient(135deg,
+            rgba(110, 231, 135, 0.14),
+            rgba(110, 231, 135, 0.04)),
+        var(--bg-card, #1c1c22);
+    box-shadow: 0 0 22px rgba(110, 231, 135, 0.20),
+                inset 0 0 40px rgba(110, 231, 135, 0.05);
+}
+.roll-card--fail {
+    color: #ff7a7a;
+    border-color: rgba(255, 122, 122, 0.55);
+    background:
+        linear-gradient(135deg,
+            rgba(255, 122, 122, 0.14),
+            rgba(255, 122, 122, 0.04)),
+        var(--bg-card, #1c1c22);
+    box-shadow: 0 0 22px rgba(255, 122, 122, 0.20),
+                inset 0 0 40px rgba(255, 122, 122, 0.05);
+}
+.roll-card--info {
+    color: var(--accent, #c9a961);
+    border-color: var(--accent-dim, #8a7444);
+    background:
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--accent, #c9a961) 10%, transparent),
+            color-mix(in srgb, var(--accent, #c9a961) 2%, transparent)),
+        var(--bg-card, #1c1c22);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent, #c9a961) 18%, transparent);
+}
+
+.roll-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: currentColor;
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    margin-bottom: 14px;
+}
+.roll-header .roll-label {
+    opacity: 0.75;
+}
+.roll-header .roll-expr {
+    font-weight: 700;
+    color: currentColor;
+    text-shadow: 0 0 10px currentColor;
+    opacity: 0.95;
+}
+.roll-header .roll-reason {
+    font-style: italic;
+    opacity: 0.7;
+    margin-left: auto;
+    text-transform: none;
+    letter-spacing: 0.05em;
+    font-size: 0.82rem;
+}
+
+.roll-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    padding: 4px 0 12px 0;
+}
+
+.roll-value { text-align: center; }
+.roll-value-num {
+    font-size: clamp(2.6rem, 2rem + 2.2vw, 4.2rem);
+    font-weight: 700;
+    line-height: 1;
+    color: currentColor;
+    text-shadow: 0 0 26px currentColor;
+    letter-spacing: -0.02em;
+}
+.roll-value-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.3em;
+    opacity: 0.7;
+    margin-top: 6px;
+    text-transform: uppercase;
+}
+
+.roll-mod {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: currentColor;
+    opacity: 0.9;
+    padding: 4px 14px;
+    border-left: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+    border-right: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+    text-shadow: 0 0 12px currentColor;
+    letter-spacing: 0.04em;
+}
+
+.roll-meta {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 10px 0 6px 0;
+    border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    margin-top: 4px;
+}
+.roll-meta-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+.roll-meta-item .label {
+    font-size: 0.66rem;
+    letter-spacing: 0.25em;
+    opacity: 0.65;
+    text-transform: uppercase;
+}
+.roll-meta-item .value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: currentColor;
+    text-shadow: 0 0 12px currentColor;
+}
+
+.roll-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 8px 0 2px 0;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: currentColor;
+}
+.roll-status-icon { font-size: 1.15rem; }
+.roll-status-text { text-shadow: 0 0 16px currentColor; }
+
+/* =====================================================
+   10. Мобильный
    ===================================================== */
 @media (max-width: 768px) {
     html { font-size: 15px !important; }
@@ -457,10 +638,18 @@ section.main > div,
     .section-header .title { letter-spacing: 0.15em; font-size: 0.9rem; }
     .section-header .meta { display: none; }
     .chat-name { font-size: 0.65rem; letter-spacing: 0.15em; }
+
+    .roll-card { padding: 12px 16px 14px 16px; }
+    .roll-value-num { font-size: 2.4rem; }
+    .roll-meta { gap: 20px; }
+    .roll-meta-item .value { font-size: 1.1rem; }
+    .roll-body { gap: 16px; }
+    .roll-mod { font-size: 1.3rem; padding: 3px 10px; }
+    .roll-status { font-size: 0.78rem; letter-spacing: 0.25em; }
 }
 
 /* =====================================================
-   10. Ультравайд
+   11. Ультравайд
    ===================================================== */
 @media (min-width: 2000px) {
     html { font-size: 19px !important; }
@@ -680,7 +869,7 @@ h4, h5, h6 {
     color: var(--ink) !important;
 }
 
-/* === CHAT MESSAGE — роль-зависимый стиль (ПАКЕТ 1) === */
+/* === CHAT MESSAGE — роль-зависимый стиль === */
 [data-testid="stChatMessage"] {
     background: var(--bg-chat) !important;
     border: 1px solid var(--accent-dim) !important;
@@ -690,8 +879,6 @@ h4, h5, h6 {
     box-shadow: 0 2px 8px rgba(0,0,0,0.35);
     transition: box-shadow 0.2s ease;
 }
-
-/* Мастер — левая акцентная полоса */
 [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
     border-left: 3px solid var(--accent) !important;
     background: linear-gradient(90deg,
@@ -702,8 +889,6 @@ h4, h5, h6 {
     box-shadow: 0 4px 16px rgba(0,0,0,0.45),
                 0 0 20px color-mix(in srgb, var(--accent) 18%, transparent);
 }
-
-/* Игрок — правая акцентная полоса */
 [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
     border-right: 3px solid var(--accent-bright) !important;
     background: linear-gradient(270deg,
@@ -729,7 +914,6 @@ h4, h5, h6 {
     color: var(--ink-dim) !important;
 }
 
-/* Метка роли над репликой */
 .chat-name {
     display: flex;
     align-items: center;
@@ -752,7 +936,7 @@ h4, h5, h6 {
     box-shadow: 0 0 8px currentColor;
 }
 
-/* === CHAT INPUT — усиленные селекторы === */
+/* === CHAT INPUT === */
 [data-testid="stChatInput"],
 [data-testid="stChatInput"] > div,
 [data-testid="stChatInput"] > div > div,
@@ -805,13 +989,9 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     background: transparent !important;
 }
 
-/* === ALERTS (используются для бросков) === */
+/* === ALERTS — нейтрализуем, если вдруг где-то остались === */
 [data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
 [data-testid="stAlert"] * { font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important; }
-[data-testid="stAlert"][kind="success"] * { color: #0a2e0a !important; }
-[data-testid="stAlert"][kind="error"] * { color: #2e0a0a !important; }
-[data-testid="stAlert"][kind="info"] * { color: #0a1a2e !important; }
-[data-testid="stAlert"][kind="warning"] * { color: #2e220a !important; }
 
 /* === TEXT INPUT / TEXTAREA === */
 .stTextInput input, .stTextArea textarea,
@@ -1333,9 +1513,25 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
 
 
 # ============================================================
-# РЕНДЕР БРОСКА
+# РЕНДЕР БРОСКА — карточка (ПАКЕТ 2)
 # ============================================================
-def format_roll_text(r: dict) -> str:
+def _esc(text) -> str:
+    """Безопасное экранирование HTML."""
+    return (str(text)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;"))
+
+
+def render_roll(r: dict):
+    if not isinstance(r, dict):
+        st.warning(f"Некорректный результат броска: {r}")
+        return
+    if "error" in r:
+        st.error(f"Ошибка броска: {r['error']}")
+        return
+
     expr = r.get("expression", "?")
     reason = r.get("reason", "")
     rolls = r.get("rolls", [])
@@ -1344,31 +1540,78 @@ def format_roll_text(r: dict) -> str:
     difficulty = r.get("difficulty", 0)
     success = r.get("success")
     margin = r.get("margin", 0)
-    header = f"🎲 Бросок {expr}"
-    if reason: header += f" ({reason})"
-    header += ": "
+
     roll1 = rolls[0] if rolls else total
-    detail = f"выпало [{roll1}] + {mod} = {total}" if mod else f"выпало [{roll1}]"
-    if "1d100" in expr.lower() and difficulty > 0 and success is not None:
+
+    # Тип проверки — это бросок d100 со сложностью
+    is_check = "1d100" in expr.lower() and difficulty > 0 and success is not None
+
+    if is_check:
         if success:
-            detail += f" — ✅ УСПЕХ (сложность {difficulty}, степеней успеха: {margin})"
+            card_class = "roll-card--success"
+            status_icon = "✅"
+            status_text = "УСПЕХ"
+            margin_label = "СТЕПЕНИ УСПЕХА"
         else:
-            detail += f" — ❌ ПРОВАЛ (сложность {difficulty}, степеней провала: {margin})"
-    return header + detail
-
-
-def render_roll(r: dict):
-    if not isinstance(r, dict):
-        st.warning(f"Некорректный результат броска: {r}"); return
-    if "error" in r:
-        st.error(f"Ошибка броска: {r['error']}"); return
-    text = format_roll_text(r)
-    expr = r.get("expression", "").lower()
-    difficulty = r.get("difficulty", 0)
-    if "1d100" in expr and difficulty > 0:
-        (st.success if r.get("success") else st.error)(text)
+            card_class = "roll-card--fail"
+            status_icon = "❌"
+            status_text = "ПРОВАЛ"
+            margin_label = "СТЕПЕНИ ПРОВАЛА"
     else:
-        st.info(text)
+        card_class = "roll-card--info"
+        status_icon = "🎲"
+        status_text = "РЕЗУЛЬТАТ"
+        margin_label = ""
+
+    # Модификатор
+    mod_html = ""
+    if mod:
+        sign = "+" if mod > 0 else ""
+        mod_html = f'<div class="roll-mod">{sign}{mod}</div>'
+
+    # Причина
+    reason_html = f'<div class="roll-reason">{_esc(reason)}</div>' if reason else ""
+
+    # Метрики
+    meta_parts = []
+    if difficulty > 0:
+        meta_parts.append(
+            f'<div class="roll-meta-item">'
+            f'<span class="label">СЛОЖНОСТЬ</span>'
+            f'<span class="value">{difficulty}</span>'
+            f'</div>'
+        )
+    if is_check:
+        meta_parts.append(
+            f'<div class="roll-meta-item">'
+            f'<span class="label">{margin_label}</span>'
+            f'<span class="value">{margin}</span>'
+            f'</div>'
+        )
+    meta_html = f'<div class="roll-meta">{"".join(meta_parts)}</div>' if meta_parts else ""
+
+    html = (
+        f'<div class="roll-card {card_class}">'
+        f'  <div class="roll-header">'
+        f'    <span class="roll-label">🎲 БРОСОК</span>'
+        f'    <span class="roll-expr">{_esc(expr)}</span>'
+        f'    {reason_html}'
+        f'  </div>'
+        f'  <div class="roll-body">'
+        f'    <div class="roll-value">'
+        f'      <div class="roll-value-num">{roll1}</div>'
+        f'      <div class="roll-value-label">ВЫПАЛО</div>'
+        f'    </div>'
+        f'    {mod_html}'
+        f'  </div>'
+        f'  {meta_html}'
+        f'  <div class="roll-status">'
+        f'    <span class="roll-status-icon">{status_icon}</span>'
+        f'    <span class="roll-status-text">{status_text}</span>'
+        f'  </div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ============================================================
@@ -1496,7 +1739,6 @@ def render_section_header(num: str, title: str, meta: str = ""):
 
 
 def render_chat_name(role: str, player_name: str = "Игрок"):
-    """Метка роли над репликой: точка + имя."""
     label = "МАСТЕР" if role == "assistant" else player_name.upper()
     cls = "chat-name--master" if role == "assistant" else "chat-name--user"
     st.markdown(
@@ -2265,7 +2507,6 @@ def render_chat(localS):
         render_character_inline(st.session_state.character, kb, localS,
                                 st.session_state.chat_history)
 
-    # Аватар фракции + имя игрока
     faction_avatar = get_faction_avatar(st.session_state.character)
     player_name = (st.session_state.character or {}).get("name", "Игрок")
 
@@ -2298,7 +2539,6 @@ def render_chat(localS):
             except Exception as e:
                 st.error(f"Ошибка вступления: {e}")
 
-    # Отрисовка истории с метками роли
     for msg in st.session_state.chat_history:
         role = msg["role"]
         avatar = AVATAR_USER if role == "user" else faction_avatar
