@@ -1,7 +1,6 @@
 # app.py
 # Streamlit: визард + чат с Мастером.
-# Темы: 12 палитр. Универсальная типографика через clamp().
-# Единый ритм масштабирования — от телефона до 4K.
+# Темы: 12 палитр. Терминальный UI в стиле Rogue Trader.
 
 import json
 import re
@@ -152,24 +151,25 @@ DEFAULT_THEME = "grimdark"
 
 
 # ============================================================
-# BASE CSS — УНИВЕРСАЛЬНАЯ ТИПОГРАФИКА
+# BASE CSS
 # ============================================================
 BASE_CSS = """
 <style>
 /* =====================================================
-   1. КОРНЕВОЙ РАЗМЕР — единый ритм всего интерфейса
+   1. КОРНЕВОЙ РАЗМЕР
    ===================================================== */
 html {
     font-size: clamp(15px, 0.5vw + 12px, 18px) !important;
 }
 
 /* =====================================================
-   2. ШИРИНА КОНТЕНТА — нет пустот по бокам
+   2. ШИРИНА КОНТЕНТА
    ===================================================== */
 .block-container {
-    padding-top: 1rem !important;
+    padding-top: 0.6rem !important;
     padding-left: 1rem !important;
     padding-right: 1rem !important;
+    padding-bottom: 1rem !important;
     max-width: min(1700px, 94vw) !important;
     margin-left: auto !important;
     margin-right: auto !important;
@@ -187,7 +187,7 @@ header[data-testid="stHeader"], [data-testid="stHeader"] {
 [data-testid="stDecoration"] { display: none !important; }
 
 /* =====================================================
-   4. Убираем светлые панели снизу
+   4. Прозрачные панели снизу
    ===================================================== */
 [data-testid="stBottom"],
 [data-testid="stBottom"] > div,
@@ -201,12 +201,12 @@ section.main > div,
     background-color: transparent !important;
 }
 [data-testid="stMainBlockContainer"] {
-    padding-bottom: 2rem !important;
+    padding-bottom: 1rem !important;
     background: transparent !important;
 }
 
 /* =====================================================
-   5. Сайдбар-табы: wrap + компактно
+   5. Сайдбар-табы
    ===================================================== */
 [data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
     display: flex !important;
@@ -227,13 +227,11 @@ section.main > div,
 }
 [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] p {
     font-size: clamp(0.72rem, 0.68rem + 0.1vw, 0.85rem) !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    line-height: 1.2 !important;
+    margin: 0 !important; padding: 0 !important; line-height: 1.2 !important;
 }
 
 /* =====================================================
-   6. Safety: длинные слова, pre-блоки
+   6. Safety
    ===================================================== */
 [data-testid="stChatMessage"] p,
 [data-testid="stChatMessage"] li,
@@ -242,14 +240,176 @@ section.main > div,
     overflow-wrap: anywhere !important;
     word-break: break-word !important;
 }
-.stMarkdown pre,
-.stMarkdown code {
+.stMarkdown pre, .stMarkdown code {
     overflow-x: auto !important;
     max-width: 100% !important;
 }
 
 /* =====================================================
-   7. Мобильный (< 768px)
+   7. TERMINAL UI — панели, скобки, свечение
+   ===================================================== */
+
+/* --- Скошенная панель — стиль game-UI --- */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    position: relative;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--bg-light, #1e1e24) 92%, var(--accent, #c9a961) 8%),
+        var(--bg-card, #1c1c22)) !important;
+    border: 1px solid var(--accent-dim, #8a7444) !important;
+    border-radius: 0 !important;
+    padding: 22px 26px !important;
+    margin-bottom: 16px !important;
+    clip-path: polygon(
+        18px 0, 100% 0,
+        100% calc(100% - 18px), calc(100% - 18px) 100%,
+        0 100%, 0 18px
+    );
+    transition: all 0.22s ease;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #c9a961) 10%, transparent),
+                0 4px 18px rgba(0,0,0,0.45);
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    border-color: var(--accent, #c9a961) !important;
+    box-shadow: 0 0 0 1px var(--accent, #c9a961),
+                0 0 22px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent),
+                0 6px 24px rgba(0,0,0,0.55);
+}
+
+/* --- Угловые скобки для панелей --- */
+[data-testid="stVerticalBlockBorderWrapper"]::before {
+    content: '';
+    position: absolute;
+    top: 8px; left: 8px;
+    width: 22px; height: 22px;
+    border-top: 2px solid var(--accent, #c9a961);
+    border-left: 2px solid var(--accent, #c9a961);
+    pointer-events: none;
+    opacity: 0.85;
+}
+[data-testid="stVerticalBlockBorderWrapper"]::after {
+    content: '';
+    position: absolute;
+    bottom: 8px; right: 8px;
+    width: 22px; height: 22px;
+    border-bottom: 2px solid var(--accent, #c9a961);
+    border-right: 2px solid var(--accent, #c9a961);
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+/* =====================================================
+   8. ТЕРМИНАЛ — статус-бар, hero, заголовки секций
+   ===================================================== */
+
+/* --- Статус-бар --- */
+.terminal-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    margin-bottom: 18px;
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: clamp(0.68rem, 0.66rem + 0.1vw, 0.78rem);
+    color: var(--accent-dim, #8a7444);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    border-top: 1px solid var(--accent-dim, #8a7444);
+    border-bottom: 1px solid var(--accent-dim, #8a7444);
+    background: linear-gradient(90deg,
+        transparent 0%,
+        color-mix(in srgb, var(--accent, #c9a961) 5%, transparent) 50%,
+        transparent 100%);
+}
+.terminal-status span { white-space: nowrap; }
+.terminal-status .dot { color: var(--accent, #c9a961); margin: 0 8px; }
+
+/* --- Hero-панель --- */
+.hero-panel {
+    position: relative;
+    padding: 28px 36px 26px 36px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--bg-light, #1e1e24) 88%, var(--accent, #c9a961) 12%),
+        var(--bg-card, #1c1c22));
+    border: 1px solid var(--accent-dim, #8a7444);
+    clip-path: polygon(
+        26px 0, 100% 0,
+        100% calc(100% - 26px), calc(100% - 26px) 100%,
+        0 100%, 0 26px
+    );
+    box-shadow: 0 0 30px color-mix(in srgb, var(--accent, #c9a961) 12%, transparent),
+                0 4px 24px rgba(0,0,0,0.5),
+                inset 0 0 60px color-mix(in srgb, var(--accent, #c9a961) 4%, transparent);
+}
+.hero-panel .hero-title {
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: clamp(1.5rem, 1.15rem + 1.6vw, 2.6rem);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--accent-bright, #e8d9b8);
+    margin: 0 0 8px 0;
+    line-height: 1.15;
+    text-shadow: 0 0 20px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent);
+}
+.hero-panel .hero-sub {
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: clamp(0.78rem, 0.74rem + 0.2vw, 0.95rem);
+    color: var(--ink-dim, #b8ac92);
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.hero-panel .hero-sub .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-dim, #8a7444), transparent);
+    max-width: 200px;
+}
+
+/* --- Заголовок секции: [ 01 ]  TITLE  ──────── --- */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 22px 0 12px 0;
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.section-header .num {
+    display: inline-block;
+    padding: 3px 10px;
+    border: 1px solid var(--accent, #c9a961);
+    color: var(--accent, #c9a961);
+    font-weight: 700;
+    font-size: clamp(0.78rem, 0.74rem + 0.15vw, 0.92rem);
+    letter-spacing: 0.15em;
+    background: color-mix(in srgb, var(--accent, #c9a961) 8%, transparent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent, #c9a961) 20%, transparent);
+}
+.section-header .title {
+    color: var(--heading, #e8d9b8);
+    font-weight: 700;
+    font-size: clamp(0.95rem, 0.88rem + 0.3vw, 1.15rem);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.section-header .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--accent-dim, #8a7444), transparent 80%);
+}
+.section-header .meta {
+    color: var(--accent-dim, #8a7444);
+    font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.85rem);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* =====================================================
+   9. Мобильный
    ===================================================== */
 @media (max-width: 768px) {
     html { font-size: 15px !important; }
@@ -268,10 +428,14 @@ section.main > div,
         font-size: 0.7rem !important;
         padding: 3px 5px !important;
     }
+    .hero-panel { padding: 18px 20px !important; }
+    .hero-panel .hero-sub { letter-spacing: 0.2em; }
+    .section-header .title { letter-spacing: 0.15em; font-size: 0.9rem; }
+    .section-header .meta { display: none; }
 }
 
 /* =====================================================
-   8. Ультравайд (> 2000px)
+   10. Ультравайд
    ===================================================== */
 @media (min-width: 2000px) {
     html { font-size: 19px !important; }
@@ -285,7 +449,7 @@ section.main > div,
 
 
 # ============================================================
-# THEME CSS — шаблон с адаптивными размерами и подстановкой цветов
+# THEME CSS
 # ============================================================
 THEME_CSS_TEMPLATE = """
 <style>
@@ -305,17 +469,22 @@ THEME_CSS_TEMPLATE = """
     --link:      __LINK__;
 }
 
-/* Фон */
-.stApp { background: var(--bg-deep) !important; color: var(--ink) !important; }
+.stApp {
+    background-color: var(--bg-deep) !important;
+    color: var(--ink) !important;
+    background-image:
+        linear-gradient(color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px) !important;
+    background-size: 44px 44px !important;
+    background-position: 0 0 !important;
+}
 
-/* Нижняя панель под цвет темы */
 [data-testid="stBottom"],
 [data-testid="stBottomBlockContainer"] {
     background: var(--bg-deep) !important;
     border-top: 1px solid var(--accent-dim) !important;
 }
 
-/* === Заголовки === */
 h1, h2, h3, h4, h5, h6 {
     color: var(--heading) !important;
     font-weight: 700;
@@ -338,7 +507,6 @@ h4, h5, h6 {
     color: var(--accent-dim) !important;
 }
 
-/* === Основной текст === */
 .stMarkdown p, .stMarkdown li {
     font-size: 1.05rem;
     line-height: 1.65;
@@ -355,14 +523,12 @@ h4, h5, h6 {
     border-radius: 3px;
 }
 
-/* === Caption === */
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] *,
 .stCaption, .stCaption * {
     color: var(--ink-dim) !important;
     font-size: clamp(0.85rem, 0.8rem + 0.1vw, 1rem) !important;
 }
 
-/* === Метрики — с emoji, защита от наездов === */
 [data-testid="stMetric"] {
     background: var(--bg-card) !important;
     border: 1px solid var(--accent-dim) !important;
@@ -371,9 +537,7 @@ h4, h5, h6 {
     min-width: 0 !important;
     overflow: visible !important;
 }
-[data-testid="stMetricLabel"] {
-    overflow: visible !important;
-}
+[data-testid="stMetricLabel"] { overflow: visible !important; }
 [data-testid="stMetricLabel"] > div,
 [data-testid="stMetricLabel"] > div > div {
     color: var(--accent) !important;
@@ -396,7 +560,6 @@ h4, h5, h6 {
 }
 [data-testid="stMetricDelta"] { color: var(--ink-dim) !important; }
 
-/* === Сайдбар === */
 [data-testid="stSidebar"] {
     background: var(--bg-mid) !important;
     border-right: 1px solid var(--accent-dim);
@@ -410,40 +573,47 @@ h4, h5, h6 {
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] > * { color: var(--ink) !important; }
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] * { color: var(--ink-dim) !important; }
 
-/* === Кнопки === */
 .stButton > button, [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"] {
-    letter-spacing: 0.02em;
-    font-weight: 500 !important;
+    letter-spacing: 0.05em;
+    font-weight: 600 !important;
     background: var(--bg-light) !important;
     color: var(--accent-bright) !important;
     border: 1px solid var(--accent-dim) !important;
-    border-radius: 4px;
-    transition: all 0.18s ease;
+    border-radius: 3px;
+    transition: all 0.2s ease;
     font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important;
     white-space: nowrap !important;
+    text-transform: uppercase;
 }
 .stButton > button:hover, [data-testid="stBaseButton-secondary"]:hover {
     border-color: var(--accent) !important;
     color: var(--accent-bright) !important;
-    box-shadow: 0 0 10px rgba(128,128,128,0.20);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent),
+                0 0 26px color-mix(in srgb, var(--accent) 18%, transparent),
+                inset 0 0 8px color-mix(in srgb, var(--accent) 8%, transparent);
 }
 [data-testid="stBaseButton-primary"] {
-    background: var(--accent-dim) !important;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--accent-dim) 100%, transparent),
+        var(--accent-dim)) !important;
     border-color: var(--accent) !important;
     color: #ffffff !important;
 }
 [data-testid="stBaseButton-primary"]:hover {
     background: var(--accent) !important;
     color: #ffffff !important;
+    box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent),
+                0 0 32px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 [data-testid="stDownloadButton"] > button {
     background: var(--bg-light) !important;
     color: var(--accent-bright) !important;
     border: 1px solid var(--accent-dim) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important;
 }
 
-/* === Табы === */
 .stTabs [data-baseweb="tab-list"] { border-bottom: 1px solid var(--accent-dim); gap: 4px; }
 .stTabs [data-baseweb="tab"] {
     color: var(--ink-dim) !important;
@@ -459,16 +629,17 @@ h4, h5, h6 {
 }
 .stTabs [data-baseweb="tab-highlight"] { background-color: var(--accent) !important; }
 
-/* === Expander === */
 [data-testid="stExpander"] {
     border: 1px solid var(--accent-dim) !important;
-    border-radius: 5px;
+    border-radius: 4px;
     background: var(--bg-card) !important;
 }
 [data-testid="stExpander"] summary {
     color: var(--accent) !important;
     font-weight: 600 !important;
     font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }
 [data-testid="stExpander"] summary p {
     color: var(--accent) !important;
@@ -483,11 +654,10 @@ h4, h5, h6 {
     color: var(--ink) !important;
 }
 
-/* === Чат-сообщения — крупнее === */
 [data-testid="stChatMessage"] {
     background: var(--bg-chat) !important;
     border: 1px solid var(--accent-dim) !important;
-    border-radius: 8px;
+    border-radius: 6px;
     padding: 16px 20px !important;
     margin-bottom: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.35);
@@ -506,7 +676,6 @@ h4, h5, h6 {
     color: var(--ink-dim) !important;
 }
 
-/* === Чат-инпут === */
 [data-testid="stChatInput"] {
     background: var(--bg-light) !important;
     border: 1px solid var(--accent-dim) !important;
@@ -524,7 +693,6 @@ h4, h5, h6 {
 }
 [data-testid="stChatInput"] button { color: var(--accent) !important; background: transparent !important; }
 
-/* === Alerts === */
 [data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
 [data-testid="stAlert"] * { font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important; }
 [data-testid="stAlert"][kind="success"] * { color: #0a2e0a !important; }
@@ -532,7 +700,6 @@ h4, h5, h6 {
 [data-testid="stAlert"][kind="info"] * { color: #0a1a2e !important; }
 [data-testid="stAlert"][kind="warning"] * { color: #2e220a !important; }
 
-/* === Формы === */
 .stTextInput input, .stTextArea textarea,
 [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea {
     background: var(--bg-light) !important;
@@ -553,9 +720,10 @@ h4, h5, h6 {
 [data-testid="stWidgetLabel"] > div > div {
     color: var(--accent) !important;
     font-size: clamp(0.88rem, 0.85rem + 0.1vw, 1rem) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
 }
 
-/* === Select / radio / checkbox === */
 [data-baseweb="select"] input { color: var(--ink) !important; }
 [data-baseweb="select"] [role="button"] { color: var(--ink) !important; background: var(--bg-light) !important; }
 [data-baseweb="popover"] { background: var(--bg-light) !important; }
@@ -565,32 +733,30 @@ h4, h5, h6 {
 [data-testid="stRadio"] label p { color: var(--ink) !important; }
 [data-testid="stCheckbox"] label p { color: var(--ink) !important; }
 
-/* === File uploader === */
-[data-testid="stFileUploader"] section { background: var(--bg-mid) !important; border: 1px dashed var(--accent-dim) !important; }
+[data-testid="stFileUploader"] section {
+    background: color-mix(in srgb, var(--bg-mid) 80%, transparent) !important;
+    border: 1px dashed var(--accent-dim) !important;
+    border-radius: 4px !important;
+}
 [data-testid="stFileUploader"] section * { color: var(--ink) !important; }
 
-/* === Progress === */
 [data-testid="stProgress"] > div > div > div {
     background: linear-gradient(90deg, var(--accent-dim), var(--accent)) !important;
 }
 
-/* === Прочее === */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg-deep); }
 ::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 a { color: var(--link) !important; }
 a:hover { color: var(--accent-bright) !important; }
-hr { border-color: var(--accent-dim) !important; }
+hr { border-color: var(--accent-dim) !important; margin: 14px 0 !important; }
 </style>
 """
 
 
 def inject_custom_css(theme_key: str = DEFAULT_THEME):
     st.markdown(BASE_CSS, unsafe_allow_html=True)
-    if theme_key == "default":
-        return
-
     theme = THEMES.get(theme_key, THEMES[DEFAULT_THEME])
     css = THEME_CSS_TEMPLATE
     for k, v in {
@@ -1053,6 +1219,48 @@ def render_theme_selector(localS, location="sidebar"):
 
 
 # ============================================================
+# ХЕЛПЕРЫ UI
+# ============================================================
+def render_status_bar():
+    date_str = datetime.now().strftime("%d.%m.%Y")
+    st.markdown(
+        f'<div class="terminal-status">'
+        f'<span>◆ ROGUE TRADER</span>'
+        f'<span>ТЕРМИНАЛ ДОСТУПА</span>'
+        f'<span>{date_str}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_hero_panel():
+    st.markdown(
+        '<div class="hero-panel">'
+        '<div class="hero-title">⚔️ W A R H A M M E R   4 0 K</div>'
+        '<div class="hero-sub">'
+        '<span class="line"></span>'
+        '<span>RPG С ИИ-МАСТЕРОМ</span>'
+        '<span class="line"></span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_section_header(num: str, title: str, meta: str = ""):
+    meta_html = f'<span class="meta">{meta}</span>' if meta else ""
+    st.markdown(
+        f'<div class="section-header">'
+        f'<span class="num">{num}</span>'
+        f'<span class="title">{title}</span>'
+        f'<span class="line"></span>'
+        f'{meta_html}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
 # АВАТАРКИ
 # ============================================================
 AVATAR_USER = "🧑"
@@ -1083,22 +1291,23 @@ def render_wizard(localS):
     step = st.session_state.wizard_step
     data = st.session_state.wizard_data
 
+    render_status_bar()
     st.title("⚔️ Создание персонажа")
     st.progress((step + 1) / 8)
     st.caption(f"Шаг {step + 1} из 8")
 
     if step == 0:
-        st.header("Как генерировать характеристики?")
+        render_section_header("01", "СПОСОБ ГЕНЕРАЦИИ")
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("🎲 Броски кубиков (2d10 + модификатор)", use_container_width=True):
+            if st.button("🎲 Броски кубиков (2d10 + мод)", use_container_width=True):
                 data["generation_method"] = "dice"; wizard_go(1); st.rerun()
         with col2:
             if st.button("⚖️ Распределение очков (point-buy)", use_container_width=True):
                 data["generation_method"] = "pointbuy"; wizard_go(1); st.rerun()
 
     elif step == 1:
-        st.header("Выбери фракцию")
+        render_section_header("02", "ФРАКЦИЯ")
         for fid in factions_data.FACTION_ORDER:
             f = factions_data.FACTIONS[fid]
             with st.container(border=True):
@@ -1118,7 +1327,7 @@ def render_wizard(localS):
     elif step == 2:
         fid = data["faction_id"]
         f = factions_data.FACTIONS[fid]
-        st.header(f"{f['icon']} {f['name']} — выбери путь")
+        render_section_header("03", f"{f['name']} — ПУТЬ")
         for sid, sub in f["subfactions"].items():
             with st.container(border=True):
                 cols = st.columns([8, 2])
@@ -1136,7 +1345,7 @@ def render_wizard(localS):
         fid = data["faction_id"]
         sid = data["subfaction_id"]
         sub = factions_data.FACTIONS[fid]["subfactions"][sid]
-        st.header(f"{sub['name']} — выбери архетип")
+        render_section_header("04", f"{sub['name']} — АРХЕТИП")
         for aid, arch in sub["archetypes"].items():
             with st.container(border=True):
                 cols = st.columns([8, 2])
@@ -1155,7 +1364,7 @@ def render_wizard(localS):
         fid = data["faction_id"]
         sid = data["subfaction_id"]
         sub = factions_data.FACTIONS[fid]["subfactions"][sid]
-        st.header("Дополнительные параметры")
+        render_section_header("05", "ДОПОЛНИТЕЛЬНЫЕ ПАРАМЕТРЫ")
         for key, spec in sub.get("extra_choices", {}).items():
             st.subheader(spec["label"])
             choice = st.radio(spec["label"], options=spec["options"],
@@ -1172,7 +1381,7 @@ def render_wizard(localS):
         sid = data["subfaction_id"]
         sub = factions_data.FACTIONS[fid]["subfactions"][sid]
         dice_mod = sub.get("dice_modifier", 25)
-        st.header("Характеристики")
+        render_section_header("06", "ХАРАКТЕРИСТИКИ")
         if data["generation_method"] == "dice":
             if not data.get("dice_rolled_once"):
                 st.write(f"Бросок **2d10 + {dice_mod}**.")
@@ -1214,7 +1423,7 @@ def render_wizard(localS):
                     data["characteristics"] = dict(pv); wizard_go(6); st.rerun()
 
     elif step == 6:
-        st.header("Имя и детали")
+        render_section_header("07", "ИМЯ И ДЕТАЛИ")
         data["name"] = st.text_input("Имя *", value=data.get("name", ""))
         data["age"] = st.text_input("Возраст", value=data.get("age", ""))
         data["appearance"] = st.text_area("Внешность", value=data.get("appearance", ""), height=100)
@@ -1228,7 +1437,7 @@ def render_wizard(localS):
                 else: wizard_go(7); st.rerun()
 
     elif step == 7:
-        st.header("Лист персонажа")
+        render_section_header("08", "ЛИСТ ПЕРСОНАЖА")
         if not data.get("sheet"):
             with st.spinner("Мастер составляет лист..."):
                 try:
@@ -1302,55 +1511,110 @@ def _download_save_payload(sheet, chat_history):
 
 
 def render_start_screen(localS):
-    st.title("⚔️ Warhammer 40,000 — RPG с ИИ-Мастером")
-    with st.expander("🎨 Тема", expanded=False):
+    render_status_bar()
+    render_hero_panel()
+
+    # Селектор темы под hero, справа
+    col_l, col_theme = st.columns([3, 1])
+    with col_theme:
         render_theme_selector(localS, location="main")
-    st.write("---")
+
+    # ---- 01 · НОВАЯ ИГРА ----
+    render_section_header("01", "НОВАЯ ИГРА")
+
     col1, col2 = st.columns(2)
     with col1:
-        st.subheader("🆕 Новая игра")
-        if st.button("Создать персонажа", type="primary", use_container_width=True):
-            st.session_state.wizard_step = 0
-            st.session_state.wizard_data = {}
-            st.session_state.in_wizard = True
-            st.rerun()
+        with st.container(border=True):
+            st.markdown(
+                '<div style="font-family:Consolas,monospace;color:var(--accent,'
+                '#c9a961);font-size:1.8rem;letter-spacing:0.3em;'
+                'margin-bottom:6px;">⚔</div>'
+                '<div style="font-family:Consolas,monospace;color:var(--accent-bright,'
+                '#e8d9b8);font-size:1.05rem;letter-spacing:0.18em;'
+                'text-transform:uppercase;font-weight:700;margin-bottom:6px;">'
+                'Создать персонажа</div>'
+                '<div style="color:var(--ink-dim,#b8ac92);font-size:0.9rem;'
+                'line-height:1.5;margin-bottom:14px;">'
+                '8 шагов · броски кубиков или распределение очков</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("▶ НАЧАТЬ СОЗДАНИЕ", type="primary", use_container_width=True):
+                st.session_state.wizard_step = 0
+                st.session_state.wizard_data = {}
+                st.session_state.in_wizard = True
+                st.rerun()
     with col2:
-        st.subheader("📥 Загрузить из файла")
-        uploaded = st.file_uploader("JSON-файл сохранения", type=["json"],
-                                     label_visibility="collapsed")
-        if uploaded is not None:
-            try:
-                data = json.loads(uploaded.read().decode("utf-8"))
-                if data.get("format") != SAVE_FORMAT:
-                    st.error("Не наш формат сохранения.")
-                elif not data.get("character"):
-                    st.error("Файл без персонажа.")
-                else:
-                    st.session_state.character = data["character"]
-                    st.session_state.chat_history = data.get("chat_history", [])
-                    st.session_state.in_wizard = False
-                    cc.save_character(data["character"])
-                    cc.save_chat_history(data["character"].get("name", "unnamed"),
-                                         st.session_state.chat_history)
-                    _ls_save(localS, data["character"], st.session_state.chat_history)
-                    st.success("Персонаж загружен!")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Ошибка чтения файла: {e}")
-    st.write("---")
-    st.subheader("📂 Продолжить")
+        with st.container(border=True):
+            st.markdown(
+                '<div style="font-family:Consolas,monospace;color:var(--accent,'
+                '#c9a961);font-size:1.8rem;letter-spacing:0.3em;'
+                'margin-bottom:6px;">📥</div>'
+                '<div style="font-family:Consolas,monospace;color:var(--accent-bright,'
+                '#e8d9b8);font-size:1.05rem;letter-spacing:0.18em;'
+                'text-transform:uppercase;font-weight:700;margin-bottom:6px;">'
+                'Загрузить сохранение</div>'
+                '<div style="color:var(--ink-dim,#b8ac92);font-size:0.9rem;'
+                'line-height:1.5;margin-bottom:6px;">'
+                'JSON-файл персонажа (лист + история)</div>',
+                unsafe_allow_html=True,
+            )
+            uploaded = st.file_uploader("JSON-файл сохранения", type=["json"],
+                                         label_visibility="collapsed")
+            if uploaded is not None:
+                try:
+                    data = json.loads(uploaded.read().decode("utf-8"))
+                    if data.get("format") != SAVE_FORMAT:
+                        st.error("Не наш формат сохранения.")
+                    elif not data.get("character"):
+                        st.error("Файл без персонажа.")
+                    else:
+                        st.session_state.character = data["character"]
+                        st.session_state.chat_history = data.get("chat_history", [])
+                        st.session_state.in_wizard = False
+                        cc.save_character(data["character"])
+                        cc.save_chat_history(data["character"].get("name", "unnamed"),
+                                             st.session_state.chat_history)
+                        _ls_save(localS, data["character"], st.session_state.chat_history)
+                        st.success("Персонаж загружен!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Ошибка чтения файла: {e}")
+
+    # ---- 02 · ПЕРСОНАЖИ ----
     chars = cc.list_characters()
+    meta = f"{len(chars)} ЗАПИСЬ" if chars else "ПУСТО"
+    render_section_header("02", "ПЕРСОНАЖИ", meta)
+
     if not chars:
         st.info("Нет сохранённых персонажей.")
     else:
-        for c in chars:
+        for i, c in enumerate(chars, start=1):
             with st.container(border=True):
-                cols = st.columns([5, 2, 2, 2])
-                with cols[0]:
-                    st.markdown(f"**{c['name']}**")
-                    st.caption(f"{c.get('faction','')} → {c.get('subfaction','')} → {c.get('archetype','')}")
-                with cols[1]:
-                    if st.button("▶️ Играть", key=f"load_{c['name']}", use_container_width=True):
+                st.markdown(
+                    f'<div style="display:flex;justify-content:space-between;'
+                    f'align-items:center;margin-bottom:14px;">'
+                    f'<span style="font-family:Consolas,monospace;color:var(--accent,'
+                    f'#c9a961);font-size:1.2rem;letter-spacing:0.2em;">☠</span>'
+                    f'<span style="font-family:Consolas,monospace;color:var(--accent-dim,'
+                    f'#8a7444);font-size:0.78rem;letter-spacing:0.22em;">'
+                    f'ЗАПИСЬ {i:02d}</span>'
+                    f'</div>'
+                    f'<div style="font-family:Consolas,monospace;color:var(--heading,'
+                    f'#e8d9b8);font-size:1.5rem;letter-spacing:0.14em;font-weight:700;'
+                    f'margin-bottom:6px;">{c["name"]}</div>'
+                    f'<div style="height:1px;background:linear-gradient(90deg,'
+                    f'var(--accent-dim,#8a7444),transparent 70%);margin-bottom:12px;"></div>'
+                    f'<div style="color:var(--ink-dim,#b8ac92);font-family:Consolas,'
+                    f'monospace;font-size:0.88rem;letter-spacing:0.1em;'
+                    f'margin-bottom:16px;">'
+                    f'{c.get("faction","")} · {c.get("subfaction","")} · '
+                    f'{c.get("archetype","")}</div>',
+                    unsafe_allow_html=True,
+                )
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    if st.button("▶ ИГРАТЬ", key=f"load_{c['name']}",
+                                 use_container_width=True, type="primary"):
                         sheet = cc.load_character(c["path"])
                         chat = cc.load_chat_history(c["name"])
                         st.session_state.character = sheet
@@ -1359,36 +1623,118 @@ def render_start_screen(localS):
                         st.session_state.in_wizard = False
                         _ls_save(localS, sheet, chat)
                         st.rerun()
-                with cols[2]:
+                with b2:
                     try:
                         sheet_data = cc.load_character(c["path"])
                         chat_data = cc.load_chat_history(c["name"])
                         payload = _download_save_payload(sheet_data, chat_data)
                         st.download_button(
-                            "💾 Скачать",
+                            "💾 СКАЧАТЬ",
                             data=payload,
                             file_name=f"{c['name']}_save.json",
                             mime="application/json",
                             key=f"dl_{c['name']}",
                             use_container_width=True,
-                            help="Скачать сохранение (лист + история)",
                         )
                     except Exception:
                         st.caption("—")
-                with cols[3]:
-                    if st.button("🗑 Удалить", key=f"del_{c['name']}",
-                                 use_container_width=True,
-                                 help="Удалить персонажа"):
+                with b3:
+                    if st.button("🗑 УДАЛИТЬ", key=f"del_{c['name']}",
+                                 use_container_width=True):
                         cc.delete_character(c["path"])
                         cc.delete_chat_history(c["name"])
                         st.rerun()
-    st.write("---")
-    cols = st.columns([3, 2, 3])
-    with cols[1]:
-        if st.button("🗑 Очистить сохранение в браузере", use_container_width=True,
-                     help="Удаляет автосохранение"):
+
+    # ---- ХВОСТ ----
+    st.write("")
+    st.write("")
+    col_a, col_b, col_c = st.columns([3, 2, 3])
+    with col_b:
+        if st.button("⌫ СБРОСИТЬ АВТОСОХРАНЕНИЕ", use_container_width=True):
             _ls_clear(localS)
             st.toast("Автосохранение очищено", icon="✅")
+
+
+# ============================================================
+# ВСТРОЕННЫЙ ЛИСТ ПЕРСОНАЖА
+# ============================================================
+def render_character_inline(sheet, kb, localS, chat_history):
+    wounds = sheet.get("wounds", {"current": 0, "max": 0})
+    fate = sheet.get("fate_points", {"current": 0, "max": 0})
+
+    c1, c2 = st.columns(2)
+    c1.metric("❤️ Раны", f"{wounds.get('current', 0)}/{wounds.get('max', 0)}")
+    c2.metric("🍀 Судьба", f"{fate.get('current', 0)}/{fate.get('max', 0)}")
+    c1, c2 = st.columns(2)
+    c1.metric("🌀 Порча", sheet.get("corruption", 0))
+    c2.metric("🧠 Безумие", sheet.get("insanity", 0))
+
+    loc = sheet.get("location", "")
+    date = sheet.get("game_date", "")
+    if loc: st.markdown(f"📍 **Локация:** {loc}")
+    if date: st.markdown(f"⏱️ **Время:** {date}")
+
+    money = sheet.get("money", 0)
+    currency = sheet.get("currency", "Троны")
+    st.markdown(f"💰 **{currency}:** {money}")
+
+    with st.expander("🎒 Снаряжение", expanded=False):
+        eq = sheet.get("equipment", [])
+        if eq:
+            for e in eq: st.write(f"• {e}")
+        else:
+            st.caption("— пусто —")
+
+    with st.expander("⚔️ Оружие", expanded=False):
+        for w in sheet.get("weapons", []):
+            st.markdown(f"**{w.get('name','')}**")
+            st.caption(w.get("stats", ""))
+            if w.get("notes"): st.caption(f"_{w['notes']}_")
+
+    with st.expander("✨ Таланты", expanded=False):
+        for t in sheet.get("talents", []): st.write(f"• {t}")
+
+    with st.expander("📖 Навыки", expanded=False):
+        for s in sheet.get("skills", []):
+            st.write(f"• **{s['name']}** ({s.get('characteristic','')}): {s.get('value','')}")
+
+    powers = sheet.get("psychic_powers", [])
+    if powers:
+        with st.expander("🔮 Психосилы", expanded=False):
+            for p in powers: st.write(f"• {p}")
+
+    with st.expander("📋 Задачи", expanded=False):
+        q = sheet.get("quests", [])
+        if q:
+            for item in q: st.write(f"• {item}")
+        else:
+            st.caption("— нет —")
+
+    with st.expander("👥 NPC", expanded=False):
+        n = sheet.get("npcs", [])
+        if n:
+            for item in n: st.write(f"• {item}")
+        else:
+            st.caption("— нет —")
+
+    effects = sheet.get("effects", [])
+    if effects:
+        with st.expander("⚡ Эффекты", expanded=False):
+            for e in effects: st.write(f"• {e}")
+
+    with st.expander("🚀 Корабль", expanded=False):
+        ship = sheet.get("ship")
+        if not ship:
+            st.caption("— нет —")
+        else:
+            st.markdown(f"**{ship['name']}**")
+            st.caption(f"{ship.get('class','')} • {ship.get('type','')}")
+            st.write(ship.get("description", ""))
+
+    journal = sheet.get("journal", [])
+    if journal:
+        with st.expander("📖 Дневник", expanded=False):
+            for entry in journal: st.write(f"• {entry}")
 
 
 # ============================================================
@@ -1669,7 +2015,12 @@ def render_chat(localS):
         render_character_sidebar(st.session_state.character, kb, MODEL,
                                  localS, st.session_state.chat_history)
 
+    render_status_bar()
     st.title("🎲 Игра")
+
+    with st.expander("👤 Лист персонажа", expanded=False):
+        render_character_inline(st.session_state.character, kb, localS,
+                                st.session_state.chat_history)
 
     if not st.session_state.chat_history:
         intro_user = build_intro_message(st.session_state.character)
