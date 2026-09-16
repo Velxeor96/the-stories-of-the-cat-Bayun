@@ -37,12 +37,17 @@ MAX_FUNCTION_ITERATIONS = 15
 TOP_K_KNOWLEDGE = 5
 MASTER_PROMPT_PATH = "prompts/master.txt"
 
-LS_KEY = "wh40k_rpg_save"
+LS_KEY = "wh40k_rpg_save_v2"
 LS_THEME_KEY = "wh40k_theme"
 SAVE_FORMAT = "wh40k_rpg_save"
 SAVE_VERSION = 1
 
-st.set_page_config(page_title="Warhammer 40K — RPG с ИИ-Мастером", layout="wide")
+st.set_page_config(
+    page_title="Warhammer 40K · RPG",
+    page_icon="⚔️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 # ============================================================
@@ -51,11 +56,11 @@ st.set_page_config(page_title="Warhammer 40K — RPG с ИИ-Мастером", 
 THEMES = {
     "default": {
         "label": "🎨 Стандартная",
-        "bg_deep": "#0e1117", "bg_mid": "#161a21", "bg_light": "#1e2229",
+        "bg_deep": "#0f1116", "bg_mid": "#161a21", "bg_light": "#1e2229",
         "bg_card": "#1c2028", "bg_chat": "#262a33",
-        "accent": "#ff4b4b", "accent_dim": "#b83737", "accent_bright": "#ff7a7a",
-        "text": "#fafafa", "text_dim": "#a0a4ab", "text_faint": "#6e7179",
-        "heading": "#fafafa", "link": "#ff4b4b",
+        "accent": "#d98a3a", "accent_dim": "#7a4a1f", "accent_bright": "#f5c88a",
+        "text": "#f0f0f0", "text_dim": "#a8a8b0", "text_faint": "#6e7179",
+        "heading": "#f5c88a", "link": "#d98a3a",
     },
     "grimdark": {
         "label": "⚔️ Grimdark",
@@ -151,7 +156,7 @@ DEFAULT_THEME = "grimdark"
 
 
 # ============================================================
-# АВАТАРЫ ФРАКЦИЙ — для чата
+# АВАТАРЫ ФРАКЦИЙ
 # ============================================================
 FACTION_AVATARS = {
     "империум": "🛡️",
@@ -170,6 +175,64 @@ FACTION_AVATARS = {
 }
 
 DEFAULT_AVATAR_MASTER = "🎲"
+
+# ============================================================
+# РУССКИЕ ИМЕНА ХАРАКТЕРИСТИК (короткие для кнопок)
+# Поддержка алиасов: Wil/WP, Fel/FEL/fel и т.д.
+# ============================================================
+# ============================================================
+# РУССКИЕ ИМЕНА ХАРАКТЕРИСТИК
+#   Короткие — для кнопок.  Длинные — для подсказок.
+# ============================================================
+CHAR_RU_SHORT = {
+    "WS":  "Рук",     # рукопашный бой
+    "BS":  "Стр",     # стрельба
+    "S":   "Сил",     # сила
+    "T":   "Вын",     # выносливость
+    "AG":  "Лов",     # ловкость
+    "INT": "Инт",     # интеллект
+    "PER": "Восп",    # восприятие
+    "WIL": "Воля",    # сила воли
+    "WP":  "Воля",
+    "FEL": "Общ",     # общительность
+    "STR": "Сил",
+    "TOU": "Вын",
+    "TGH": "Вын",
+    "AGI": "Лов",
+    "PERC": "Восп",
+    "WILL": "Воля",
+    "SOC": "Общ",
+}
+
+CHAR_RU_LONG = {
+    "WS": "Рукопашный бой",
+    "BS": "Стрельба",
+    "S": "Сила",
+    "T": "Выносливость",
+    "Ag": "Ловкость",
+    "Int": "Интеллект",
+    "Per": "Восприятие",
+    "Wil": "Сила воли",
+    "WP": "Сила воли",
+    "Fel": "Общительность",
+}
+
+
+def char_ru(key: str) -> str:
+    """Короткое русское имя для кнопки."""
+    if not key:
+        return ""
+    k = str(key).strip().upper().rstrip(".")
+    return CHAR_RU_SHORT.get(k, str(key))
+
+
+def char_ru_long(key: str) -> str:
+    """Длинное русское имя для tooltip."""
+    if not key:
+        return ""
+    return CHAR_RU_LONG.get(str(key).strip(), str(key))
+
+
 
 
 def get_faction_avatar(sheet) -> str:
@@ -212,11 +275,48 @@ html {
    ===================================================== */
 header[data-testid="stHeader"], [data-testid="stHeader"] {
     background: transparent !important;
-    height: 0 !important;
-    visibility: hidden !important;
+    min-height: 44px !important;
+    height: auto !important;
 }
 [data-testid="stToolbar"] { top: 0.5rem !important; right: 0.8rem !important; }
 [data-testid="stDecoration"] { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
+[data-testid="stHeader"] > div:first-child > div:first-child {
+    background: transparent !important;
+}
+
+/* === Кнопка разворота сайдбара — ВСЕГДА видима и кликабельна === */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapsedControl"] > div,
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="collapsedControl"],
+button[kind="header"] {
+    visibility: visible !important;
+    display: block !important;
+    opacity: 1 !important;
+    z-index: 999999 !important;
+    position: fixed !important;
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+}
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarCollapseButton"] button,
+button[kind="header"] {
+    background: var(--bg-light, #1e1e24) !important;
+    color: var(--accent-bright, #e8d9b8) !important;
+    border: 1px solid var(--accent-dim, #8a7444) !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent) !important;
+}
+[data-testid="stSidebarCollapsedControl"] button:hover,
+[data-testid="stSidebarCollapseButton"] button:hover,
+button[kind="header"]:hover {
+    border-color: var(--accent, #c9a961) !important;
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent, #c9a961) 60%, transparent) !important;
+}
 
 /* =====================================================
    4. Прозрачные панели снизу
@@ -432,7 +532,7 @@ section.main > div,
 }
 
 /* =====================================================
-   9. БРОСКИ КУБИКОВ — карточки (ПАКЕТ 2)
+   9. БРОСКИ КУБИКОВ — карточки
    ===================================================== */
 .roll-card {
     position: relative;
@@ -515,9 +615,7 @@ section.main > div,
     border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
     margin-bottom: 14px;
 }
-.roll-header .roll-label {
-    opacity: 0.75;
-}
+.roll-header .roll-label { opacity: 0.75; }
 .roll-header .roll-expr {
     font-weight: 700;
     color: currentColor;
@@ -532,7 +630,6 @@ section.main > div,
     letter-spacing: 0.05em;
     font-size: 0.82rem;
 }
-
 .roll-body {
     display: flex;
     align-items: center;
@@ -540,7 +637,6 @@ section.main > div,
     gap: 30px;
     padding: 4px 0 12px 0;
 }
-
 .roll-value { text-align: center; }
 .roll-value-num {
     font-size: clamp(2.6rem, 2rem + 2.2vw, 4.2rem);
@@ -557,7 +653,6 @@ section.main > div,
     margin-top: 6px;
     text-transform: uppercase;
 }
-
 .roll-mod {
     font-size: 1.6rem;
     font-weight: 700;
@@ -569,7 +664,6 @@ section.main > div,
     text-shadow: 0 0 12px currentColor;
     letter-spacing: 0.04em;
 }
-
 .roll-meta {
     display: flex;
     justify-content: center;
@@ -596,7 +690,6 @@ section.main > div,
     color: currentColor;
     text-shadow: 0 0 12px currentColor;
 }
-
 .roll-status {
     display: flex;
     align-items: center;
@@ -612,6 +705,361 @@ section.main > div,
 }
 .roll-status-icon { font-size: 1.15rem; }
 .roll-status-text { text-shadow: 0 0 16px currentColor; }
+
+/* =====================================================
+   9-B. САЙДБАР — ЛИСТ ПЕРСОНАЖА
+   ===================================================== */
+.char-sheet-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--accent-dim, #8a7444);
+}
+.char-avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: 2px solid var(--accent, #c9a961);
+    background: color-mix(in srgb, var(--accent-dim, #8a7444) 30%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent),
+                inset 0 0 10px color-mix(in srgb, var(--accent, #c9a961) 15%, transparent);
+    flex-shrink: 0;
+}
+.char-sheet-name {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--accent-bright, #e8d9b8);
+    margin: 0 0 3px 0;
+    line-height: 1.1;
+}
+.char-sheet-sub {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim, #b8ac92);
+    line-height: 1.3;
+}
+
+.stat-bar { margin: 8px 0; }
+.stat-bar-head {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+.stat-bar-label { color: var(--ink-dim, #b8ac92); }
+.stat-bar-value { color: var(--accent-bright, #e8d9b8); font-weight: 700; }
+.stat-bar-track {
+    height: 8px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent-dim, #8a7444) 18%, transparent);
+    overflow: hidden;
+    border: 1px solid var(--accent-dim, #8a7444);
+}
+.stat-bar-fill {
+    height: 100%;
+    transition: width 0.4s ease;
+}
+.stat-bar--wounds .stat-bar-fill {
+    background: linear-gradient(90deg, #6b1a1a, #d33);
+    box-shadow: 0 0 8px rgba(220, 50, 50, 0.6);
+}
+.stat-bar--fate .stat-bar-fill {
+    background: linear-gradient(90deg, var(--accent-dim, #8a7444), var(--accent, #c9a961));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent, #c9a961) 55%, transparent);
+}
+.stat-bar--corruption .stat-bar-fill {
+    background: linear-gradient(90deg, #4a1a6b, #9c5cff);
+    box-shadow: 0 0 8px rgba(156, 92, 255, 0.5);
+}
+.stat-bar--insanity .stat-bar-fill {
+    background: linear-gradient(90deg, #6b4a1a, #d4913a);
+    box-shadow: 0 0 8px rgba(212, 145, 58, 0.5);
+}
+
+.meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin: 12px 0;
+}
+.meta-tile {
+    background: var(--bg-card, #1c1c22);
+    border: 1px solid var(--accent-dim, #8a7444);
+    border-radius: 4px;
+    padding: 10px 6px 9px 6px;
+    text-align: center;
+    font-family: 'Consolas', 'Menlo', monospace;
+}
+.meta-tile .icon { font-size: 1rem; opacity: 0.9; }
+.meta-tile .label {
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent, #c9a961) !important;
+    margin: 4px 0 5px;
+}
+.meta-tile .value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent-bright, #e8d9b8);
+}
+
+.attr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 7px;
+    margin: 10px 0 14px;
+}
+.attr-tile {
+    background: color-mix(in srgb, var(--bg-card, #1c1c22) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-dim, #8a7444) 80%, transparent);
+    border-radius: 4px;
+    padding: 10px 6px 9px 6px;
+    text-align: center;
+    font-family: 'Consolas', 'Menlo', monospace;
+    transition: all 0.18s ease;
+}
+.attr-tile:hover {
+    border-color: var(--accent, #c9a961);
+    background: color-mix(in srgb, var(--bg-card, #1c1c22) 78%, var(--accent, #c9a961) 8%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 25%, transparent);
+}
+.attr-tile .attr-key {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    color: var(--accent, #c9a961) !important;
+    text-transform: uppercase;
+    opacity: 1 !important;
+    font-weight: 700;
+}
+.attr-tile .attr-val {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--ink, #ede4d3);
+    margin: 5px 0 3px;
+    line-height: 1;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--ink, #ede4d3) 20%, transparent);
+}
+.attr-tile .attr-bon {
+    font-size: 0.85rem;
+    color: var(--accent-bright, #e8d9b8);
+    opacity: 0.95;
+    font-weight: 600;
+}
+
+
+/* === Усиленная читаемость сайдбара (patch5) === */
+[data-testid="stSidebar"] .stButton > button {
+    color: var(--accent-bright, #e8d9b8) !important;
+    font-weight: 600 !important;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--accent, #c9a961) 40%, transparent);
+    letter-spacing: 0.04em !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary *,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+    color: var(--accent-bright, #e8d9b8) !important;
+    font-weight: 700 !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 0.1em !important;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent, #c9a961) 45%, transparent);
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg {
+    fill: var(--accent, #c9a961) !important;
+}
+
+/* === Полоса локации над чатом (patch6) === */
+.location-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 18px;
+    margin: 0 0 18px 0;
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--accent, #c9a961) 14%, transparent),
+        transparent 65%);
+    border-left: 3px solid var(--accent, #c9a961);
+    border-top: 1px solid color-mix(in srgb, var(--accent, #c9a961) 22%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent, #c9a961) 22%, transparent);
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: clamp(0.78rem, 0.74rem + 0.2vw, 0.92rem);
+    color: var(--accent-bright, #e8d9b8);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent, #c9a961) 15%, transparent);
+}
+.location-bar .lbl {
+    color: var(--accent, #c9a961);
+    font-weight: 700;
+    letter-spacing: 0.22em;
+}
+.location-bar .val {
+    color: var(--accent-bright, #e8d9b8);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent);
+}
+.location-bar .dot {
+    color: var(--accent-dim, #8a7444);
+    opacity: 0.7;
+    font-weight: 700;
+}
+
+/* === Пульс HP при низких ранах (patch6) === */
+@keyframes pulse-wounds {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(220, 50, 50, 0.6);
+        filter: brightness(1);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 60, 60, 1),
+                    0 0 32px rgba(255, 60, 60, 0.5);
+        filter: brightness(1.25);
+    }
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-fill {
+    animation: pulse-wounds 1.5s ease-in-out infinite;
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-value {
+    color: #ff7a7a !important;
+    text-shadow: 0 0 10px rgba(255, 122, 122, 0.8);
+}
+
+/* === Анимация карточки броска (patch9) === */
+@keyframes roll-in {
+    0% {
+        opacity: 0;
+        transform: translateY(14px) scale(0.94);
+        filter: blur(4px);
+    }
+    60% { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.roll-card {
+    animation: roll-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* === XP-бар === */
+.stat-bar--xp .stat-bar-fill {
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--accent, #c9a961) 60%, #4fc3f7),
+        var(--accent-bright, #e8d9b8));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent, #c9a961) 55%, transparent);
+}
+
+/* === Карточка полученного предмета (patch9) === */
+@keyframes loot-in {
+    0% {
+        opacity: 0;
+        transform: translateX(-30px) rotate(-2deg) scale(0.9);
+    }
+    60% { transform: translateX(4px) rotate(0.5deg) scale(1.02); }
+    100% { opacity: 1; transform: translateX(0) rotate(0) scale(1); }
+}
+.loot-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    margin: 10px 0 14px 0;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--accent, #c9a961) 22%, transparent),
+        color-mix(in srgb, var(--accent, #c9a961) 6%, transparent));
+    border: 1px solid var(--accent, #c9a961);
+    border-left: 4px solid var(--accent-bright, #e8d9b8);
+    clip-path: polygon(
+        12px 0, 100% 0,
+        100% calc(100% - 12px), calc(100% - 12px) 100%,
+        0 100%, 0 12px
+    );
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent),
+                inset 0 0 30px color-mix(in srgb, var(--accent, #c9a961) 8%, transparent);
+    font-family: 'Consolas', 'Menlo', monospace;
+    animation: loot-in 0.55s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    position: relative;
+}
+.loot-card::after {
+    content: '';
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 14px; height: 14px;
+    border-top: 2px solid var(--accent-bright, #e8d9b8);
+    border-right: 2px solid var(--accent-bright, #e8d9b8);
+    opacity: 0.7;
+}
+.loot-icon {
+    font-size: 2rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent, #c9a961) 60%, transparent));
+    flex-shrink: 0;
+}
+.loot-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.loot-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.28em;
+    color: var(--accent, #c9a961);
+    text-transform: uppercase;
+    font-weight: 700;
+}
+.loot-name {
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+    color: var(--accent-bright, #e8d9b8);
+    font-weight: 700;
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 45%, transparent);
+    word-break: break-word;
+}
+.sidebar-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-dim, #8a7444), transparent);
+    margin: 14px 0;
+}
+.sidebar-section-title {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.16em;
+    color: var(--accent, #c9a961) !important;
+    text-transform: uppercase;
+    margin: 12px 0 8px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent, #c9a961) 35%, transparent);
+    font-weight: 700;
+}
+.pending-check-box {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    color: var(--accent-bright, #e8d9b8) !important;
+    padding: 9px 12px;
+    border: 1px solid var(--accent, #c9a961);
+    border-radius: 4px;
+    margin: 10px 0 8px 0;
+    background: color-mix(in srgb, var(--accent, #c9a961) 12%, transparent);
+    font-weight: 700;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 25%, transparent);
+}
+
 
 /* =====================================================
    10. Мобильный
@@ -638,7 +1086,6 @@ section.main > div,
     .section-header .title { letter-spacing: 0.15em; font-size: 0.9rem; }
     .section-header .meta { display: none; }
     .chat-name { font-size: 0.65rem; letter-spacing: 0.15em; }
-
     .roll-card { padding: 12px 16px 14px 16px; }
     .roll-value-num { font-size: 2.4rem; }
     .roll-meta { gap: 20px; }
@@ -646,6 +1093,8 @@ section.main > div,
     .roll-body { gap: 16px; }
     .roll-mod { font-size: 1.3rem; padding: 3px 10px; }
     .roll-status { font-size: 0.78rem; letter-spacing: 0.25em; }
+    .attr-tile .attr-val { font-size: 0.9rem; }
+    .meta-tile .value { font-size: 0.9rem; }
 }
 
 /* =====================================================
@@ -657,6 +1106,34 @@ section.main > div,
     h2 { font-size: 1.8rem !important; }
     h3 { font-size: 1.4rem !important; }
     .block-container { max-width: 1800px !important; }
+}
+
+/* === ПУЛЬС HP — ФИНАЛЬНЫЙ OVERRIDE (patch8) === */
+@keyframes pulse-wounds {
+    0%, 100% {
+        background: linear-gradient(90deg, #6b1a1a, #d33);
+        box-shadow: 0 0 8px rgba(220, 50, 50, 0.7);
+        filter: brightness(1);
+    }
+    50% {
+        background: linear-gradient(90deg, #ff1818, #ff6868);
+        box-shadow: 0 0 24px rgba(255, 60, 60, 1),
+                    0 0 44px rgba(255, 60, 60, 0.6);
+        filter: brightness(1.3);
+    }
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-fill {
+    animation: pulse-wounds 1.4s ease-in-out infinite !important;
+    background: linear-gradient(90deg, #ff1818, #ff6868) !important;
+    box-shadow: 0 0 18px rgba(255, 60, 60, 0.9) !important;
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-value {
+    color: #ff7a7a !important;
+    text-shadow: 0 0 12px rgba(255, 122, 122, 0.95) !important;
+    font-weight: 700 !important;
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-label {
+    color: #ff9a9a !important;
 }
 </style>
 """
@@ -731,10 +1208,13 @@ h4, h5, h6 {
 .stMarkdown a { color: var(--link) !important; text-decoration: underline; }
 .stMarkdown a:hover { color: var(--accent-bright) !important; }
 .stMarkdown code {
-    background: rgba(128,128,128,0.15);
+    background: color-mix(in srgb, var(--bg-deep) 82%, var(--accent) 18%);
     color: var(--accent-bright) !important;
-    padding: 1px 5px;
+    padding: 2px 7px;
     border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.92em;
 }
 
 [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] *,
@@ -787,7 +1267,6 @@ h4, h5, h6 {
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] > * { color: var(--ink) !important; }
 [data-testid="stSidebar"] [data-testid="stCaptionContainer"] * { color: var(--ink-dim) !important; }
 
-/* === КНОПКИ === */
 .stButton > button, [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"] {
     letter-spacing: 0.05em;
     font-weight: 600 !important;
@@ -849,17 +1328,36 @@ h4, h5, h6 {
     border-radius: 4px;
     background: var(--bg-card) !important;
 }
-[data-testid="stExpander"] summary {
+[data-testid="stExpander"] details > summary,
+[data-testid="stExpander"] details > summary *,
+[data-testid="stExpander"] details > summary p,
+[data-testid="stExpander"] details > summary span,
+[data-testid="stExpander"] details > summary div,
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary *,
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary div,
+[data-testid="stExpander"] [data-testid="stExpanderHeader"],
+[data-testid="stExpander"] [data-testid="stExpanderHeader"] *,
+[data-testid="stExpander"] [data-testid="stExpanderHeader"] p,
+[data-testid="stExpander"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpander"] details > summary svg {
     color: var(--accent) !important;
+    fill: var(--accent) !important;
+}
+
+/* Названия внутри expander-details (Броня, Оружие...) — тоже accent */
+[data-testid="stExpander"] details[open] > summary,
+[data-testid="stExpander"] details[open] > summary * {
+    color: var(--accent) !important;
+}
+[data-testid="stExpander"] summary {
     font-weight: 600 !important;
     font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-}
-[data-testid="stExpander"] summary p {
-    color: var(--accent) !important;
-    font-weight: 600 !important;
-    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
 }
 [data-testid="stExpander"] [data-testid="stExpanderDetails"] {
     background: var(--bg-mid) !important;
@@ -869,7 +1367,6 @@ h4, h5, h6 {
     color: var(--ink) !important;
 }
 
-/* === CHAT MESSAGE — роль-зависимый стиль === */
 [data-testid="stChatMessage"] {
     background: var(--bg-chat) !important;
     border: 1px solid var(--accent-dim) !important;
@@ -936,7 +1433,6 @@ h4, h5, h6 {
     box-shadow: 0 0 8px currentColor;
 }
 
-/* === CHAT INPUT === */
 [data-testid="stChatInput"],
 [data-testid="stChatInput"] > div,
 [data-testid="stChatInput"] > div > div,
@@ -989,11 +1485,9 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     background: transparent !important;
 }
 
-/* === ALERTS — нейтрализуем, если вдруг где-то остались === */
 [data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
 [data-testid="stAlert"] * { font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important; }
 
-/* === TEXT INPUT / TEXTAREA === */
 .stTextInput input, .stTextArea textarea,
 [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea {
     background: var(--bg-light) !important;
@@ -1029,7 +1523,6 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     letter-spacing: 0.1em;
 }
 
-/* === SELECTBOX === */
 [data-testid="stSelectbox"] > div,
 [data-testid="stSelectbox"] > div > div,
 [data-testid="stSelectbox"] [data-baseweb="select"],
@@ -1098,7 +1591,6 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     color: var(--accent-bright) !important;
 }
 
-/* === СЛАЙДЕРЫ === */
 [data-testid="stSlider"] [data-testid="stWidgetLabel"],
 [data-testid="stSlider"] [data-testid="stWidgetLabel"] *,
 [data-testid="stSlider"] label,
@@ -1135,13 +1627,11 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
     box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent) !important;
 }
 
-/* === RADIO / CHECKBOX === */
 [data-testid="stRadio"] label p,
 [data-testid="stRadio"] label * { color: var(--ink) !important; }
 [data-testid="stCheckbox"] label p,
 [data-testid="stCheckbox"] label * { color: var(--ink) !important; }
 
-/* === FILE UPLOADER === */
 [data-testid="stFileUploader"] section,
 [data-testid="stFileUploaderDropzone"] {
     background: color-mix(in srgb, var(--bg-mid) 80%, transparent) !important;
@@ -1151,18 +1641,14 @@ textarea[data-testid="stChatInputTextArea"]::placeholder {
 [data-testid="stFileUploader"] section *,
 [data-testid="stFileUploaderDropzone"] * { color: var(--ink) !important; }
 
-/* === PROGRESS === */
 [data-testid="stProgress"] > div > div > div {
     background: linear-gradient(90deg, var(--accent-dim), var(--accent)) !important;
 }
 
-/* === SCROLLBAR === */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg-deep); }
 ::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
-
-/* === LINKS / HR === */
 a { color: var(--link) !important; }
 a:hover { color: var(--accent-bright) !important; }
 hr { border-color: var(--accent-dim) !important; margin: 14px 0 !important; }
@@ -1205,7 +1691,6 @@ def get_giga():
     )
 
 
-@st.cache_data
 def get_master_prompt():
     with open(MASTER_PROMPT_PATH, encoding="utf-8") as f:
         return f.read()
@@ -1360,27 +1845,204 @@ def parse_rolls_from_text(text: str):
 # ============================================================
 # ПАРСЕР [STATE]
 # ============================================================
-_STATE_RE = re.compile(r"\[STATE\](.*?)\[/STATE\]", re.DOTALL | re.IGNORECASE)
+_STATE_RE = re.compile(
+    r"\[STATE\]\s*(.*?)(?=\n\s*\n|\[STATE\]|\[/STATE\]|$)",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+# Автоподстановка брони по фразам игрока
+_ARMOUR_WORDS = {
+    "head": ["шлем", "хелм", "маск", "капюшон", "helmet", "head"],
+    "body": ["броня", "торс", "кирас", "планшет", "armour", "armor", "body", "chest"],
+    "arms": ["перчатк", "наруч", "рукав", "glove", "bracer", "arms"],
+    "legs": ["сапог", "ботинк", "понож", "штаны", "штани", "boot", "legs"],
+}
+
+
+def _detect_armour_zone(text: str):
+    """По тексту определяет зону брони. Возвращает (zone, 'equip'|'unequip') или None."""
+    if not text:
+        return None
+    low = text.lower()
+    # Какое действие?
+    action = None
+    if re.search(r"\b(снима|снял|убира|сбро|снят|remove|off)\b", low):
+        action = "unequip"
+    elif re.search(r"\b(надел|надева|натягива|надевают|equip|wear|on)\b", low):
+        action = "equip"
+    if not action:
+        return None
+    # Какая зона?
+    for zone, words in _ARMOUR_WORDS.items():
+        for w in words:
+            if w in low:
+                return (zone, action)
+    return None
+
+
+def _normalize_state_tags(text: str) -> str:
+    """Приводит все одиночные теги к парным, чтобы regex работал."""
+    if not text:
+        return text
+    # Сначала убиваем пустые пары: [STATE][/STATE], [STATE] [/STATE]
+    text = re.sub(r"\[STATE\]\s*\[/STATE\]", "", text, flags=re.IGNORECASE)
+    # Все [/STATE] → маркер конца
+    text = re.sub(r"\[/STATE\]", "\n[__END_STATE__]\n", text, flags=re.IGNORECASE)
+    # Все [STATE] → маркер начала
+    text = re.sub(r"\[STATE\]", "\n[__BEGIN_STATE__]\n", text, flags=re.IGNORECASE)
+    return text
+
+
+# ============================================================
+# STATE: ключи, алиасы, автодетект (patch20)
+# ============================================================
+_KEY_ALIASES = {
+    "inventory_add": "equipment_add",
+    "inventory_remove": "equipment_remove",
+    "items_add": "equipment_add",
+    "items_remove": "equipment_remove",
+    "armor_equip": "armour_equip",
+    "armor_unequip": "armour_unequip",
+    "armor_change": "armour_change",
+    "loot": "loot_seen",
+}
+
+_KNOWN_EXACT = {
+    "wounds", "fate", "insanity", "corruption", "xp", "money",
+    "location", "date", "journal", "loot_seen",
+    "quest_add", "quest_remove", "npc_add", "npc_remove",
+    "effect_add", "effect_remove", "companion_add", "companion_remove",
+    "goal_add", "goal_remove",
+    "equipment_add", "equipment_remove", "equipment_equip", "equipment_unequip",
+    "weapon_add", "weapon_remove", "weapon_lost", "weapon_equip", "weapon_unequip",
+    "armour_equip", "armour_unequip", "armour_change",
+}
+
+_KNOWN_PREFIXES = (
+    "armour_", "special_", "extra_money_", "reputation_", "characteristic_", "ship_",
+)
+
+_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_ARMOUR_ZONES = ("head", "body", "arms", "legs")
+
+
+def _is_state_key(key):
+    if not key or not _KEY_RE.match(key):
+        return False
+    if key in _KNOWN_EXACT:
+        return True
+    return any(key.startswith(p) for p in _KNOWN_PREFIXES)
+
+
+def _normalize_key_val(key, value):
+    """Мастер пишет armour_equip=head — превращаем в armour_equip_head=1."""
+    key = _KEY_ALIASES.get(key, key)
+    vlow = str(value).strip().lower()
+    if key == "armour_equip" and vlow in _ARMOUR_ZONES:
+        return f"armour_equip_{vlow}", "1"
+    if key == "armour_unequip" and vlow in _ARMOUR_ZONES:
+        return f"armour_unequip_{vlow}", "1"
+    return key, value
+
+
+_LOOT_TAKE_RE = re.compile(
+    r"\b(беру|забира|подбира|хватаю|присваива|в сумку|в инвентарь|в карман)",
+    re.IGNORECASE,
+)
+_LOOT_DROP_RE = re.compile(
+    r"\b(выбрасыва|выкидыва|броса|теря|отдаю|сбрасыва|избавля)",
+    re.IGNORECASE,
+)
+
+
+def _keywords(text):
+    return [w.lower() for w in re.findall(r"[А-Яа-яA-Za-z]{4,}", str(text))]
+
+
+def _autodetect_loot(user_text, last_loot_seen):
+    if not user_text or not last_loot_seen or not _LOOT_TAKE_RE.search(user_text):
+        return []
+    items = [x.strip() for x in last_loot_seen.split(";") if x.strip()]
+    if not items:
+        return []
+    low = user_text.lower()
+    matched = []
+    for it in items:
+        kws = _keywords(it)
+        if kws and any(kw in low for kw in kws):
+            matched.append(it)
+    if not matched and re.search(r"\b(всё|все|предметы|вещи)\b", low):
+        return items
+    return matched
+
+
+def _autodetect_drop(user_text, sheet):
+    if not user_text or not _LOOT_DROP_RE.search(user_text):
+        return [], []
+    low = user_text.lower()
+    eq, wp = [], []
+    for it in (sheet.get("equipment") or []):
+        kws = _keywords(it)
+        if kws and any(kw in low for kw in kws):
+            eq.append(it)
+    for w in (sheet.get("weapons") or []):
+        nm = w.get("name") if isinstance(w, dict) else None
+        if not nm:
+            continue
+        kws = _keywords(nm)
+        if kws and any(kw in low for kw in kws):
+            wp.append(nm)
+    return eq, wp
 
 
 def parse_state_block(text: str):
+    """Парсит [STATE] блоки + голые строки с известными ключами."""
     if not text:
         return text, {}
-    match = _STATE_RE.search(text)
-    if not match:
-        return text, {}
-    block = match.group(1)
+    normalized = _normalize_state_tags(text)
     updates = {}
-    for line in block.strip().split("\n"):
-        line = line.strip()
-        if not line or "=" not in line:
+    out_lines = []
+    in_block = False
+    for raw_line in normalized.split("\n"):
+        line = raw_line.rstrip("\r")
+        stripped = line.strip()
+        if stripped == "[__BEGIN_STATE__]":
+            in_block = True
             continue
-        key, _, value = line.partition("=")
-        key = key.strip(); value = value.strip()
-        if key:
-            updates[key] = value
-    cleaned = _STATE_RE.sub("", text).strip()
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        if stripped == "[__END_STATE__]":
+            in_block = False
+            continue
+        if in_block:
+            if "=" in stripped:
+                key, _, value = stripped.partition("=")
+                key = key.strip()
+                value = value.strip()
+                if key and value:
+                    k2, v2 = _normalize_key_val(key, value)
+                    updates[k2] = v2
+            continue
+        out_lines.append(line)
+
+    final_out = []
+    for line in out_lines:
+        stripped = line.strip()
+        if "=" in stripped:
+            kp = stripped.split("=", 1)[0].strip()
+            if " " not in kp and _is_state_key(kp):
+                key, _, value = stripped.partition("=")
+                value = value.strip()
+                if value:
+                    k2, v2 = _normalize_key_val(key.strip(), value)
+                    updates[k2] = v2
+                    continue
+        final_out.append(line)
+
+    cleaned = "\n".join(final_out)
+    cleaned = re.sub(r"^\s*\[/?STATE\]\s*$", "", cleaned, flags=re.MULTILINE).strip()
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    if not cleaned and updates:
+        cleaned = "_…_"
     return cleaned, updates
 
 
@@ -1465,6 +2127,72 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
             else:
                 rep[fac] = val
 
+    # === ЭКИПИРОВКА (patch11) ===
+    sheet["armour"] = _norm_armour(sheet.get("armour", {}))
+    sheet["weapons"] = _norm_weapons(sheet.get("weapons", []))
+
+    # Броня: armour_equip=head / armour_unequip=body
+    for k, val in updates.items():
+        if k.startswith("armour_equip_"):
+            z = k[len("armour_equip_"):].strip().lower()
+            if z in ("head", "body", "arms", "legs"):
+                sheet["armour"].setdefault(z, {"value": 0, "equipped": True})["equipped"] = True
+        if k.startswith("armour_unequip_"):
+            z = k[len("armour_unequip_"):].strip().lower()
+            if z in ("head", "body", "arms", "legs"):
+                sheet["armour"].setdefault(z, {"value": 0, "equipped": True})["equipped"] = False
+        if k.startswith("armour_change_"):
+            z = k[len("armour_change_"):].strip().lower()
+            if z in ("head", "body", "arms", "legs"):
+                v = _parse_signed_int(val)
+                if v is not None:
+                    sheet["armour"].setdefault(z, {"value": 0, "equipped": True})["value"] = v
+
+    # Оружие: weapon_equip=N / weapon_unequip=N / weapon_lost=N
+    if "weapon_equip" in updates:
+        names = [n.strip() for n in str(updates["weapon_equip"]).split(";") if n.strip()]
+        for w in sheet["weapons"]:
+            if w.get("name") in names:
+                w["equipped"] = True
+    if "weapon_unequip" in updates:
+        names = [n.strip() for n in str(updates["weapon_unequip"]).split(";") if n.strip()]
+        for w in sheet["weapons"]:
+            if w.get("name") in names:
+                w["equipped"] = False
+    if "weapon_lost" in updates:
+        names = []
+        for n in str(updates["weapon_lost"]).split(";"):
+            n = n.strip()
+            if "|" in n:
+                n = n.split("|")[0].strip()
+            if n:
+                names.append(n)
+        sheet["weapons"] = [w for w in sheet["weapons"] if w.get("name") not in names]
+    if "equipment_remove" in updates:
+        names = []
+        for n in str(updates["equipment_remove"]).split(";"):
+            n = n.strip()
+            if "|" in n:
+                n = n.split("|")[0].strip()
+            if n:
+                names.append(n)
+        sheet["equipment"] = [x for x in sheet.get("equipment", []) if x not in names]
+
+    # Инвентарь экипирован / не экипирован (equipment_equip / equipment_unequip)
+    # Хранится в отдельном сете «unequipped_items» (мягкий флаг)
+    unequipped = set(sheet.get("unequipped_items") or [])
+    if "equipment_unequip" in updates:
+        for n in str(updates["equipment_unequip"]).split(";"):
+            n = n.strip()
+            if n:
+                unequipped.add(n)
+    if "equipment_equip" in updates:
+        for n in str(updates["equipment_equip"]).split(";"):
+            n = n.strip()
+            if n:
+                unequipped.discard(n)
+    sheet["unequipped_items"] = sorted(unequipped) if unequipped else []
+
     if "location" in updates: sheet["location"] = updates["location"]
     if "date" in updates: sheet["game_date"] = updates["date"]
 
@@ -1480,6 +2208,37 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
         if rem_key in updates:
             items = [i.strip() for i in updates[rem_key].split(";") if i.strip()]
             sheet[plural] = [x for x in sheet.get(plural, []) if x not in items]
+
+    # === ИНВЕНТАРЬ: equipment_add / equipment_remove (patch10) ===
+    if "equipment_add" in updates:
+        items = [i.strip() for i in str(updates["equipment_add"]).split(";") if i.strip()]
+        eq = sheet.setdefault("equipment", [])
+        for it in items:
+            if it not in eq:
+                eq.append(it)
+    if "equipment_remove" in updates:
+        items = [i.strip() for i in str(updates["equipment_remove"]).split(";") if i.strip()]
+        sheet["equipment"] = [x for x in sheet.get("equipment", []) if x not in items]
+
+    # === ОРУЖИЕ: weapon_add=Название | статы  (patch10) ===
+    if "weapon_add" in updates:
+        items = [i.strip() for i in str(updates["weapon_add"]).split(";") if i.strip()]
+        wl = sheet.setdefault("weapons", [])
+        existing = {w.get("name", "") for w in wl if isinstance(w, dict)}
+        for it in items:
+            if "|" in it:
+                name, stats = [p.strip() for p in it.split("|", 1)]
+            else:
+                name, stats = it, ""
+            if name and name not in existing:
+                wl.append({"name": name, "stats": stats, "notes": ""})
+                existing.add(name)
+    if "weapon_remove" in updates:
+        items = [i.strip() for i in str(updates["weapon_remove"]).split(";") if i.strip()]
+        sheet["weapons"] = [
+            w for w in sheet.get("weapons", [])
+            if not (isinstance(w, dict) and w.get("name") in items)
+        ]
 
     if "journal" in updates:
         entry = updates["journal"].strip()
@@ -1513,15 +2272,109 @@ def apply_state_updates(sheet: dict, updates: dict) -> dict:
 
 
 # ============================================================
-# РЕНДЕР БРОСКА — карточка (ПАКЕТ 2)
+# ХЕЛПЕРЫ HTML
 # ============================================================
 def _esc(text) -> str:
-    """Безопасное экранирование HTML."""
     return (str(text)
             .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace('"', "&quot;"))
+
+def _apply_pending_check(pending, diff_label, diff_mod, sheet, chat_history, localS):
+    """Формирует сообщение-проверку и отправляет Мастеру."""
+    kind = pending.get("kind", "?")
+    name = pending.get("name", "?")
+    base = int(pending.get("value", 0) or 0)
+    eff = base + diff_mod
+    ru = char_ru(name) if kind == "Характеристика" else ""
+    name_disp = f"{name} ({ru})" if ru and ru != name else name
+    msg = (f"[ПРОВЕРКА] {kind}: {name_disp} · "
+           f"База: {base} · Сложность: {diff_label} ({diff_mod:+d}) · "
+           f"Эффективное значение: {eff}")
+    _send_quick_action(msg, sheet, chat_history, localS)
+    st.session_state.pending_check = None
+
+def _dedupe_rolls(rolls):
+    """Убирает дубли бросков, оставляя самую подробную версию.
+
+    Ключ дедупа — (expression, rolls, total).
+    Приоритет: с reason > без reason, с difficulty > без, с _from_text > без.
+    """
+    if not rolls:
+        return []
+    best = {}
+    order = []
+    for r in rolls:
+        if not isinstance(r, dict):
+            continue
+        if "error" in r:
+            k = ("__err__", id(r))
+            if k not in best:
+                best[k] = (0, r)
+                order.append(k)
+            continue
+        key = (
+            str(r.get("expression", "")),
+            tuple(r.get("rolls", []) or []),
+            int(r.get("total", 0) or 0),
+        )
+        priority = 0
+        if r.get("reason"):
+            priority += 1
+        if int(r.get("difficulty", 0) or 0) > 0:
+            priority += 2
+        if r.get("_from_text"):
+            priority += 1
+        if key not in best:
+            best[key] = (priority, r)
+            order.append(key)
+        elif best[key][0] < priority:
+            best[key] = (priority, r)
+    return [best[k][1] for k in order]
+
+
+
+def _render_pending_check_picker(sheet, chat_history, localS, source="default"):
+    """Меню выбора сложности. source — уникальный суффикс для ключей."""
+    pending = st.session_state.get("pending_check")
+    if not pending or pending.get("source") != source:
+        return
+    pname = pending["name"]
+    ru = char_ru(pname) if pending.get("kind") == "Характеристика" else ""
+    pname_disp = f"{pname} ({ru})" if ru and ru != pname else pname
+    val = int(pending.get("value", 0) or 0)
+    st.markdown(
+        f'<div class="pending-check-box">'
+        f'▶ ПРОВЕРКА: {_esc(pname_disp)} · {val}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("ЛГК +20", key=f"pd_{source}_easy",
+                     use_container_width=True, help="Лёгкая (+20)"):
+            _apply_pending_check(pending, "Легко", 20, sheet, chat_history, localS)
+            st.rerun()
+    with c2:
+        if st.button("ОБЧ 0", key=f"pd_{source}_norm",
+                     use_container_width=True, help="Обычная (0)"):
+            _apply_pending_check(pending, "Обычно", 0, sheet, chat_history, localS)
+            st.rerun()
+    c3, c4 = st.columns(2)
+    with c3:
+        if st.button("СЛЖ -20", key=f"pd_{source}_hard",
+                     use_container_width=True, help="Сложная (-20)"):
+            _apply_pending_check(pending, "Сложно", -20, sheet, chat_history, localS)
+            st.rerun()
+    with c4:
+        if st.button("ОСЛ -40", key=f"pd_{source}_vhard",
+                     use_container_width=True, help="Очень сложная (-40)"):
+            _apply_pending_check(pending, "Очень сложно", -40, sheet, chat_history, localS)
+            st.rerun()
+    if st.button("✖ ОТМЕНА", key=f"pd_{source}_cancel", use_container_width=True):
+        st.session_state.pending_check = None
+        st.rerun()
 
 
 def render_roll(r: dict):
@@ -1542,8 +2395,6 @@ def render_roll(r: dict):
     margin = r.get("margin", 0)
 
     roll1 = rolls[0] if rolls else total
-
-    # Тип проверки — это бросок d100 со сложностью
     is_check = "1d100" in expr.lower() and difficulty > 0 and success is not None
 
     if is_check:
@@ -1563,16 +2414,13 @@ def render_roll(r: dict):
         status_text = "РЕЗУЛЬТАТ"
         margin_label = ""
 
-    # Модификатор
     mod_html = ""
     if mod:
         sign = "+" if mod > 0 else ""
         mod_html = f'<div class="roll-mod">{sign}{mod}</div>'
 
-    # Причина
     reason_html = f'<div class="roll-reason">{_esc(reason)}</div>' if reason else ""
 
-    # Метрики
     meta_parts = []
     if difficulty > 0:
         meta_parts.append(
@@ -1668,15 +2516,18 @@ def quick_remove_effect(sheet, effect_name):
 
 
 def _send_quick_action(msg, sheet, chat_history, localS):
-    chat_history.append({"role": "user", "content": f"[ДЕЙСТВИЕ] {msg}", "rolls": []})
-    cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
-    cc.save_character(sheet)
-    _ls_save(localS, sheet, chat_history)
+    """Отправляет сообщение от кнопки в чат — Мастер ответит автоматически."""
+    if not msg.startswith("["):
+        msg = f"[ДЕЙСТВИЕ] {msg}"
+    try:
+        st.session_state.auto_user_message = msg
+        cc.save_character(sheet)
+        _ls_save(localS, sheet, chat_history)
+    except Exception as e:
+        print(f"[quick_action] ошибка сохранения: {e}")
+        st.session_state.auto_user_message = msg
 
 
-# ============================================================
-# ПЕРЕКЛЮЧАТЕЛЬ ТЕМЫ
-# ============================================================
 def render_theme_selector(localS, location="sidebar"):
     current = st.session_state.get("theme", DEFAULT_THEME)
     theme_keys = list(THEMES.keys())
@@ -2141,7 +2992,7 @@ def render_start_screen(localS):
 
 
 # ============================================================
-# ВСТРОЕННЫЙ ЛИСТ ПЕРСОНАЖА
+# ВСТРОЕННЫЙ ЛИСТ ПЕРСОНАЖА (для мобильных)
 # ============================================================
 def render_character_inline(sheet, kb, localS, chat_history):
     wounds = sheet.get("wounds", {"current": 0, "max": 0})
@@ -2223,96 +3074,339 @@ def render_character_inline(sheet, kb, localS, chat_history):
 
 
 # ============================================================
-# САЙДБАР
+# САЙДБАР — ЛИСТ ПЕРСОНАЖА
 # ============================================================
-def _render_quick_actions(sheet, chat_history, localS):
-    st.markdown("**⚡ Действия**")
-    cols = st.columns(2)
-    with cols[0]:
-        if st.button("🔥 Судьба", use_container_width=True, help="Потратить Очко Судьбы"):
-            msg, err = quick_fate_point(sheet)
-            if err: st.toast(err, icon="⚠️")
-            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
-    with cols[1]:
-        if st.button("💣 Граната", use_container_width=True):
-            msg, err = quick_grenade(sheet)
-            if err: st.toast(err, icon="⚠️")
-            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
-    cols = st.columns(2)
-    with cols[0]:
-        if st.button("🏥 Аптечка", use_container_width=True):
-            msg, err = quick_medkit(sheet)
-            if err: st.toast(err, icon="⚠️")
-            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
-    with cols[1]:
-        if st.button("⚡ Стим", use_container_width=True):
-            msg, err = quick_stimulant(sheet)
-            if err: st.toast(err, icon="⚠️")
-            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+def _norm_armour(arm):
+    """Нормализует броню в {zone: {value, equipped}, notes}."""
+    if not arm:
+        return {}
+    result = {"notes": arm.get("notes", "")}
+    for z in ["head", "body", "arms", "legs"]:
+        v = arm.get(z, 0)
+        if isinstance(v, dict):
+            result[z] = {
+                "value": int(v.get("value", 0) or 0),
+                "equipped": bool(v.get("equipped", True)),
+            }
+        else:
+            result[z] = {"value": int(v or 0), "equipped": True}
+    return result
 
-    effects = sheet.get("effects", [])
-    if effects:
-        eff_to_remove = st.selectbox("Снять эффект", options=["—"] + effects,
-                                     key="effect_remove_select",
-                                     label_visibility="collapsed")
-        if eff_to_remove != "—" and st.button("✖️ Снять", use_container_width=True):
-            msg, err = quick_remove_effect(sheet, eff_to_remove)
-            if err: st.toast(err, icon="⚠️")
-            else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+
+def _norm_weapons(ws):
+    """Нормализует оружие в dict с флагом equipped."""
+    result = []
+    for w in (ws or []):
+        if not isinstance(w, dict):
+            continue
+        nw = dict(w)
+        nw.setdefault("equipped", True)
+        result.append(nw)
+    return result
+
+
+def _ap_total(sheet):
+    """AP — только по экипированным зонам."""
+    arm = _norm_armour(sheet.get("armour", {}))
+    vals = []
+    for z in ["head", "body", "arms", "legs"]:
+        zz = arm.get(z, {})
+        if zz.get("equipped", True):
+            vals.append(int(zz.get("value", 0) or 0))
+    return max(vals) if vals else 0
+
+
+def _render_stat_bar(label: str, current: int, maximum: int, variant: str, icon: str = ""):
+    maximum = max(1, int(maximum or 1))
+    current = int(current or 0)
+    pct = max(0, min(100, round(100 * current / maximum)))
+    is_low = (variant == "wounds" and pct < 30)
+    low_class = " stat-bar--low" if is_low else ""
+    pulse_attr = ' data-pulse="on"' if is_low else ''
+    st.markdown(
+        f'<div class="stat-bar stat-bar--{variant}{low_class}"{pulse_attr}>'
+        f'  <div class="stat-bar-head">'
+        f'    <span class="stat-bar-label">{icon} {label}</span>'
+        f'    <span class="stat-bar-value">{current} / {maximum}</span>'
+        f'  </div>'
+        f'  <div class="stat-bar-track">'
+        f'    <div class="stat-bar-fill" style="width:{pct}%"></div>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+
+
+def render_location_bar(sheet):
+    """Полоса локации над чатом: 📍 ЛОКАЦИЯ · значение · ⏱ ВРЕМЯ · значение."""
+    sheet = sheet or {}
+    loc = str(sheet.get("location", "") or "").strip() or "Неизвестное место"
+    date = str(sheet.get("game_date", "") or "").strip() or "—"
+    st.markdown(
+        f'<div class="location-bar">'
+        f'  <span class="lbl">📍 ЛОКАЦИЯ</span>'
+        f'  <span class="val">{_esc(loc)}</span>'
+        f'  <span class="dot">◆</span>'
+        f'  <span class="lbl">⏱ ВРЕМЯ</span>'
+        f'  <span class="val">{_esc(date)}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+def _render_character_summary(sheet: dict, chat_history: list, localS):
+    name = sheet.get("name", "Безымянный")
+    faction = sheet.get("faction", "")
+    subfaction = sheet.get("subfaction", "")
+    archetype = sheet.get("archetype", "")
+    faction_avatar = get_faction_avatar(sheet)
+    sub_line = " · ".join([x for x in [faction, subfaction, archetype] if x]) or "—"
+
+    st.markdown(
+        f'<div class="char-sheet-header">'
+        f'  <div class="char-avatar">{faction_avatar}</div>'
+        f'  <div style="min-width:0;">'
+        f'    <div class="char-sheet-name">{_esc(name)}</div>'
+        f'    <div class="char-sheet-sub">{_esc(sub_line)}</div>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    w = sheet.get("wounds", {}) or {}
+    _render_stat_bar("РАНЫ", int(w.get("current", 0) or 0),
+                     int(w.get("max", 1) or 1), "wounds", "❤️")
+    f = sheet.get("fate_points", {}) or {}
+    _render_stat_bar("СУДЬБА", int(f.get("current", 0) or 0),
+                     int(f.get("max", 1) or 1), "fate", "🍀")
+
+    xp = int(sheet.get("xp", 0) or 0)
+    rank = int(sheet.get("rank", 1) or 1)
+    xp_next = rank * 500
+    _render_stat_bar(f"ОПЫТ · РАНГ {rank}", xp, xp_next, "xp", "★")
+
+    corr = int(sheet.get("corruption", 0) or 0)
+    ins = int(sheet.get("insanity", 0) or 0)
+    if corr > 0 or ins > 0:
+        c1, c2 = st.columns(2)
+        with c1:
+            if corr > 0:
+                _render_stat_bar("ПОРЧА", corr, max(corr, 10), "corruption", "🌀")
+        with c2:
+            if ins > 0:
+                _render_stat_bar("БЕЗУМИЕ", ins, max(ins, 10), "insanity", "🧠")
+
+    ap = _ap_total(sheet)
+    bonuses = sheet.get("bonuses", {}) or {}
+    ini = int(bonuses.get("Ag", 0) or 0)
+    per = int(bonuses.get("Per", 0) or 0)
+
+    st.markdown(
+        f'<div class="meta-grid">'
+        f'  <div class="meta-tile">'
+        f'    <div class="icon">🛡️</div>'
+        f'    <div class="label">БРОНЯ</div>'
+        f'    <div class="value">{ap}</div>'
+        f'  </div>'
+        f'  <div class="meta-tile">'
+        f'    <div class="icon">⚡</div>'
+        f'    <div class="label">ИНИЦ</div>'
+        f'    <div class="value">{ini:+d}</div>'
+        f'  </div>'
+        f'  <div class="meta-tile">'
+        f'    <div class="icon">👁</div>'
+        f'    <div class="label">ВНИМ</div>'
+        f'    <div class="value">{per:+d}</div>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    chars = sheet.get("characteristics", {}) or {}
+    with st.expander("⚔ ПРОВЕРКИ", expanded=True, key="exp_chars"):
+        char_cols = st.columns(3)
+        for i, ch in enumerate(cc.CHARACTERISTICS):
+            val = int(chars.get(ch, 0) or 0)
+            bon = int(bonuses.get(ch, val // 10) or 0)
+            ru = char_ru(ch)
+            label = f"{ru} · {val}" if ru else f"{ch} · {val}"
+            with char_cols[i % 3]:
+                if st.button(label, key=f"chk_char_{ch}",
+                             use_container_width=True,
+                             help=f"{ch} — {char_ru_long(ch)}: база {val}, бонус {bon:+d}"):
+                    st.session_state.pending_check = {
+                        "source": "chars",
+                        "kind": "Характеристика", "name": ch, "value": val,
+                    }
+                    st.rerun()
+        _render_pending_check_picker(sheet, chat_history, localS, source="chars")
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+
+def _render_quick_actions(sheet, chat_history, localS):
+    with st.expander("⚡ ДЕЙСТВИЯ", expanded=False, key="exp_actions"):
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button("🔥 Судьба", use_container_width=True, help="Потратить Очко Судьбы"):
+                msg, err = quick_fate_point(sheet)
+                if err: st.toast(err, icon="⚠️")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+        with cols[1]:
+            if st.button("💣 Граната", use_container_width=True):
+                msg, err = quick_grenade(sheet)
+                if err: st.toast(err, icon="⚠️")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button("🏥 Аптечка", use_container_width=True):
+                msg, err = quick_medkit(sheet)
+                if err: st.toast(err, icon="⚠️")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+        with cols[1]:
+            if st.button("⚡ Стим", use_container_width=True):
+                msg, err = quick_stimulant(sheet)
+                if err: st.toast(err, icon="⚠️")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+
+        effects = sheet.get("effects", [])
+        if effects:
+            eff_to_remove = st.selectbox("Снять эффект", options=["—"] + effects,
+                                         key="effect_remove_select",
+                                         label_visibility="collapsed")
+            if eff_to_remove != "—" and st.button("✖️ Снять", use_container_width=True):
+                msg, err = quick_remove_effect(sheet, eff_to_remove)
+                if err: st.toast(err, icon="⚠️")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
 
 
 def render_character_sidebar(sheet, kb, model, localS, chat_history):
-    st.header("👤 Персонаж")
-    st.write(f"**{sheet['name']}**")
-    st.caption(f"{sheet.get('faction','')} → {sheet.get('subfaction','')} → {sheet.get('archetype','')}")
+    _render_character_summary(sheet, chat_history, localS)
 
-    wounds = sheet.get("wounds", {"current": 0, "max": 0})
-    fate = sheet.get("fate_points", {"current": 0, "max": 0})
-    c1, c2 = st.columns(2)
-    c1.metric("❤️ Раны", f"{wounds.get('current', 0)}/{wounds.get('max', 0)}")
-    c2.metric("🍀 Судьба", f"{fate.get('current', 0)}/{fate.get('max', 0)}")
-    c1, c2 = st.columns(2)
-    c1.metric("🌀 Порча", sheet.get("corruption", 0))
-    c2.metric("🧠 Безумие", sheet.get("insanity", 0))
-
-    st.write("---")
     _render_quick_actions(sheet, chat_history, localS)
-    st.write("---")
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
 
     tabs = st.tabs(["Перс", "Инвент", "Мир", "Корабль", "Заметки"])
 
     with tabs[0]:
-        with st.expander("📊 Характеристики", expanded=False):
-            for ch in cc.CHARACTERISTICS:
-                val = sheet["characteristics"].get(ch, 0)
-                bon = sheet.get("bonuses", {}).get(ch, val // 10)
-                st.write(f"**{ch}**: {val} (+{bon})")
-        arm = sheet.get("armour", {})
-        if arm:
-            with st.expander("🛡️ Броня", expanded=False):
-                st.write(f"Голова: **{arm.get('head', 0)}** | Тело: **{arm.get('body', 0)}**")
-                st.write(f"Руки: **{arm.get('arms', 0)}** | Ноги: **{arm.get('legs', 0)}**")
-                if arm.get("notes"): st.caption(arm["notes"])
-        weapons = sheet.get("weapons", [])
-        if weapons:
-            with st.expander(f"⚔️ Оружие ({len(weapons)})", expanded=False):
-                for w in weapons:
-                    st.markdown(f"**{w.get('name','')}**")
-                    st.caption(w.get("stats", ""))
-                    if w.get("notes"): st.caption(f"_{w['notes']}_")
-        talents = sheet.get("talents", [])
-        if talents:
-            with st.expander(f"✨ Таланты ({len(talents)})", expanded=False):
-                for t in talents: st.write(f"• {t}")
         skills = sheet.get("skills", [])
         if skills:
-            with st.expander(f"📖 Навыки ({len(skills)})", expanded=False):
-                for s in skills:
-                    st.write(f"• **{s['name']}** ({s.get('characteristic','')}): {s.get('value','')}")
+            with st.expander(f"📖 НАВЫКИ ({len(skills)})", expanded=False, key="exp_skills"):
+                for i, s in enumerate(skills):
+                    nm = s.get("name", "?")
+                    val = int(s.get("value", 0) or 0)
+                    ch = s.get("characteristic", "")
+                    ru_ch = char_ru(ch)
+                    ch_disp = ru_ch if ru_ch else ch
+                    if st.button(f"{nm} · {ch_disp} {val}", key=f"skl_{i}",
+                                 use_container_width=True,
+                                 help=f"Проверка навыка «{nm}» ({ch} — {char_ru_long(ch)})"):
+                        st.session_state.pending_check = {
+                            "source": "skills",
+                            "kind": "Навык", "name": nm, "value": val,
+                        }
+                        st.rerun()
+                _render_pending_check_picker(sheet, chat_history, localS, source="skills")
+
+        talents = sheet.get("talents", [])
+        if talents:
+            with st.expander(f"✨ ТАЛАНТЫ ({len(talents)})", expanded=False, key="exp_talents"):
+                for i, t in enumerate(talents):
+                    if st.button(f"📖 {t}", key=f"tal_{i}",
+                                 use_container_width=True,
+                                 help=f"Справка: {t}"):
+                        _send_quick_action(
+                            f'[СПРАВКА] Расскажи кратко по канону про талант: "{t}"',
+                            sheet, chat_history, localS)
+                        st.rerun()
+
+        weapons = sheet.get("weapons", [])
+        if weapons:
+            with st.expander(f"⚔ ОРУЖИЕ ({len(weapons)})", expanded=False, key="exp_weapons"):
+                for i, w in enumerate(weapons):
+                    wname = w.get("name", "?")
+                    stats = w.get("stats", "")
+                    equipped = bool(w.get("equipped", True))
+                    is_ranged = bool(re.search(r"\d+\s*м", stats))
+                    badge = "✅" if equipped else "⚪"
+                    badge_color = "var(--accent-bright, #e8d9b8)" if equipped else "var(--ink-dim, #8a8068)"
+                    st.markdown(
+                        f'<div style="font-family:Consolas,monospace;font-size:0.85rem;'
+                        f'color:{badge_color};margin:12px 0 3px 0;'
+                        f'font-weight:700;letter-spacing:0.03em;">{badge} {_esc(wname)}</div>'
+                        f'<div style="font-family:Consolas,monospace;font-size:0.7rem;'
+                        f'color:var(--ink-dim, #b8ac92);margin-bottom:6px;'
+                        f'word-break:break-word;">{_esc(stats)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if equipped:
+                        c1, c2, c3 = st.columns(3)
+                        if is_ranged:
+                            labels = [("ОДИН", "одиночный выстрел", "single"),
+                                      ("ОЧЕР", "стрельба очередью", "burst"),
+                                      ("ПРИЦ", "прицельный выстрел", "aimed")]
+                        else:
+                            labels = [("АТАК", "обычная атака", "atk"),
+                                      ("ПАР", "парирование", "par"),
+                                      ("МОЩН", "мощная атака", "pow")]
+                        for col, (lbl, mode, sfx) in zip([c1, c2, c3], labels):
+                            with col:
+                                if st.button(lbl, key=f"w_{sfx}_{i}",
+                                             use_container_width=True,
+                                             help=f"{wname}: {mode}"):
+                                    _send_quick_action(
+                                        f'[АТАКА] {wname} — {mode}',
+                                        sheet, chat_history, localS)
+                                    st.rerun()
+                    else:
+                        st.caption("_Оружие убрано. Достань командой «Достаю X»._")
+                    if w.get("notes"):
+                        st.caption(f"_{w['notes']}_")
+
         powers = sheet.get("psychic_powers", [])
         if powers:
-            with st.expander(f"🔮 Психосилы ({len(powers)})", expanded=False):
-                for p in powers: st.write(f"• {p}")
+            with st.expander(f"🔮 ПСИХОСИЛЫ ({len(powers)})", expanded=False, key="exp_psy"):
+                for i, p in enumerate(powers):
+                    pname = p if isinstance(p, str) else p.get("name", "?")
+                    st.markdown(
+                        f'<div style="font-family:Consolas,monospace;font-size:0.85rem;'
+                        f'color:var(--accent-bright, #e8d9b8);margin:12px 0 6px 0;'
+                        f'font-weight:700;letter-spacing:0.03em;">{_esc(pname)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    c1, c2, c3 = st.columns(3)
+                    modes = [("ТОЧН", "точечное применение", "pt"),
+                             ("ОБЛ", "по площади", "ar"),
+                             ("КОНЦ", "с концентрацией", "cc")]
+                    for col, (lbl, mode, sfx) in zip([c1, c2, c3], modes):
+                        with col:
+                            if st.button(lbl, key=f"p_{sfx}_{i}",
+                                         use_container_width=True,
+                                         help=f"{pname}: {mode}"):
+                                _send_quick_action(
+                                    f'[ПСИ] {pname} — {mode}',
+                                    sheet, chat_history, localS)
+                                st.rerun()
+
+        arm = _norm_armour(sheet.get("armour", {}))
+        if arm:
+            with st.expander("🛡️ БРОНЯ", expanded=False, key="exp_armour"):
+                zones = [("head", "Голова"), ("body", "Тело"),
+                         ("arms", "Руки"), ("legs", "Ноги")]
+                for z, zname in zones:
+                    zz = arm.get(z, {}) or {}
+                    v = int(zz.get("value", 0) or 0)
+                    eq = bool(zz.get("equipped", True))
+                    badge = "✅" if eq else "⚪"
+                    col = "var(--accent-bright, #e8d9b8)" if eq else "var(--ink-dim, #8a8068)"
+                    extra = " · снято" if not eq else ""
+                    st.markdown(
+                        f'<div style="font-family:Consolas,monospace;font-size:0.84rem;'
+                        f'color:{col};padding:5px 0;border-bottom:1px dashed '
+                        f'color-mix(in srgb, var(--accent) 15%, transparent);">'
+                        f'{badge} {zname}: <b>{v}</b>{extra}</div>',
+                        unsafe_allow_html=True,
+                    )
+                if arm.get("notes"): st.caption(arm["notes"])
 
     with tabs[1]:
         st.markdown(f"### 💰 {sheet.get('currency', 'Троны')}: **{sheet.get('money', 0)}**")
@@ -2432,7 +3526,18 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
                     st.error("Не наш формат.")
                 else:
                     st.session_state.character = data["character"]
-                    st.session_state.chat_history = data.get("chat_history", [])
+                    _raw_chat = data.get("chat_history", [])
+                    cleaned_chat = []
+                    for m in _raw_chat:
+                        if isinstance(m, dict) and m.get("role") == "assistant":
+                            cleaned_text, _ = parse_state_block(m.get("content", ""))
+                            if cleaned_text and cleaned_text != "_…_":
+                                mc = dict(m)
+                                mc["content"] = cleaned_text
+                                cleaned_chat.append(mc)
+                        else:
+                            cleaned_chat.append(m)
+                    st.session_state.chat_history = cleaned_chat
                     _ls_save(localS, data["character"], st.session_state.chat_history)
                     st.rerun()
             except Exception as e:
@@ -2457,6 +3562,15 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
         if st.session_state.get("show_last_request"):
             st.code(st.session_state.get("last_request_to_giga", "—"), language="text")
 
+        if st.button("📜 Последний [STATE]", use_container_width=True):
+            st.session_state.show_last_state = not st.session_state.get("show_last_state", False)
+        if st.session_state.get("show_last_state"):
+            last_state = st.session_state.get("last_state_updates") or {}
+            if last_state:
+                st.json(last_state)
+            else:
+                st.caption("— пусто —")
+
     st.write("---")
     if st.button("🔄 Заново", use_container_width=True, help="Начать историю заново"):
         st.session_state.chat_history = []
@@ -2472,9 +3586,6 @@ def render_character_sidebar(sheet, kb, model, localS, chat_history):
         st.rerun()
 
 
-# ============================================================
-# ЧАТ
-# ============================================================
 def build_intro_message(sheet: dict) -> str:
     return (
         f"=== ПЕРСОНАЖ ИГРОКА ===\n"
@@ -2501,6 +3612,7 @@ def render_chat(localS):
                                  localS, st.session_state.chat_history)
 
     render_status_bar()
+    render_location_bar(st.session_state.character)
     st.title("🎲 Игра")
 
     with st.expander("👤 Лист персонажа", expanded=False):
@@ -2524,6 +3636,7 @@ def render_chat(localS):
                 if state_updates:
                     st.session_state.character = apply_state_updates(
                         st.session_state.character, state_updates)
+                    st.session_state.last_state_updates = dict(state_updates)
                     try:
                         new_path = cc.save_character(st.session_state.character)
                         st.session_state.character_path = new_path
@@ -2541,14 +3654,23 @@ def render_chat(localS):
 
     for msg in st.session_state.chat_history:
         role = msg["role"]
+        content = msg.get("content", "")
+        # Чистим STATE-мусор даже при показе (защита от старой грязи в LS)
+        if role == "assistant":
+            content, _ = parse_state_block(content)
+            if not content or content == "_…_":
+                continue
         avatar = AVATAR_USER if role == "user" else faction_avatar
         with st.chat_message(role, avatar=avatar):
             render_chat_name(role, player_name)
-            for r in msg.get("rolls", []):
+            for r in _dedupe_rolls(msg.get("rolls", []) or []):
                 render_roll(r)
-            st.markdown(msg["content"])
+            st.markdown(content)
 
     user_input = st.chat_input("Что делаешь?")
+    auto_msg = st.session_state.pop("auto_user_message", None)
+    if auto_msg:
+        user_input = auto_msg
     if not user_input:
         return
 
@@ -2565,6 +3687,39 @@ def render_chat(localS):
     parts = [f"=== АКТУАЛЬНЫЙ ЛИСТ ПЕРСОНАЖА ===\n{sheet_json}"]
     if context: parts.append(context)
     parts.append(f"=== СООБЩЕНИЕ ИГРОКА ===\n{user_input}")
+
+    # Подсказка Мастеру в зависимости от метки
+    hint = ""
+    msg_upper = user_input.upper()
+    if "[ПРОВЕРКА]" in msg_upper:
+        hint = ("=== ИНСТРУКЦИЯ ===\n"
+                "Игрок нажал кнопку проверки. Сделай бросок 1d100 против "
+                "ЭФФЕКТИВНОГО ЗНАЧЕНИЯ из сообщения. Оформи результат ОДНОЙ "
+                "строкой: 🎲 Бросок 1d100 (причина): выпало [N] — сложность D. "
+                "Если N ≤ D — УСПЕХ, иначе ПРОВАЛ. Учти степени (разница // 10). "
+                "Затем опиши последствия в сцене.\n"
+                "ВАЖНО: выведи РОВНО ОДИН бросок 1d100, не дублируй его. "
+                "Не вызывай функцию roll_dice — только пиши броском в тексте. "
+                "Отвечай ТОЛЬКО на текущий запрос, не смешивай с прошлыми.")
+    elif "[АТАКА]" in msg_upper:
+        hint = ("=== ИНСТРУКЦИЯ ===\n"
+                "Игрок атакует. Сделай бросок 1d100 против BS (дальний бой) "
+                "или WS (ближний бой) персонажа со сложностью по "
+                "обстоятельствам (обычно 40-60). Оформи броском "
+                "🎲 Бросок 1d100. При успехе — опиши попадание и урон.")
+    elif "[СПРАВКА]" in msg_upper:
+        hint = ("=== ИНСТРУКЦИЯ ===\n"
+                "Игрок просит справку по канону. Ответь кратко (3-6 "
+                "предложений), по правилам WH40K Rogue Trader, без "
+                "выдумок. Если не знаешь — так и скажи.")
+    elif "[ПСИ]" in msg_upper:
+        hint = ("=== ИНСТРУКЦИЯ ===\n"
+                "Игрок применяет психосилу. Сделай психотест 1d100 против "
+                "пси-рейтинга или Willpower. При 9 на d10 — Феномен, при "
+                "100 — Периллы Варпа. Опиши эффект.")
+    if hint:
+        parts.append(hint)
+
     enriched = "\n\n".join(parts)
 
     giga_messages = [Messages(role=MessagesRole.SYSTEM, content=master_prompt)]
@@ -2622,7 +3777,50 @@ def render_chat(localS):
             final_text, state_updates = parse_state_block(final_text)
             final_text, text_rolls = parse_rolls_from_text(final_text)
 
+        # Автоподстановка брони и лута (patch20)
+        last_user = ""
+        for m_ in reversed(st.session_state.chat_history):
+            if m_.get("role") == "user":
+                last_user = m_.get("content", "")
+                break
+
+        if not any(k.startswith("armour_") for k in state_updates):
+            detected = _detect_armour_zone(last_user)
+            if detected:
+                zone, action = detected
+                state_updates[f"armour_{action}_{zone}"] = "1"
+
+        if not any(k in state_updates for k in ("equipment_add", "weapon_add")):
+            last_loot = st.session_state.get("last_loot_seen", "")
+            items = _autodetect_loot(last_user, last_loot)
+            if items:
+                existing = state_updates.get("equipment_add", "")
+                all_items = [x for x in existing.split(";") if x.strip()] + items
+                seen = set()
+                unique = []
+                for x in all_items:
+                    if x not in seen:
+                        seen.add(x)
+                        unique.append(x)
+                state_updates["equipment_add"] = "; ".join(unique)
+
+        eq_drop, wp_lost = _autodetect_drop(last_user, st.session_state.character)
+        if eq_drop and "equipment_remove" not in state_updates:
+            state_updates["equipment_remove"] = "; ".join(eq_drop)
+        if wp_lost and "weapon_lost" not in state_updates:
+            state_updates["weapon_lost"] = "; ".join(wp_lost)
+
+        if "loot_seen" in state_updates:
+            st.session_state.last_loot_seen = state_updates["loot_seen"]
+
         if state_updates:
+            old_snap = {
+                "w": int(((st.session_state.character.get("wounds") or {}).get("current", 0)) or 0),
+                "f": int(((st.session_state.character.get("fate_points") or {}).get("current", 0)) or 0),
+                "c": int(st.session_state.character.get("corruption", 0) or 0),
+                "i": int(st.session_state.character.get("insanity", 0) or 0),
+                "x": int(st.session_state.character.get("xp", 0) or 0),
+            }
             st.session_state.character = apply_state_updates(
                 st.session_state.character, state_updates)
             try:
@@ -2631,7 +3829,98 @@ def render_chat(localS):
             except Exception as e:
                 print(f"[STATE] ошибка: {e}")
 
-        all_rolls = rolls_to_render + text_rolls
+            new_snap = {
+                "w": int(((st.session_state.character.get("wounds") or {}).get("current", 0)) or 0),
+                "f": int(((st.session_state.character.get("fate_points") or {}).get("current", 0)) or 0),
+                "c": int(st.session_state.character.get("corruption", 0) or 0),
+                "i": int(st.session_state.character.get("insanity", 0) or 0),
+                "x": int(st.session_state.character.get("xp", 0) or 0),
+            }
+            toasts = []
+            dw = new_snap["w"] - old_snap["w"]
+            df = new_snap["f"] - old_snap["f"]
+            dc = new_snap["c"] - old_snap["c"]
+            di = new_snap["i"] - old_snap["i"]
+            dx = new_snap["x"] - old_snap["x"]
+            if dw: toasts.append((f"{dw:+d} РАНЫ", "❤️" if dw > 0 else "💔"))
+            if df: toasts.append((f"{df:+d} СУДЬБА", "🍀" if df > 0 else "⚠️"))
+            if dc: toasts.append((f"{dc:+d} ПОРЧА", "🌀"))
+            if di: toasts.append((f"{di:+d} БЕЗУМИЕ", "🧠"))
+            if dx: toasts.append((f"{dx:+d} ОПЫТ", "★"))
+            for txt, ic in toasts:
+                try: st.toast(txt, icon=ic)
+                except Exception: pass
+
+            # Карточка лута
+            loot_items = []
+            for short, lbl, ic in [
+                ("quest_add", "НОВАЯ ЗАДАЧА", "📋"),
+                ("npc_add", "НОВЫЙ NPC", "👥"),
+                ("companion_add", "НОВЫЙ СПУТНИК", "🐾"),
+                ("goal_add", "НОВАЯ ЦЕЛЬ", "🎯"),
+                ("effect_add", "НОВЫЙ ЭФФЕКТ", "⚡"),
+            ]:
+                if short in state_updates:
+                    for it in str(state_updates[short]).split(";"):
+                        it = it.strip()
+                        if it:
+                            loot_items.append((lbl, it, ic))
+
+            # Инвентарь
+            if "equipment_add" in state_updates:
+                for it in str(state_updates["equipment_add"]).split(";"):
+                    it = it.strip()
+                    if it:
+                        loot_items.append(("ПОЛУЧЕН ПРЕДМЕТ", it, "📦"))
+
+            # ОБНАРУЖЕНО (не в инвентарь, только всплывает)
+            if "loot_seen" in state_updates:
+                for it in str(state_updates["loot_seen"]).split(";"):
+                    it = it.strip()
+                    if it:
+                        loot_items.append(("ОБНАРУЖЕНО", it, "👁"))
+
+            # Оружие
+            if "weapon_add" in state_updates:
+                for it in str(state_updates["weapon_add"]).split(";"):
+                    it = it.strip()
+                    if not it:
+                        continue
+                    nm = it.split("|")[0].strip() if "|" in it else it
+                    loot_items.append(("ПОЛУЧЕНО ОРУЖИЕ", nm, "⚔"))
+
+            # Особые ресурсы: special_XXX=+N
+            for k, v in state_updates.items():
+                if k.startswith("special_"):
+                    res = k[len("special_"):].strip()
+                    try:
+                        iv = int(str(v).strip().lstrip("+"))
+                    except Exception:
+                        iv = 0
+                    if iv > 0:
+                        loot_items.append(("ОСОБЫЙ РЕСУРС", f"{res} +{iv}", "💎"))
+
+            # Деньги: money=+N
+            if "money" in state_updates:
+                mv = str(state_updates["money"]).strip()
+                if mv.startswith("+"):
+                    loot_items.append(("ПОЛУЧЕНО ДЕНЕГ", mv, "💰"))
+
+            for lbl, nm, ic in loot_items:
+                st.markdown(
+                    f'<div class="loot-card">'
+                    f'  <div class="loot-icon">{ic}</div>'
+                    f'  <div class="loot-info">'
+                    f'    <div class="loot-label">{lbl}</div>'
+                    f'    <div class="loot-name">{_esc(nm)}</div>'
+                    f'  </div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+            st.session_state.last_state_updates = dict(state_updates)
+
+        all_rolls = _dedupe_rolls(rolls_to_render + text_rolls)
         for r in all_rolls:
             render_roll(r)
 
@@ -2682,7 +3971,18 @@ def main():
                     except Exception:
                         pass
                 st.session_state.character = char
-                st.session_state.chat_history = chat
+                # Чистка старой истории: выкидываем STATE-мусор из сообщений
+                cleaned_chat = []
+                for m in chat:
+                    if isinstance(m, dict) and m.get("role") == "assistant":
+                        cleaned_text, _ = parse_state_block(m.get("content", ""))
+                        if cleaned_text and cleaned_text != "_…_":
+                            mc = dict(m)
+                            mc["content"] = cleaned_text
+                            cleaned_chat.append(mc)
+                    else:
+                        cleaned_chat.append(m)
+                st.session_state.chat_history = cleaned_chat
                 st.session_state.ls_restore_done = True
             else:
                 st.session_state.ls_attempts = attempts + 1
