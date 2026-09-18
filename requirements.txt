@@ -4,3 +4,6 @@ chromadb
 curl_cffi
 beautifulsoup4
 streamlit-local-storage
+openai
+pytest
+pytest-watch

@@ -67,15 +67,21 @@ def cmd_info() -> int:
     return 0
 
 
+def cmd_run() -> int:
+    """Запустить Streamlit UI."""
+    return _run([sys.executable, "-m", "streamlit", "run", "app.py"])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Dev-скрипты проекта")
-    ap.add_argument("command", choices=["check", "test", "live", "info"])
+    ap.add_argument("command", choices=["check", "test", "live", "info", "run"])
     args = ap.parse_args()
     return {
         "check": cmd_check,
         "test": cmd_test,
         "live": cmd_live,
         "info": cmd_info,
+        "run": cmd_run,
     }[args.command]()
 
 

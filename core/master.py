@@ -133,8 +133,8 @@ class Master:
             system_prompt=self.system_prompt,
             user_message=user_message,
             model=self.model.id,
-            temperature=defaults.get("temperature", 0.8),
-            max_tokens=defaults.get("max_tokens", 1024),
+            temperature=defaults.get("temperature", 0.85),
+            max_tokens=defaults.get("max_tokens", 700),
         )
 
         text = self._extract_text(response).strip()

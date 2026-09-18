@@ -103,14 +103,22 @@ class Analyst:
         )
 
         text = self._extract_text(response)
-        raw_json = self._extract_json(text)
-        parsed = self._to_command(raw_json, original=player_input)
 
-        valid, reason = parsed.is_valid()
-        if not valid:
-            raise AnalystError(f"Некорректный JSON: {reason}\nБыло: {raw_json}")
-
-        return parsed
+        try:
+            raw_json = self._extract_json(text)
+            parsed = self._to_command(raw_json, original=player_input)
+            valid, reason = parsed.is_valid()
+            if not valid:
+                raise AnalystError(f"Некорректный JSON: {reason}")
+            return parsed
+        except AnalystError as e:
+            # Fallback: модель вернула мусор или пустоту.
+            # Не падаем — отдаём нейтральное действие, Master всё равно опишет.
+            print(f"[analyst] fallback: {e}")
+            return ParsedCommand(
+                action="other", target=None, skill=None,
+                roll_needed=False, difficulty="Ordinary", raw=player_input,
+            )
 
     def _do_request(
         self,

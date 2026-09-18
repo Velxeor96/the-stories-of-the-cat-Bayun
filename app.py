@@ -1,0 +1,4360 @@
+# app.py
+# Streamlit: визард + чат с Мастером.
+# Темы: 12 палитр. Терминальный UI в стиле Rogue Trader.
+
+import json
+import traceback
+import re
+from datetime import datetime
+
+import streamlit as st
+
+try:
+    from streamlit_local_storage import LocalStorage
+    HAS_LS = True
+except Exception:
+    HAS_LS = False
+
+from gigachat import GigaChat
+from gigachat.models import Chat, Messages, MessagesRole, Function
+# --- UI V2 ---
+from ui_themes import (
+    THEMES as _UI_THEMES,
+    DEFAULT_THEME as _UI_DEFAULT_THEME,
+    theme_display, theme_label, theme_icon, get_theme,
+)
+from ui_themes import theme_keys as _theme_keys
+from ui_render import render_theme as _render_theme_v2
+
+# --- Новое ядро ---
+from core.config import Config
+from core.orchestrator import Orchestrator
+from core.auth import (
+    AuthError, account_exists, list_accounts, register_user,
+    user_dir_for, validate_login, validate_password, verify_user,
+)
+from ui_state import StateAdapter, apply_turn_effects, apply_turn_effects_pro
+from core.state import CharacterState
+from core.master import Turn as CoreTurn
+
+from dice import roll_dice
+from knowledge import KnowledgeBase
+
+import factions_data
+import character_creation as cc
+
+
+# ============================================================
+# НАСТРОЙКИ
+# ============================================================
+try:
+    API_KEY = st.secrets["GIGACHAT_API_KEY"]
+except Exception:
+    API_KEY = "MDFhMDk2NGMtZGQ0Yi03NGJiLTkzNWEtODgzMWEwNjZjZDYzOjBkNDViZDZmLTYxYzQtNGYyNC1hYzFlLTczZGY5OWI5MDZiMw=="
+
+MODEL = "GigaChat-2-Pro"
+MAX_FUNCTION_ITERATIONS = 15
+TOP_K_KNOWLEDGE = 5
+MASTER_PROMPT_PATH = "prompts/master.txt"
+
+LS_KEY = "wh40k_rpg_save_v2"
+LS_THEME_KEY = "wh40k_theme"
+SAVE_FORMAT = "wh40k_rpg_save"
+SAVE_VERSION = 1
+
+APP_VERSION = "Альфа 0.2"
+SPLASH_CREDITS = [
+    "Ксения (Заяц)", "Роман", "Валерий",
+    "Анна", "Сергей", "Игорь",
+]
+SPLASH_GREETING = """
+Приветствую тебя, путник, зашедший на огонек в мою скромную обитель! Мурр... Очень рад видеть тебя здесь. Спасибо, что не прошел мимо, скачал, запустил и решил взглянуть на то, что мы тут ваяем. Это дорогого стоит, и я, Кот Баюн, это очень ценю. Устраивайся поудобнее, сейчас я расскажу тебе сказку о том, как рождается игра.
+
+Разработка игр — это, скажу я тебе, ад кромешный. Это бесконечный круговорот багов, вылетов, неработающих скриптов и бессонных ночей, когда ты сидишь и смотришь на экран, пытаясь понять, почему трава внезапно стала фиолетовой, а главный герой проваливается сквозь текстуры. Это выматывает, высасывает все соки и заставляет сомневаться во всем. Но... черт возьми, это безумно весело! Видеть, как из хаоса кода и нагромождения ассетов рождается что-то живое, как мир обретает очертания, а персонажи начинают дышать — это магия, ради которой мы и терпим этот ад. И сейчас, перед вами — наше детище. Версия Альфа 0.2. Еще сырая, местами дерзкая, но уже живая.
+
+Но, как говорится, один в поле не воин. И в этом аду кромешном без надежного плеча рядом можно просто сойти с ума. Поэтому я хочу сказать огромное, искреннее спасибо тем, без кого этого проекта просто не существовало бы. В первую очередь — Ксении (ака Заяц). Заяц, да, это про тебя! Спасибо тебе огромное за то, что терпела меня все это время. За твое бесконечное терпение, за поддержку, за то, что не дала мне бросить это гиблое дело, когда руки опускались. Ты — мой самый главный критик и самый верный союзник. Без тебя этого проекта бы просто не было.
+
+Отдельное мурр-спасибо нашим отважным альфа-тестерам, которые первыми ступили на эту зыбкую почву, ловили баги, тестировали механики и давали бесценную обратную связь: Ксении, Роману, Валерию, Анне, Сергею, Игорю, а также друзьям Романа. Ребята, я понятия не имею, кто вы такие, но я вам тоже безумно благодарен! Вы все — настоящие герои, которые помогли сделать эту версию лучше.
+
+Спасибо, что играли. Спасибо за вашу поддержку. Спасибо, что тратите свое время (и, надеюсь, в будущем — заработанные тяжким трудом деньги) на наше творчество. Надеемся, вам понравилось. Впереди еще много работы, много новых приключений и исправлений, но мы движемся вперед.
+
+С любовью и мурчанием,
+Ваш Кот Баюн.
+"""
+GENDER_OPTIONS = {"male": "Мужской", "female": "Женский"}
+
+st.set_page_config(
+    page_title="Warhammer 40K · RPG",
+    page_icon="",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+@st.cache_resource(show_spinner=False)
+def _get_kb_cached():
+    """ChromaDB через session_state — если упало, не кэшируем None."""
+    try:
+        _inst = st.session_state.get("_kb_instance")
+        if _inst is not None:
+            return _inst
+        from knowledge import KnowledgeBase
+        _inst = KnowledgeBase()
+        st.session_state["_kb_instance"] = _inst
+        return _inst
+    except Exception as _e:
+        print(f"[kb] {_e}")
+        return None
+
+
+def _get_orchestrator():
+    return Orchestrator.from_config(Config.load())
+
+
+def _ensure_gender(d):
+    """Мягкая миграция: только male/female, дефолт male."""
+    if isinstance(d, dict):
+        g = d.get("gender")
+        if g not in ("male", "female"):
+            d["gender"] = "male"
+    return d
+
+
+def _make_state(data):
+    """Создаёт state из legacy-dict: сначала пробует CharacterState,
+    при несовпадении схемы возвращает StateAdapter."""
+    if isinstance(data, dict) is False:
+        return data
+    try:
+        cs = CharacterState.from_dict(data)
+        if cs is None:
+            raise ValueError('None')
+        return cs
+    except Exception:
+        return StateAdapter(data)
+
+
+# ============================================================
+# Хелперы (восстановлены патчем 16d)
+# ============================================================
+@st.cache_resource(show_spinner=False)
+def get_kb():
+    from knowledge import KnowledgeBase
+    return KnowledgeBase()
+
+
+@st.cache_resource(show_spinner=False)
+def get_master_prompt():
+    for p in ("prompts/master_core.txt", "prompts/master.txt"):
+        try:
+            return Path(p).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+    return ""
+
+
+def get_giga():
+    return None
+
+
+
+# ============================================================
+# ТЕМЫ — 12 палитр
+# ============================================================
+THEMES = _UI_THEMES
+
+DEFAULT_THEME = "grimdark"
+
+
+# ============================================================
+# АВАТАРЫ ФРАКЦИЙ
+# ============================================================
+FACTION_AVATARS = {}
+
+DEFAULT_AVATAR_MASTER = ""
+
+# ============================================================
+# РУССКИЕ ИМЕНА ХАРАКТЕРИСТИК (короткие для кнопок)
+# Поддержка алиасов: Wil/WP, Fel/FEL/fel и т.д.
+# ============================================================
+# ============================================================
+# РУССКИЕ ИМЕНА ХАРАКТЕРИСТИК
+#   Короткие — для кнопок.  Длинные — для подсказок.
+# ============================================================
+CHAR_RU_SHORT = {
+    "WS":  "Рук",     # рукопашный бой
+    "BS":  "Стр",     # стрельба
+    "S":   "Сил",     # сила
+    "T":   "Вын",     # выносливость
+    "AG":  "Лов",     # ловкость
+    "INT": "Инт",     # интеллект
+    "PER": "Восп",    # восприятие
+    "WIL": "Воля",    # сила воли
+    "WP":  "Воля",
+    "FEL": "Общ",     # общительность
+    "STR": "Сил",
+    "TOU": "Вын",
+    "TGH": "Вын",
+    "AGI": "Лов",
+    "PERC": "Восп",
+    "WILL": "Воля",
+    "SOC": "Общ",
+}
+
+CHAR_RU_LONG = {
+    "WS": "Рукопашный бой",
+    "BS": "Стрельба",
+    "S": "Сила",
+    "T": "Выносливость",
+    "Ag": "Ловкость",
+    "Int": "Интеллект",
+    "Per": "Восприятие",
+    "Wil": "Сила воли",
+    "WP": "Сила воли",
+    "Fel": "Общительность",
+}
+
+
+def char_ru(key: str) -> str:
+    """Короткое русское имя для кнопки."""
+    if not key:
+        return ""
+    k = str(key).strip().upper().rstrip(".")
+    return CHAR_RU_SHORT.get(k, str(key))
+
+
+def char_ru_long(key: str) -> str:
+    """Длинное русское имя для tooltip."""
+    if not key:
+        return ""
+    return CHAR_RU_LONG.get(str(key).strip(), str(key))
+
+
+
+
+def get_faction_avatar(sheet):
+    return ""
+
+
+# ============================================================
+# BASE CSS
+# ============================================================
+BASE_CSS = """
+<style>
+/* =====================================================
+   1. КОРНЕВОЙ РАЗМЕР
+   ===================================================== */
+html {
+    font-size: clamp(15px, 0.5vw + 12px, 18px) !important;
+}
+
+/* =====================================================
+   2. ШИРИНА КОНТЕНТА
+   ===================================================== */
+.block-container {
+    padding-top: 0.6rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-bottom: 1rem !important;
+    max-width: min(1700px, 94vw) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* =====================================================
+   3. Убираем полосы сверху
+   ===================================================== */
+header[data-testid="stHeader"], [data-testid="stHeader"] {
+    background: transparent !important;
+    min-height: 44px !important;
+    height: auto !important;
+}
+[data-testid="stToolbar"] { top: 0.5rem !important; right: 0.8rem !important; }
+[data-testid="stDecoration"] { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
+[data-testid="stHeader"] > div:first-child > div:first-child {
+    background: transparent !important;
+}
+
+/* === Кнопка разворота сайдбара — ВСЕГДА видима и кликабельна === */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapsedControl"] > div,
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="collapsedControl"],
+button[kind="header"] {
+    visibility: visible !important;
+    display: block !important;
+    opacity: 1 !important;
+    z-index: 999999 !important;
+    position: fixed !important;
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+}
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarCollapseButton"] button,
+button[kind="header"] {
+    background: var(--bg-light, #1e1e24) !important;
+    color: var(--accent-bright, #e8d9b8) !important;
+    border: 1px solid var(--accent-dim, #8a7444) !important;
+    border-radius: 4px !important;
+    padding: 6px 10px !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent) !important;
+}
+[data-testid="stSidebarCollapsedControl"] button:hover,
+[data-testid="stSidebarCollapseButton"] button:hover,
+button[kind="header"]:hover {
+    border-color: var(--accent, #c9a961) !important;
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent, #c9a961) 60%, transparent) !important;
+}
+
+/* =====================================================
+   4. Прозрачные панели снизу
+   ===================================================== */
+[data-testid="stBottom"],
+[data-testid="stBottom"] > div,
+[data-testid="stBottom"] > div > div,
+[data-testid="stBottomBlockContainer"],
+[data-testid="stBottomBlockContainer"] > div,
+[data-testid="stAppViewContainer"] > .main,
+section.main > div,
+.stApp > section {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+[data-testid="stMainBlockContainer"] {
+    padding-bottom: 1rem !important;
+    background: transparent !important;
+}
+
+/* =====================================================
+   5. Сайдбар-табы
+   ===================================================== */
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab-list"] {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 2px !important;
+    overflow: visible !important;
+    height: auto !important;
+    background: transparent !important;
+}
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+    font-size: clamp(0.72rem, 0.68rem + 0.1vw, 0.85rem) !important;
+    padding: 4px 7px !important;
+    white-space: nowrap !important;
+    min-width: unset !important;
+    width: auto !important;
+    height: auto !important;
+    line-height: 1.2 !important;
+}
+[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] p {
+    font-size: clamp(0.72rem, 0.68rem + 0.1vw, 0.85rem) !important;
+    margin: 0 !important; padding: 0 !important; line-height: 1.2 !important;
+}
+
+/* =====================================================
+   6. Safety
+   ===================================================== */
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] li,
+.stMarkdown p,
+.stMarkdown li {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+}
+.stMarkdown pre, .stMarkdown code {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+}
+
+/* =====================================================
+   7. TERMINAL UI — панели, скобки, свечение
+   ===================================================== */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    position: relative;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--bg-light, #1e1e24) 92%, var(--accent, #c9a961) 8%),
+        var(--bg-card, #1c1c22)) !important;
+    border: 1px solid var(--accent-dim, #8a7444) !important;
+    border-radius: 0 !important;
+    padding: 22px 26px !important;
+    margin-bottom: 16px !important;
+    clip-path: polygon(
+        18px 0, 100% 0,
+        100% calc(100% - 18px), calc(100% - 18px) 100%,
+        0 100%, 0 18px
+    );
+    transition: all 0.22s ease;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #c9a961) 10%, transparent),
+                0 4px 18px rgba(0,0,0,0.45);
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    border-color: var(--accent, #c9a961) !important;
+    box-shadow: 0 0 0 1px var(--accent, #c9a961),
+                0 0 22px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent),
+                0 6px 24px rgba(0,0,0,0.55);
+}
+[data-testid="stVerticalBlockBorderWrapper"]::before {
+    content: '';
+    position: absolute;
+    top: 8px; left: 8px;
+    width: 22px; height: 22px;
+    border-top: 2px solid var(--accent, #c9a961);
+    border-left: 2px solid var(--accent, #c9a961);
+    pointer-events: none;
+    opacity: 0.85;
+}
+[data-testid="stVerticalBlockBorderWrapper"]::after {
+    content: '';
+    position: absolute;
+    bottom: 8px; right: 8px;
+    width: 22px; height: 22px;
+    border-bottom: 2px solid var(--accent, #c9a961);
+    border-right: 2px solid var(--accent, #c9a961);
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+/* =====================================================
+   8. ТЕРМИНАЛ — статус-бар, hero, заголовки секций
+   ===================================================== */
+.terminal-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    margin-bottom: 18px;
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: clamp(0.68rem, 0.66rem + 0.1vw, 0.78rem);
+    color: var(--accent-dim, #8a7444);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    border-top: 1px solid var(--accent-dim, #8a7444);
+    border-bottom: 1px solid var(--accent-dim, #8a7444);
+    background: linear-gradient(90deg,
+        transparent 0%,
+        color-mix(in srgb, var(--accent, #c9a961) 5%, transparent) 50%,
+        transparent 100%);
+}
+.terminal-status span { white-space: nowrap; }
+
+.hero-panel {
+    position: relative;
+    padding: 28px 36px 26px 36px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--bg-light, #1e1e24) 88%, var(--accent, #c9a961) 12%),
+        var(--bg-card, #1c1c22));
+    border: 1px solid var(--accent-dim, #8a7444);
+    clip-path: polygon(
+        26px 0, 100% 0,
+        100% calc(100% - 26px), calc(100% - 26px) 100%,
+        0 100%, 0 26px
+    );
+    box-shadow: 0 0 30px color-mix(in srgb, var(--accent, #c9a961) 12%, transparent),
+                0 4px 24px rgba(0,0,0,0.5),
+                inset 0 0 60px color-mix(in srgb, var(--accent, #c9a961) 4%, transparent);
+}
+.hero-panel .hero-title {
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: clamp(1.5rem, 1.15rem + 1.6vw, 2.6rem);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--accent-bright, #e8d9b8);
+    margin: 0 0 8px 0;
+    line-height: 1.15;
+    text-shadow: 0 0 20px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent);
+}
+.hero-panel .hero-sub {
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: clamp(0.78rem, 0.74rem + 0.2vw, 0.95rem);
+    color: var(--ink-dim, #b8ac92);
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.hero-panel .hero-sub .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-dim, #8a7444), transparent);
+    max-width: 200px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 22px 0 12px 0;
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+}
+.section-header .num {
+    display: inline-block;
+    padding: 3px 10px;
+    border: 1px solid var(--accent, #c9a961);
+    color: var(--accent, #c9a961);
+    font-weight: 700;
+    font-size: clamp(0.78rem, 0.74rem + 0.15vw, 0.92rem);
+    letter-spacing: 0.15em;
+    background: color-mix(in srgb, var(--accent, #c9a961) 8%, transparent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent, #c9a961) 20%, transparent);
+}
+.section-header .title {
+    color: var(--heading, #e8d9b8);
+    font-weight: 700;
+    font-size: clamp(0.95rem, 0.88rem + 0.3vw, 1.15rem);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.section-header .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--accent-dim, #8a7444), transparent 80%);
+}
+.section-header .meta {
+    color: var(--accent-dim, #8a7444);
+    font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.85rem);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* =====================================================
+   9. БРОСКИ КУБИКОВ — карточки
+   ===================================================== */
+.roll-card {
+    position: relative;
+    margin: 12px 0 16px 0;
+    padding: 16px 24px 18px 24px;
+    background: var(--bg-card, #1c1c22);
+    border: 1px solid var(--accent-dim, #8a7444);
+    clip-path: polygon(
+        14px 0, 100% 0,
+        100% calc(100% - 14px), calc(100% - 14px) 100%,
+        0 100%, 0 14px
+    );
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    color: var(--accent, #c9a961);
+    transition: box-shadow 0.25s ease;
+}
+.roll-card::before {
+    content: '';
+    position: absolute;
+    top: 6px; left: 6px;
+    width: 16px; height: 16px;
+    border-top: 2px solid currentColor;
+    border-left: 2px solid currentColor;
+    opacity: 0.75;
+    pointer-events: none;
+}
+.roll-card::after {
+    content: '';
+    position: absolute;
+    bottom: 6px; right: 6px;
+    width: 16px; height: 16px;
+    border-bottom: 2px solid currentColor;
+    border-right: 2px solid currentColor;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+.roll-card--success {
+    color: #6ee787;
+    border-color: rgba(110, 231, 135, 0.55);
+    background:
+        linear-gradient(135deg,
+            rgba(110, 231, 135, 0.14),
+            rgba(110, 231, 135, 0.04)),
+        var(--bg-card, #1c1c22);
+    box-shadow: 0 0 22px rgba(110, 231, 135, 0.20),
+                inset 0 0 40px rgba(110, 231, 135, 0.05);
+}
+.roll-card--fail {
+    color: #ff7a7a;
+    border-color: rgba(255, 122, 122, 0.55);
+    background:
+        linear-gradient(135deg,
+            rgba(255, 122, 122, 0.14),
+            rgba(255, 122, 122, 0.04)),
+        var(--bg-card, #1c1c22);
+    box-shadow: 0 0 22px rgba(255, 122, 122, 0.20),
+                inset 0 0 40px rgba(255, 122, 122, 0.05);
+}
+.roll-card--info {
+    color: var(--accent, #c9a961);
+    border-color: var(--accent-dim, #8a7444);
+    background:
+        linear-gradient(135deg,
+            color-mix(in srgb, var(--accent, #c9a961) 10%, transparent),
+            color-mix(in srgb, var(--accent, #c9a961) 2%, transparent)),
+        var(--bg-card, #1c1c22);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent, #c9a961) 18%, transparent);
+}
+
+.roll-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: currentColor;
+    padding-bottom: 8px;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    margin-bottom: 14px;
+}
+.roll-header .roll-label { opacity: 0.75; }
+.roll-header .roll-expr {
+    font-weight: 700;
+    color: currentColor;
+    text-shadow: 0 0 10px currentColor;
+    opacity: 0.95;
+}
+.roll-header .roll-reason {
+    font-style: italic;
+    opacity: 0.7;
+    margin-left: auto;
+    text-transform: none;
+    letter-spacing: 0.05em;
+    font-size: 0.82rem;
+}
+.roll-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+    padding: 4px 0 12px 0;
+}
+.roll-value { text-align: center; }
+.roll-value-num {
+    font-size: clamp(2.6rem, 2rem + 2.2vw, 4.2rem);
+    font-weight: 700;
+    line-height: 1;
+    color: currentColor;
+    text-shadow: 0 0 26px currentColor;
+    letter-spacing: -0.02em;
+}
+.roll-value-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.3em;
+    opacity: 0.7;
+    margin-top: 6px;
+    text-transform: uppercase;
+}
+.roll-mod {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: currentColor;
+    opacity: 0.9;
+    padding: 4px 14px;
+    border-left: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+    border-right: 1px solid color-mix(in srgb, currentColor 50%, transparent);
+    text-shadow: 0 0 12px currentColor;
+    letter-spacing: 0.04em;
+}
+.roll-meta {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 10px 0 6px 0;
+    border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    margin-top: 4px;
+}
+.roll-meta-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+}
+.roll-meta-item .label {
+    font-size: 0.66rem;
+    letter-spacing: 0.25em;
+    opacity: 0.65;
+    text-transform: uppercase;
+}
+.roll-meta-item .value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: currentColor;
+    text-shadow: 0 0 12px currentColor;
+}
+.roll-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 10px;
+    padding: 8px 0 2px 0;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: currentColor;
+}
+.roll-status-icon { font-size: 1.15rem; }
+.roll-status-text { text-shadow: 0 0 16px currentColor; }
+
+/* =====================================================
+   9-B. САЙДБАР — ЛИСТ ПЕРСОНАЖА
+   ===================================================== */
+.char-sheet-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--accent-dim, #8a7444);
+}
+.char-avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    border: 2px solid var(--accent, #c9a961);
+    background: color-mix(in srgb, var(--accent-dim, #8a7444) 30%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent),
+                inset 0 0 10px color-mix(in srgb, var(--accent, #c9a961) 15%, transparent);
+    flex-shrink: 0;
+}
+.char-sheet-name {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--accent-bright, #e8d9b8);
+    margin: 0 0 3px 0;
+    line-height: 1.1;
+}
+.char-sheet-sub {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim, #b8ac92);
+    line-height: 1.3;
+}
+
+.stat-bar { margin: 8px 0; }
+.stat-bar-head {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+.stat-bar-label { color: var(--ink-dim, #b8ac92); }
+.stat-bar-value { color: var(--accent-bright, #e8d9b8); font-weight: 700; }
+.stat-bar-track {
+    height: 8px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--accent-dim, #8a7444) 18%, transparent);
+    overflow: hidden;
+    border: 1px solid var(--accent-dim, #8a7444);
+}
+.stat-bar-fill {
+    height: 100%;
+    transition: width 0.4s ease;
+}
+.stat-bar--wounds .stat-bar-fill {
+    background: linear-gradient(90deg, #6b1a1a, #d33);
+    box-shadow: 0 0 8px rgba(220, 50, 50, 0.6);
+}
+.stat-bar--fate .stat-bar-fill {
+    background: linear-gradient(90deg, var(--accent-dim, #8a7444), var(--accent, #c9a961));
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent, #c9a961) 55%, transparent);
+}
+.stat-bar--corruption .stat-bar-fill {
+    background: linear-gradient(90deg, #4a1a6b, #9c5cff);
+    box-shadow: 0 0 8px rgba(156, 92, 255, 0.5);
+}
+.stat-bar--insanity .stat-bar-fill {
+    background: linear-gradient(90deg, #6b4a1a, #d4913a);
+    box-shadow: 0 0 8px rgba(212, 145, 58, 0.5);
+}
+
+.meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    margin: 12px 0;
+}
+.meta-tile {
+    background: var(--bg-card, #1c1c22);
+    border: 1px solid var(--accent-dim, #8a7444);
+    border-radius: 4px;
+    padding: 10px 6px 9px 6px;
+    text-align: center;
+    font-family: 'Consolas', 'Menlo', monospace;
+}
+.meta-tile .icon { font-size: 1rem; opacity: 0.9; }
+.meta-tile .label {
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent, #c9a961) !important;
+    margin: 4px 0 5px;
+}
+.meta-tile .value {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent-bright, #e8d9b8);
+}
+
+.attr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 7px;
+    margin: 10px 0 14px;
+}
+.attr-tile {
+    background: color-mix(in srgb, var(--bg-card, #1c1c22) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-dim, #8a7444) 80%, transparent);
+    border-radius: 4px;
+    padding: 10px 6px 9px 6px;
+    text-align: center;
+    font-family: 'Consolas', 'Menlo', monospace;
+    transition: all 0.18s ease;
+}
+.attr-tile:hover {
+    border-color: var(--accent, #c9a961);
+    background: color-mix(in srgb, var(--bg-card, #1c1c22) 78%, var(--accent, #c9a961) 8%);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 25%, transparent);
+}
+.attr-tile .attr-key {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    color: var(--accent, #c9a961) !important;
+    text-transform: uppercase;
+    opacity: 1 !important;
+    font-weight: 700;
+}
+.attr-tile .attr-val {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--ink, #ede4d3);
+    margin: 5px 0 3px;
+    line-height: 1;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--ink, #ede4d3) 20%, transparent);
+}
+.attr-tile .attr-bon {
+    font-size: 0.85rem;
+    color: var(--accent-bright, #e8d9b8);
+    opacity: 0.95;
+    font-weight: 600;
+}
+
+
+/* === Усиленная читаемость сайдбара (patch5) === */
+[data-testid="stSidebar"] .stButton > button {
+    color: var(--accent-bright, #e8d9b8) !important;
+    font-weight: 600 !important;
+    text-shadow: 0 0 6px color-mix(in srgb, var(--accent, #c9a961) 40%, transparent);
+    letter-spacing: 0.04em !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary *,
+[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+    color: var(--accent-bright, #e8d9b8) !important;
+    font-weight: 700 !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 0.1em !important;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent, #c9a961) 45%, transparent);
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary svg {
+    fill: var(--accent, #c9a961) !important;
+}
+
+/* === Полоса локации над чатом (patch6) === */
+.location-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 18px;
+    margin: 0 0 18px 0;
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--accent, #c9a961) 14%, transparent),
+        transparent 65%);
+    border-left: 3px solid var(--accent, #c9a961);
+    border-top: 1px solid color-mix(in srgb, var(--accent, #c9a961) 22%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent, #c9a961) 22%, transparent);
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: clamp(0.78rem, 0.74rem + 0.2vw, 0.92rem);
+    color: var(--accent-bright, #e8d9b8);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--accent, #c9a961) 15%, transparent);
+}
+.location-bar .lbl {
+    color: var(--accent, #c9a961);
+    font-weight: 700;
+    letter-spacing: 0.22em;
+}
+.location-bar .val {
+    color: var(--accent-bright, #e8d9b8);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent);
+}
+.location-bar .dot {
+    color: var(--accent-dim, #8a7444);
+    opacity: 0.7;
+    font-weight: 700;
+}
+
+/* === Пульс HP при низких ранах (patch6) === */
+@keyframes pulse-wounds {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(220, 50, 50, 0.6);
+        filter: brightness(1);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 60, 60, 1),
+                    0 0 32px rgba(255, 60, 60, 0.5);
+        filter: brightness(1.25);
+    }
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-fill {
+    animation: pulse-wounds 1.5s ease-in-out infinite;
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-value {
+    color: #ff7a7a !important;
+    text-shadow: 0 0 10px rgba(255, 122, 122, 0.8);
+}
+
+/* === Анимация карточки броска (patch9) === */
+@keyframes roll-in {
+    0% {
+        opacity: 0;
+        transform: translateY(14px) scale(0.94);
+        filter: blur(4px);
+    }
+    60% { opacity: 1; filter: blur(0); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.roll-card {
+    animation: roll-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+/* === XP-бар === */
+.stat-bar--xp .stat-bar-fill {
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--accent, #c9a961) 60%, #4fc3f7),
+        var(--accent-bright, #e8d9b8));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent, #c9a961) 55%, transparent);
+}
+
+/* === Карточка полученного предмета (patch9) === */
+@keyframes loot-in {
+    0% {
+        opacity: 0;
+        transform: translateX(-30px) rotate(-2deg) scale(0.9);
+    }
+    60% { transform: translateX(4px) rotate(0.5deg) scale(1.02); }
+    100% { opacity: 1; transform: translateX(0) rotate(0) scale(1); }
+}
+.loot-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    margin: 10px 0 14px 0;
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--accent, #c9a961) 22%, transparent),
+        color-mix(in srgb, var(--accent, #c9a961) 6%, transparent));
+    border: 1px solid var(--accent, #c9a961);
+    border-left: 4px solid var(--accent-bright, #e8d9b8);
+    clip-path: polygon(
+        12px 0, 100% 0,
+        100% calc(100% - 12px), calc(100% - 12px) 100%,
+        0 100%, 0 12px
+    );
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent, #c9a961) 35%, transparent),
+                inset 0 0 30px color-mix(in srgb, var(--accent, #c9a961) 8%, transparent);
+    font-family: 'Consolas', 'Menlo', monospace;
+    animation: loot-in 0.55s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+    position: relative;
+}
+.loot-card::after {
+    content: '';
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 14px; height: 14px;
+    border-top: 2px solid var(--accent-bright, #e8d9b8);
+    border-right: 2px solid var(--accent-bright, #e8d9b8);
+    opacity: 0.7;
+}
+.loot-icon {
+    font-size: 2rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent, #c9a961) 60%, transparent));
+    flex-shrink: 0;
+}
+.loot-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.loot-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.28em;
+    color: var(--accent, #c9a961);
+    text-transform: uppercase;
+    font-weight: 700;
+}
+.loot-name {
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+    color: var(--accent-bright, #e8d9b8);
+    font-weight: 700;
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 45%, transparent);
+    word-break: break-word;
+}
+.sidebar-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-dim, #8a7444), transparent);
+    margin: 14px 0;
+}
+.sidebar-section-title {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.16em;
+    color: var(--accent, #c9a961) !important;
+    text-transform: uppercase;
+    margin: 12px 0 8px 0;
+    padding-bottom: 5px;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent, #c9a961) 35%, transparent);
+    font-weight: 700;
+}
+.pending-check-box {
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    color: var(--accent-bright, #e8d9b8) !important;
+    padding: 9px 12px;
+    border: 1px solid var(--accent, #c9a961);
+    border-radius: 4px;
+    margin: 10px 0 8px 0;
+    background: color-mix(in srgb, var(--accent, #c9a961) 12%, transparent);
+    font-weight: 700;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent, #c9a961) 25%, transparent);
+}
+
+
+/* =====================================================
+   10. Мобильный
+   ===================================================== */
+@media (max-width: 768px) {
+    html { font-size: 15px !important; }
+    .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+    h1 { font-size: 1.6rem !important; }
+    h2 { font-size: 1.3rem !important; }
+    [data-testid="stChatMessage"] { padding: 12px 14px !important; }
+    [data-testid="stChatMessage"] p,
+    [data-testid="stChatMessage"] li { font-size: 1rem !important; }
+    [data-testid="stMetricValue"] > div,
+    [data-testid="stMetricValue"] > div > div { font-size: 1.3rem !important; }
+    [data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+        font-size: 0.7rem !important;
+        padding: 3px 5px !important;
+    }
+    .hero-panel { padding: 18px 20px !important; }
+    .hero-panel .hero-sub { letter-spacing: 0.2em; }
+    .section-header .title { letter-spacing: 0.15em; font-size: 0.9rem; }
+    .section-header .meta { display: none; }
+    .chat-name { font-size: 0.65rem; letter-spacing: 0.15em; }
+    .roll-card { padding: 12px 16px 14px 16px; }
+    .roll-value-num { font-size: 2.4rem; }
+    .roll-meta { gap: 20px; }
+    .roll-meta-item .value { font-size: 1.1rem; }
+    .roll-body { gap: 16px; }
+    .roll-mod { font-size: 1.3rem; padding: 3px 10px; }
+    .roll-status { font-size: 0.78rem; letter-spacing: 0.25em; }
+    .attr-tile .attr-val { font-size: 0.9rem; }
+    .meta-tile .value { font-size: 0.9rem; }
+}
+
+/* =====================================================
+   11. Ультравайд
+   ===================================================== */
+@media (min-width: 2000px) {
+    html { font-size: 19px !important; }
+    h1 { font-size: 2.4rem !important; }
+    h2 { font-size: 1.8rem !important; }
+    h3 { font-size: 1.4rem !important; }
+    .block-container { max-width: 1800px !important; }
+}
+
+/* === ПУЛЬС HP — ФИНАЛЬНЫЙ OVERRIDE (patch8) === */
+@keyframes pulse-wounds {
+    0%, 100% {
+        background: linear-gradient(90deg, #6b1a1a, #d33);
+        box-shadow: 0 0 8px rgba(220, 50, 50, 0.7);
+        filter: brightness(1);
+    }
+    50% {
+        background: linear-gradient(90deg, #ff1818, #ff6868);
+        box-shadow: 0 0 24px rgba(255, 60, 60, 1),
+                    0 0 44px rgba(255, 60, 60, 0.6);
+        filter: brightness(1.3);
+    }
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-fill {
+    animation: pulse-wounds 1.4s ease-in-out infinite !important;
+    background: linear-gradient(90deg, #ff1818, #ff6868) !important;
+    box-shadow: 0 0 18px rgba(255, 60, 60, 0.9) !important;
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-value {
+    color: #ff7a7a !important;
+    text-shadow: 0 0 12px rgba(255, 122, 122, 0.95) !important;
+    font-weight: 700 !important;
+}
+.stat-bar--wounds.stat-bar--low .stat-bar-label {
+    color: #ff9a9a !important;
+}
+</style>
+"""
+
+
+# ============================================================
+# THEME CSS
+# ============================================================
+THEME_CSS_TEMPLATE = """
+<style>
+:root {
+    --bg-deep:   __BG_DEEP__;
+    --bg-mid:    __BG_MID__;
+    --bg-light:  __BG_LIGHT__;
+    --bg-card:   __BG_CARD__;
+    --bg-chat:   __BG_CHAT__;
+    --accent:        __ACCENT__;
+    --accent-dim:    __ACCENT_DIM__;
+    --accent-bright: __ACCENT_BRIGHT__;
+    --ink:       __TEXT__;
+    --ink-dim:   __TEXT_DIM__;
+    --ink-faint: __TEXT_FAINT__;
+    --heading:   __HEADING__;
+    --link:      __LINK__;
+}
+
+.stApp {
+    background-color: var(--bg-deep) !important;
+    color: var(--ink) !important;
+    background-image:
+        linear-gradient(color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 4%, transparent) 1px, transparent 1px) !important;
+    background-size: 44px 44px !important;
+    background-position: 0 0 !important;
+}
+
+[data-testid="stBottom"],
+[data-testid="stBottomBlockContainer"] {
+    background: var(--bg-deep) !important;
+    border-top: 1px solid var(--accent-dim) !important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--heading) !important;
+    font-weight: 700;
+}
+h1 {
+    font-size: clamp(1.8rem, 1.5rem + 1vw, 2.6rem) !important;
+    border-bottom: 1px solid var(--accent-dim);
+    padding-bottom: .4rem;
+}
+h2 {
+    font-size: clamp(1.35rem, 1.1rem + 0.6vw, 1.9rem) !important;
+    color: var(--accent) !important;
+}
+h3 {
+    font-size: clamp(1.15rem, 1rem + 0.4vw, 1.5rem) !important;
+    color: var(--accent) !important;
+}
+h4, h5, h6 {
+    font-size: clamp(1rem, 0.9rem + 0.2vw, 1.25rem) !important;
+    color: var(--accent-dim) !important;
+}
+
+.stMarkdown p, .stMarkdown li {
+    font-size: 1.05rem;
+    line-height: 1.65;
+    color: var(--ink) !important;
+}
+.stMarkdown strong, .stMarkdown b { color: var(--accent-bright) !important; font-weight: 700; }
+.stMarkdown em, .stMarkdown i { color: var(--ink-dim) !important; font-style: italic; }
+.stMarkdown a { color: var(--link) !important; text-decoration: underline; }
+.stMarkdown a:hover { color: var(--accent-bright) !important; }
+.stMarkdown code {
+    background: color-mix(in srgb, var(--bg-deep) 82%, var(--accent) 18%);
+    color: var(--accent-bright) !important;
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    font-family: 'Consolas', 'Menlo', monospace;
+    font-size: 0.92em;
+}
+
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] *,
+.stCaption, .stCaption * {
+    color: var(--ink-dim) !important;
+    font-size: clamp(0.85rem, 0.8rem + 0.1vw, 1rem) !important;
+}
+
+[data-testid="stMetric"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 6px;
+    padding: 10px 14px !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+}
+[data-testid="stMetricLabel"] { overflow: visible !important; }
+[data-testid="stMetricLabel"] > div,
+[data-testid="stMetricLabel"] > div > div {
+    color: var(--accent) !important;
+    font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.85rem) !important;
+    text-transform: uppercase;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em;
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    line-height: 1.3 !important;
+    display: inline-block !important;
+}
+[data-testid="stMetricValue"] > div,
+[data-testid="stMetricValue"] > div > div {
+    color: var(--accent-bright) !important;
+    font-weight: 700 !important;
+    font-size: clamp(1.3rem, 1.1rem + 0.6vw, 1.9rem) !important;
+    line-height: 1.2 !important;
+}
+[data-testid="stMetricDelta"] { color: var(--ink-dim) !important; }
+
+[data-testid="stSidebar"] {
+    background: var(--bg-mid) !important;
+    border-right: 1px solid var(--accent-dim);
+}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 { color: var(--accent) !important; }
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] small,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] > * { color: var(--ink) !important; }
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] * { color: var(--ink-dim) !important; }
+
+.stButton > button, [data-testid="stBaseButton-secondary"], [data-testid="stBaseButton-primary"] {
+    letter-spacing: 0.05em;
+    font-weight: 600 !important;
+    background: var(--bg-light) !important;
+    color: var(--accent-bright) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important;
+    white-space: nowrap !important;
+    text-transform: uppercase;
+}
+.stButton > button:hover, [data-testid="stBaseButton-secondary"]:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent-bright) !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent),
+                0 0 26px color-mix(in srgb, var(--accent) 18%, transparent),
+                inset 0 0 8px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+[data-testid="stBaseButton-primary"] {
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--accent-dim) 100%, transparent),
+        var(--accent-dim)) !important;
+    border-color: var(--accent) !important;
+    color: #ffffff !important;
+}
+[data-testid="stBaseButton-primary"]:hover {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 60%, transparent),
+                0 0 32px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+[data-testid="stDownloadButton"] > button {
+    background: var(--bg-light) !important;
+    color: var(--accent-bright) !important;
+    border: 1px solid var(--accent-dim) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important;
+}
+
+.stTabs [data-baseweb="tab-list"] { border-bottom: 1px solid var(--accent-dim); gap: 4px; }
+.stTabs [data-baseweb="tab"] {
+    color: var(--ink-dim) !important;
+    background: transparent !important;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: clamp(0.88rem, 0.85rem + 0.1vw, 1rem) !important;
+}
+.stTabs [data-baseweb="tab"]:hover { color: var(--accent-bright) !important; }
+.stTabs [aria-selected="true"] {
+    color: var(--accent-bright) !important;
+    border-bottom: 2px solid var(--accent) !important;
+}
+.stTabs [data-baseweb="tab-highlight"] { background-color: var(--accent) !important; }
+
+[data-testid="stExpander"] {
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 4px;
+    background: var(--bg-card) !important;
+}
+[data-testid="stExpander"] details > summary,
+[data-testid="stExpander"] details > summary *,
+[data-testid="stExpander"] details > summary p,
+[data-testid="stExpander"] details > summary span,
+[data-testid="stExpander"] details > summary div,
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary *,
+[data-testid="stExpander"] summary p,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary div,
+[data-testid="stExpander"] [data-testid="stExpanderHeader"],
+[data-testid="stExpander"] [data-testid="stExpanderHeader"] *,
+[data-testid="stExpander"] [data-testid="stExpanderHeader"] p,
+[data-testid="stExpander"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpander"] details > summary svg {
+    color: var(--accent) !important;
+    fill: var(--accent) !important;
+}
+
+/* Названия внутри expander-details (Броня, Оружие...) — тоже accent */
+[data-testid="stExpander"] details[open] > summary,
+[data-testid="stExpander"] details[open] > summary * {
+    color: var(--accent) !important;
+}
+[data-testid="stExpander"] summary {
+    font-weight: 600 !important;
+    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+    background: var(--bg-mid) !important;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] p,
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] li {
+    color: var(--ink) !important;
+}
+
+[data-testid="stChatMessage"] {
+    background: var(--bg-chat) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 6px;
+    padding: 16px 20px !important;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    transition: box-shadow 0.2s ease;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
+    border-left: 3px solid var(--accent) !important;
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--bg-chat) 92%, var(--accent) 8%),
+        var(--bg-chat)) !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]):hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45),
+                0 0 20px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+    border-right: 3px solid var(--accent-bright) !important;
+    background: linear-gradient(270deg,
+        color-mix(in srgb, var(--bg-chat) 92%, var(--accent-bright) 8%),
+        var(--bg-chat)) !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]):hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45),
+                0 0 20px color-mix(in srgb, var(--accent-bright) 18%, transparent);
+}
+
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] li {
+    color: var(--ink) !important;
+    font-size: clamp(1.05rem, 1rem + 0.3vw, 1.25rem) !important;
+    line-height: 1.7 !important;
+}
+[data-testid="stChatMessage"] strong, [data-testid="stChatMessage"] b {
+    color: var(--accent-bright) !important;
+    font-weight: 700;
+}
+[data-testid="stChatMessage"] em, [data-testid="stChatMessage"] i {
+    color: var(--ink-dim) !important;
+}
+
+.chat-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Consolas', 'Menlo', 'Monaco', 'Courier New', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.chat-name--master { color: var(--accent); }
+.chat-name--user { color: var(--accent-bright); }
+.chat-name .chat-name-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+}
+
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+[data-testid="stChatInput"] > div > div,
+[data-testid="stChatInput"] > div > div > div,
+.stChatInput,
+.stChatInputContainer,
+.stChatInputContainer > div {
+    background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
+    border-color: var(--accent-dim) !important;
+    box-shadow: none !important;
+}
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div,
+.stChatInput {
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 6px !important;
+}
+[data-testid="stChatInput"] [data-baseweb="textarea"],
+[data-testid="stChatInput"] [data-baseweb="base-input"],
+[data-testid="stChatInput"] [data-baseweb="textarea"] > div,
+[data-testid="stChatInput"] [data-baseweb="base-input"] > div {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+}
+[data-testid="stChatInput"] textarea,
+[data-testid="stChatInputTextArea"],
+.stChatInput textarea,
+textarea[data-testid="stChatInputTextArea"] {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    caret-color: var(--accent) !important;
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.15rem) !important;
+}
+[data-testid="stChatInput"] textarea::placeholder,
+[data-testid="stChatInputTextArea"]::placeholder,
+.stChatInput textarea::placeholder,
+textarea[data-testid="stChatInputTextArea"]::placeholder {
+    color: var(--ink-faint) !important;
+    -webkit-text-fill-color: var(--ink-faint) !important;
+    opacity: 1 !important;
+    font-style: italic;
+}
+[data-testid="stChatInput"] button,
+[data-testid="stChatInputSubmitButton"] {
+    color: var(--accent) !important;
+    background: transparent !important;
+}
+
+[data-testid="stAlert"] { border-radius: 6px; border-left-width: 5px !important; }
+[data-testid="stAlert"] * { font-size: clamp(0.9rem, 0.85rem + 0.1vw, 1.05rem) !important; }
+
+.stTextInput input, .stTextArea textarea,
+[data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea {
+    background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 4px !important;
+    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.1rem) !important;
+    caret-color: var(--accent) !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus,
+[data-testid="stTextInput"] input:focus, [data-testid="stTextArea"] textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 1px var(--accent) !important;
+    outline: none !important;
+}
+.stTextInput input::placeholder, .stTextArea textarea::placeholder,
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder {
+    color: var(--ink-faint) !important;
+    -webkit-text-fill-color: var(--ink-faint) !important;
+    opacity: 1 !important;
+    font-style: italic;
+}
+[data-testid="stWidgetLabel"] > div,
+[data-testid="stWidgetLabel"] > div > div,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] label {
+    color: var(--accent) !important;
+    font-size: clamp(0.88rem, 0.85rem + 0.1vw, 1rem) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+[data-testid="stSelectbox"] > div,
+[data-testid="stSelectbox"] > div > div,
+[data-testid="stSelectbox"] [data-baseweb="select"],
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
+[data-baseweb="select"] > div,
+[data-baseweb="select"] > div > div,
+[data-baseweb="select"] [role="button"],
+[data-baseweb="select"] [role="combobox"] {
+    background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
+    color: var(--ink) !important;
+    border-color: var(--accent-dim) !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"],
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-baseweb="select"] > div {
+    border: 1px solid var(--accent-dim) !important;
+    border-radius: 4px !important;
+}
+[data-testid="stSelectbox"] input,
+[data-baseweb="select"] input {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    caret-color: var(--accent) !important;
+}
+[data-testid="stSelectbox"] input::placeholder,
+[data-baseweb="select"] input::placeholder {
+    color: var(--ink-faint) !important;
+    -webkit-text-fill-color: var(--ink-faint) !important;
+    opacity: 1 !important;
+}
+[data-testid="stSelectbox"] svg,
+[data-baseweb="select"] svg {
+    fill: var(--accent) !important;
+    color: var(--accent) !important;
+}
+
+[data-baseweb="popover"],
+[data-baseweb="popover"] > div,
+[data-baseweb="popover"] > div > div,
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] ul,
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="menu"],
+[data-baseweb="menu"] > div,
+[data-baseweb="menu"] ul,
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] [role="option"] {
+    background: var(--bg-light) !important;
+    background-color: var(--bg-light) !important;
+    color: var(--ink) !important;
+    border-color: var(--accent-dim) !important;
+}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="popover"] [role="option"][aria-selected="true"],
+[data-baseweb="popover"] [role="option"][aria-selected="true"] *,
+[data-baseweb="menu"] [role="option"]:hover,
+[data-baseweb="menu"] [role="option"][aria-selected="true"],
+[data-baseweb="menu"] [role="option"][aria-selected="true"] * {
+    background: var(--accent-dim) !important;
+    background-color: var(--accent-dim) !important;
+    color: var(--accent-bright) !important;
+}
+
+[data-testid="stSlider"] [data-testid="stWidgetLabel"],
+[data-testid="stSlider"] [data-testid="stWidgetLabel"] *,
+[data-testid="stSlider"] label,
+[data-testid="stSlider"] label * {
+    color: var(--accent-bright) !important;
+    font-weight: 600 !important;
+    font-size: clamp(0.95rem, 0.9rem + 0.15vw, 1.05rem) !important;
+    opacity: 1 !important;
+}
+[data-testid="stSlider"] [data-testid="stThumbValue"],
+[data-testid="stSlider"] [data-testid="stThumbValue"] *,
+[data-testid="stSlider"] div[aria-live="polite"] {
+    color: var(--accent-bright) !important;
+    font-weight: 700 !important;
+    font-size: 1.05rem !important;
+    text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"],
+[data-testid="stSlider"] [data-testid="stTickBarMin"] *,
+[data-testid="stSlider"] [data-testid="stTickBarMax"] * {
+    color: var(--ink-dim) !important;
+    font-size: 0.85rem !important;
+    opacity: 1 !important;
+}
+[data-testid="stSlider"] [role="slider"] {
+    background: var(--accent) !important;
+    border: 2px solid var(--accent-bright) !important;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent) !important;
+    outline: none !important;
+}
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div:first-child {
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent)) !important;
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent) !important;
+}
+
+[data-testid="stRadio"] label p,
+[data-testid="stRadio"] label * { color: var(--ink) !important; }
+[data-testid="stCheckbox"] label p,
+[data-testid="stCheckbox"] label * { color: var(--ink) !important; }
+
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploaderDropzone"] {
+    background: color-mix(in srgb, var(--bg-mid) 80%, transparent) !important;
+    border: 1px dashed var(--accent-dim) !important;
+    border-radius: 4px !important;
+}
+[data-testid="stFileUploader"] section *,
+[data-testid="stFileUploaderDropzone"] * { color: var(--ink) !important; }
+
+[data-testid="stProgress"] > div > div > div {
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent)) !important;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--accent-dim); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+a { color: var(--link) !important; }
+a:hover { color: var(--accent-bright) !important; }
+hr { border-color: var(--accent-dim) !important; margin: 14px 0 !important; }
+</style>
+"""
+
+
+_EXTRA_CSS = r'''
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&display=swap');
+
+.stApp {
+    background-image:
+        radial-gradient(ellipse at 15% 0%,
+            color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+        radial-gradient(ellipse at 85% 100%,
+            color-mix(in srgb, var(--accent-dim) 8%, transparent), transparent 55%),
+        linear-gradient(color-mix(in srgb, var(--accent) 3%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 3%, transparent) 1px, transparent 1px) !important;
+    background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px !important;
+    background-attachment: fixed !important;
+}
+h1, h2, h3, .hero-panel .hero-title, .section-header .title {
+    font-family: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif !important;
+    letter-spacing: 0.14em !important;
+}
+.hero-panel .hero-title { letter-spacing: 0.08em !important; }
+
+@keyframes hero-glow {
+    0%, 100% {
+        box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 15%, transparent),
+                    0 4px 24px rgba(0,0,0,0.5);
+    }
+    50% {
+        box-shadow: 0 0 45px color-mix(in srgb, var(--accent) 30%, transparent),
+                    0 6px 30px rgba(0,0,0,0.6);
+    }
+}
+.hero-panel { animation: hero-glow 5s ease-in-out infinite; }
+
+@keyframes msg-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+[data-testid="stChatMessage"] {
+    animation: msg-in 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.stButton > button {
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.3, 1) !important;
+    position: relative;
+}
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 55%, transparent),
+                0 0 44px color-mix(in srgb, var(--accent) 22%, transparent) !important;
+}
+.stButton > button:active { transform: translateY(0); }
+
+@keyframes roll-shake {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-1.2deg); }
+    75% { transform: rotate(1.2deg); }
+}
+.roll-card {
+    animation: roll-in 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both,
+               roll-shake 0.6s ease-in-out 0.25s 2 !important;
+}
+.sidebar-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent) !important;
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+</style>
+'''
+
+def inject_custom_css(theme_key: str = DEFAULT_THEME):
+    """Обёртка над ui_render.render_theme."""
+    _render_theme_v2(theme_key)
+
+
+def get_master_prompt():
+    with open(MASTER_PROMPT_PATH, encoding="utf-8") as f:
+        return f.read()
+
+
+# ============================================================
+# LOCALSTORAGE
+# ============================================================
+def _ls_save(localS, sheet, chat_history):
+    if not HAS_LS or sheet is None:
+        return
+    try:
+        payload = json.dumps({
+            "format": SAVE_FORMAT, "version": SAVE_VERSION,
+            "character": sheet, "chat_history": chat_history,
+            "saved_at": datetime.now().isoformat(),
+        }, ensure_ascii=False)
+        localS.setItem(LS_KEY, payload)
+    except Exception as e:
+        print(f"[LS] ошибка сохранения: {e}")
+
+
+def _ls_load(localS):
+    if not HAS_LS:
+        return None
+    try:
+        raw = localS.getItem(LS_KEY)
+        if not raw:
+            return None
+        data = json.loads(raw)
+        if data.get("format") != SAVE_FORMAT:
+            return None
+        return {"character": data.get("character"),
+                "chat_history": data.get("chat_history", [])}
+    except Exception as e:
+        print(f"[LS] ошибка загрузки: {e}")
+        return None
+
+
+def _ls_clear(localS):
+    if not HAS_LS:
+        return
+    try:
+        localS.deleteItem(LS_KEY)
+    except Exception:
+        pass
+
+
+def _ls_save_theme(localS, theme_key):
+    if not HAS_LS:
+        return
+    try:
+        localS.setItem(LS_THEME_KEY, theme_key)
+    except Exception:
+        pass
+
+
+def _ls_load_theme(localS):
+    if not HAS_LS:
+        return None
+    try:
+        raw = localS.getItem(LS_THEME_KEY)
+        if raw and raw in THEMES:
+            return raw
+    except Exception:
+        pass
+    return None
+
+
+# ============================================================
+# FUNCTION CALLING
+# ============================================================
+ROLL_DICE_FUNCTION = Function(
+    name="roll_dice",
+    description="Бросить кубики.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "expression": {"type": "string"},
+            "reason":     {"type": "string"},
+            "difficulty": {"type": "integer"},
+        },
+        "required": ["expression", "reason", "difficulty"],
+    },
+)
+
+
+def call_roll_dice(args: dict) -> dict:
+    try:
+        return roll_dice(
+            expression=args.get("expression", "1d100"),
+            reason=args.get("reason", ""),
+            difficulty=int(args.get("difficulty", 0)),
+        )
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ============================================================
+# ПАРСЕР БРОСКОВ
+# ============================================================
+_LINE_PATTERN = re.compile(
+    r"\s*Бросок\s+(?P<formula>\S+)"
+    r"(?:\s*\((?P<reason>[^)]+)\))?"
+    r"[^\n]*?"
+    r"выпало\s+\[?(?P<roll1>\d+)\]?"
+    r"(?:\s*\+\s*\[?(?P<mod>\d+)\]?)?"
+    r"(?:\s*=\s*\[?(?P<total>\d+)\]?)?",
+    re.IGNORECASE,
+)
+_DIFF_PATTERN = re.compile(r"сложность\s+(\d+)", re.IGNORECASE)
+
+
+def _compute_check_result(formula, total, difficulty):
+    if difficulty <= 0 or "d100" not in formula.lower():
+        return None, 0
+    if total <= difficulty:
+        return True, (difficulty - total) // 10
+    return False, (total - difficulty) // 10
+
+
+def parse_rolls_from_text(text: str):
+    if not text:
+        return text, []
+    found_rolls, cleaned_lines = [], []
+    for line in text.split("\n"):
+        if "" in line and "Бросок" in line:
+            match = _LINE_PATTERN.search(line)
+            if match:
+                formula = match.group("formula")
+                reason = match.group("reason") or ""
+                roll1 = int(match.group("roll1"))
+                mod = int(match.group("mod")) if match.group("mod") else 0
+                total_str = match.group("total")
+                total = int(total_str) if total_str else (roll1 + mod)
+                diff_match = _DIFF_PATTERN.search(line)
+                difficulty = int(diff_match.group(1)) if diff_match else 0
+                success, margin = _compute_check_result(formula, total, difficulty)
+                found_rolls.append({
+                    "expression": formula, "reason": reason,
+                    "rolls": [roll1], "modifier": mod, "total": total,
+                    "difficulty": difficulty, "success": success,
+                    "margin": margin, "_from_text": True,
+                })
+                continue
+        cleaned_lines.append(line)
+    cleaned = "\n".join(cleaned_lines).strip()
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned, found_rolls
+
+
+# ============================================================
+# ПАРСЕР [STATE]
+# ============================================================
+_STATE_RE = re.compile(
+    r"\[STATE\]\s*(.*?)(?=\n\s*\n|\[STATE\]|\[/STATE\]|$)",
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+# Автоподстановка брони по фразам игрока
+_ARMOUR_WORDS = {
+    "head": ["шлем", "хелм", "маск", "капюшон", "helmet", "head"],
+    "body": ["броня", "торс", "кирас", "планшет", "armour", "armor", "body", "chest"],
+    "arms": ["перчатк", "наруч", "рукав", "glove", "bracer", "arms"],
+    "legs": ["сапог", "ботинк", "понож", "штаны", "штани", "boot", "legs"],
+}
+
+
+def _detect_armour_zone(text: str):
+    """По тексту определяет зону брони. Возвращает (zone, 'equip'|'unequip') или None."""
+    if not text:
+        return None
+    low = text.lower()
+    # Какое действие?
+    action = None
+    if re.search(r"\b(снима|снял|убира|сбро|снят|remove|off)\b", low):
+        action = "unequip"
+    elif re.search(r"\b(надел|надева|натягива|надевают|equip|wear|on)\b", low):
+        action = "equip"
+    if not action:
+        return None
+    # Какая зона?
+    for zone, words in _ARMOUR_WORDS.items():
+        for w in words:
+            if w in low:
+                return (zone, action)
+    return None
+
+
+def _normalize_state_tags(text: str) -> str:
+    """Приводит все одиночные теги к парным, чтобы regex работал."""
+    if not text:
+        return text
+    # Сначала убиваем пустые пары: [STATE][/STATE], [STATE] [/STATE]
+    text = re.sub(r"\[STATE\]\s*\[/STATE\]", "", text, flags=re.IGNORECASE)
+    # Все [/STATE]  маркер конца
+    text = re.sub(r"\[/STATE\]", "\n[__END_STATE__]\n", text, flags=re.IGNORECASE)
+    # Все [STATE]  маркер начала
+    text = re.sub(r"\[STATE\]", "\n[__BEGIN_STATE__]\n", text, flags=re.IGNORECASE)
+    return text
+
+
+# ============================================================
+# STATE: ключи, алиасы, автодетект (patch20)
+# ============================================================
+_KEY_ALIASES = {
+    "inventory_add": "equipment_add",
+    "inventory_remove": "equipment_remove",
+    "items_add": "equipment_add",
+    "items_remove": "equipment_remove",
+    "armor_equip": "armour_equip",
+    "armor_unequip": "armour_unequip",
+    "armor_change": "armour_change",
+    "loot": "loot_seen",
+}
+
+_KNOWN_EXACT = {
+    "wounds", "fate", "insanity", "corruption", "xp", "money",
+    "location", "date", "journal", "loot_seen",
+    "quest_add", "quest_remove", "npc_add", "npc_remove",
+    "effect_add", "effect_remove", "companion_add", "companion_remove",
+    "goal_add", "goal_remove",
+    "equipment_add", "equipment_remove", "equipment_equip", "equipment_unequip",
+    "weapon_add", "weapon_remove", "weapon_lost", "weapon_equip", "weapon_unequip",
+    "armour_equip", "armour_unequip", "armour_change",
+}
+
+_KNOWN_PREFIXES = (
+    "armour_", "special_", "extra_money_", "reputation_", "characteristic_", "ship_",
+)
+
+_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_ARMOUR_ZONES = ("head", "body", "arms", "legs")
+
+
+def _is_state_key(key):
+    if not key or not _KEY_RE.match(key):
+        return False
+    if key in _KNOWN_EXACT:
+        return True
+    return any(key.startswith(p) for p in _KNOWN_PREFIXES)
+
+
+def _normalize_key_val(key, value):
+    """Мастер пишет armour_equip=head — превращаем в armour_equip_head=1."""
+    key = _KEY_ALIASES.get(key, key)
+    vlow = str(value).strip().lower()
+    if key == "armour_equip" and vlow in _ARMOUR_ZONES:
+        return f"armour_equip_{vlow}", "1"
+    if key == "armour_unequip" and vlow in _ARMOUR_ZONES:
+        return f"armour_unequip_{vlow}", "1"
+    return key, value
+
+
+_LOOT_TAKE_RE = re.compile(
+    r"\b(беру|забира|подбира|хватаю|присваива|в сумку|в инвентарь|в карман)",
+    re.IGNORECASE,
+)
+_LOOT_DROP_RE = re.compile(
+    r"\b(выбрасыва|выкидыва|броса|теря|отдаю|сбрасыва|избавля)",
+    re.IGNORECASE,
+)
+
+
+def _keywords(text):
+    return [w.lower() for w in re.findall(r"[А-Яа-яA-Za-z]{4,}", str(text))]
+
+
+def _autodetect_loot(user_text, last_loot_seen):
+    if not user_text or not last_loot_seen or not _LOOT_TAKE_RE.search(user_text):
+        return []
+    items = [x.strip() for x in last_loot_seen.split(";") if x.strip()]
+    if not items:
+        return []
+    low = user_text.lower()
+    matched = []
+    for it in items:
+        kws = _keywords(it)
+        if kws and any(kw in low for kw in kws):
+            matched.append(it)
+    if not matched and re.search(r"\b(всё|все|предметы|вещи)\b", low):
+        return items
+    return matched
+
+
+def _autodetect_drop(user_text, sheet):
+    if not user_text or not _LOOT_DROP_RE.search(user_text):
+        return [], []
+    low = user_text.lower()
+    eq, wp = [], []
+    for it in (sheet.get("equipment") or []):
+        kws = _keywords(it)
+        if kws and any(kw in low for kw in kws):
+            eq.append(it)
+    for w in (sheet.get("weapons") or []):
+        nm = w.get("name") if isinstance(w, dict) else None
+        if not nm:
+            continue
+        kws = _keywords(nm)
+        if kws and any(kw in low for kw in kws):
+            wp.append(nm)
+    return eq, wp
+
+
+def parse_state_block(text: str):
+    """Парсит [STATE] блоки + голые строки с известными ключами."""
+    if not text:
+        return text, {}
+    normalized = _normalize_state_tags(text)
+    updates = {}
+    out_lines = []
+    in_block = False
+    for raw_line in normalized.split("\n"):
+        line = raw_line.rstrip("\r")
+        stripped = line.strip()
+        if stripped == "[__BEGIN_STATE__]":
+            in_block = True
+            continue
+        if stripped == "[__END_STATE__]":
+            in_block = False
+            continue
+        if in_block:
+            if "=" in stripped:
+                key, _, value = stripped.partition("=")
+                key = key.strip()
+                value = value.strip()
+                if key and value:
+                    k2, v2 = _normalize_key_val(key, value)
+                    updates[k2] = v2
+            continue
+        out_lines.append(line)
+
+    final_out = []
+    for line in out_lines:
+        stripped = line.strip()
+        if "=" in stripped:
+            kp = stripped.split("=", 1)[0].strip()
+            if " " not in kp and _is_state_key(kp):
+                key, _, value = stripped.partition("=")
+                value = value.strip()
+                if value:
+                    k2, v2 = _normalize_key_val(key.strip(), value)
+                    updates[k2] = v2
+                    continue
+        final_out.append(line)
+
+    cleaned = "\n".join(final_out)
+    cleaned = re.sub(r"^\s*\[/?STATE\]\s*$", "", cleaned, flags=re.MULTILINE).strip()
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    if not cleaned and updates:
+        cleaned = "_…_"
+    return cleaned, updates
+
+
+def _parse_signed_int(value: str):
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def apply_state_updates(sheet: dict, updates: dict) -> dict:
+    if not updates or not isinstance(sheet, dict):
+        return sheet
+
+    if "wounds" in updates:
+        val = _parse_signed_int(updates["wounds"])
+        if val is not None:
+            if "wounds" not in sheet or not isinstance(sheet["wounds"], dict):
+                sheet["wounds"] = {"current": val, "max": val}
+            else:
+                sheet["wounds"]["current"] = val
+
+    if "fate" in updates:
+        val = _parse_signed_int(updates["fate"])
+        if val is not None:
+            if "fate_points" not in sheet or not isinstance(sheet["fate_points"], dict):
+                sheet["fate_points"] = {"current": val, "max": val}
+            else:
+                sheet["fate_points"]["current"] = val
+
+    for key in ("insanity", "corruption", "xp"):
+        if key in updates:
+            val = _parse_signed_int(updates[key])
+            if val is not None:
+                sheet[key] = val
+
+    if "money" in updates:
+        val = _parse_signed_int(updates["money"])
+        if val is not None:
+            if updates["money"].strip().startswith(("+", "-")):
+                sheet["money"] = sheet.get("money", 0) + val
+            else:
+                sheet["money"] = val
+
+    for key, value in updates.items():
+        if key.startswith("extra_money_"):
+            currency = key[len("extra_money_"):].strip()
+            val = _parse_signed_int(value)
+            if val is None or not currency:
+                continue
+            extra = sheet.setdefault("extra_currencies", {})
+            if value.strip().startswith(("+", "-")):
+                extra[currency] = extra.get(currency, 0) + val
+            else:
+                extra[currency] = val
+            if extra[currency] <= 0:
+                extra.pop(currency, None)
+
+    for key, value in updates.items():
+        if key.startswith("special_"):
+            res = key[len("special_"):].strip()
+            val = _parse_signed_int(value)
+            if val is None or not res:
+                continue
+            sr = sheet.setdefault("special_resources", {})
+            if value.strip().startswith(("+", "-")):
+                sr[res] = sr.get(res, 0) + val
+            else:
+                sr[res] = val
+            if sr[res] <= 0:
+                sr.pop(res, None)
+
+    for key, value in updates.items():
+        if key.startswith("reputation_"):
+            fac = key[len("reputation_"):].strip()
+            val = _parse_signed_int(value)
+            if val is None or not fac:
+                continue
+            rep = sheet.setdefault("reputation", {})
+            if value.strip().startswith(("+", "-")):
+                rep[fac] = rep.get(fac, 0) + val
+            else:
+                rep[fac] = val
+
+    # === ЭКИПИРОВКА (patch11) ===
+    sheet["armour"] = _norm_armour(sheet.get("armour", {}))
+    sheet["weapons"] = _norm_weapons(sheet.get("weapons", []))
+
+    # Броня: armour_equip=head / armour_unequip=body
+    for k, val in updates.items():
+        if k.startswith("armour_equip_"):
+            z = k[len("armour_equip_"):].strip().lower()
+            if z in ("head", "body", "arms", "legs"):
+                sheet["armour"].setdefault(z, {"value": 0, "equipped": True})["equipped"] = True
+        if k.startswith("armour_unequip_"):
+            z = k[len("armour_unequip_"):].strip().lower()
+            if z in ("head", "body", "arms", "legs"):
+                sheet["armour"].setdefault(z, {"value": 0, "equipped": True})["equipped"] = False
+        if k.startswith("armour_change_"):
+            z = k[len("armour_change_"):].strip().lower()
+            if z in ("head", "body", "arms", "legs"):
+                v = _parse_signed_int(val)
+                if v is not None:
+                    sheet["armour"].setdefault(z, {"value": 0, "equipped": True})["value"] = v
+
+    # Оружие: weapon_equip=N / weapon_unequip=N / weapon_lost=N
+    if "weapon_equip" in updates:
+        names = [n.strip() for n in str(updates["weapon_equip"]).split(";") if n.strip()]
+        for w in sheet["weapons"]:
+            if w.get("name") in names:
+                w["equipped"] = True
+    if "weapon_unequip" in updates:
+        names = [n.strip() for n in str(updates["weapon_unequip"]).split(";") if n.strip()]
+        for w in sheet["weapons"]:
+            if w.get("name") in names:
+                w["equipped"] = False
+    if "weapon_lost" in updates:
+        names = []
+        for n in str(updates["weapon_lost"]).split(";"):
+            n = n.strip()
+            if "|" in n:
+                n = n.split("|")[0].strip()
+            if n:
+                names.append(n)
+        sheet["weapons"] = [w for w in sheet["weapons"] if w.get("name") not in names]
+    if "equipment_remove" in updates:
+        names = []
+        for n in str(updates["equipment_remove"]).split(";"):
+            n = n.strip()
+            if "|" in n:
+                n = n.split("|")[0].strip()
+            if n:
+                names.append(n)
+        sheet["equipment"] = [x for x in sheet.get("equipment", []) if x not in names]
+
+    # Инвентарь экипирован / не экипирован (equipment_equip / equipment_unequip)
+    # Хранится в отдельном сете «unequipped_items» (мягкий флаг)
+    unequipped = set(sheet.get("unequipped_items") or [])
+    if "equipment_unequip" in updates:
+        for n in str(updates["equipment_unequip"]).split(";"):
+            n = n.strip()
+            if n:
+                unequipped.add(n)
+    if "equipment_equip" in updates:
+        for n in str(updates["equipment_equip"]).split(";"):
+            n = n.strip()
+            if n:
+                unequipped.discard(n)
+    sheet["unequipped_items"] = sorted(unequipped) if unequipped else []
+
+    if "location" in updates: sheet["location"] = updates["location"]
+    if "date" in updates: sheet["game_date"] = updates["date"]
+
+    for short in ["quest", "npc", "effect", "companion", "goal"]:
+        plural = {"quest": "quests", "npc": "npcs", "effect": "effects",
+                  "companion": "companions", "goal": "goals"}[short]
+        add_key = f"{short}_add"; rem_key = f"{short}_remove"
+        if add_key in updates:
+            items = [i.strip() for i in updates[add_key].split(";") if i.strip()]
+            lst = sheet.setdefault(plural, [])
+            for it in items:
+                if it not in lst: lst.append(it)
+        if rem_key in updates:
+            items = [i.strip() for i in updates[rem_key].split(";") if i.strip()]
+            sheet[plural] = [x for x in sheet.get(plural, []) if x not in items]
+
+    # === ИНВЕНТАРЬ: equipment_add / equipment_remove (patch10) ===
+    if "equipment_add" in updates:
+        items = [i.strip() for i in str(updates["equipment_add"]).split(";") if i.strip()]
+        eq = sheet.setdefault("equipment", [])
+        for it in items:
+            if it not in eq:
+                eq.append(it)
+    if "equipment_remove" in updates:
+        items = [i.strip() for i in str(updates["equipment_remove"]).split(";") if i.strip()]
+        sheet["equipment"] = [x for x in sheet.get("equipment", []) if x not in items]
+
+    # === ОРУЖИЕ: weapon_add=Название | статы  (patch10) ===
+    if "weapon_add" in updates:
+        items = [i.strip() for i in str(updates["weapon_add"]).split(";") if i.strip()]
+        wl = sheet.setdefault("weapons", [])
+        existing = {w.get("name", "") for w in wl if isinstance(w, dict)}
+        for it in items:
+            if "|" in it:
+                name, stats = [p.strip() for p in it.split("|", 1)]
+            else:
+                name, stats = it, ""
+            if name and name not in existing:
+                wl.append({"name": name, "stats": stats, "notes": ""})
+                existing.add(name)
+    if "weapon_remove" in updates:
+        items = [i.strip() for i in str(updates["weapon_remove"]).split(";") if i.strip()]
+        sheet["weapons"] = [
+            w for w in sheet.get("weapons", [])
+            if not (isinstance(w, dict) and w.get("name") in items)
+        ]
+
+    if "journal" in updates:
+        entry = updates["journal"].strip()
+        if entry:
+            sheet.setdefault("journal", []).append(entry)
+
+    for ch in cc.CHARACTERISTICS:
+        key = f"characteristic_{ch.lower()}"
+        if key in updates:
+            val = _parse_signed_int(updates[key])
+            if val is not None:
+                sheet.setdefault("characteristics", {})[ch] = val
+                sheet.setdefault("bonuses", {})[ch] = val // 10
+
+    if sheet.get("ship"):
+        ship = sheet["ship"]
+        if "ship_hull" in updates:
+            val = _parse_signed_int(updates["ship_hull"])
+            if val is not None:
+                ship.setdefault("hull", {"current": val, "max": val})["current"] = val
+        if "ship_crew" in updates:
+            val = _parse_signed_int(updates["ship_crew"])
+            if val is not None:
+                ship.setdefault("crew", {"current": val, "max": val})["current"] = val
+        if "ship_status" in updates:
+            ship["status"] = updates["ship_status"]
+        if "ship_note" in updates:
+            ship["notes"] = (ship.get("notes", "") + "\n" + updates["ship_note"]).strip()
+
+    return sheet
+
+
+# ============================================================
+# ХЕЛПЕРЫ HTML
+# ============================================================
+def _esc(text) -> str:
+    return (str(text)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;"))
+
+def _apply_pending_check(pending, diff_label, diff_mod, sheet, chat_history, localS):
+    """Формирует сообщение-проверку и отправляет Мастеру."""
+    kind = pending.get("kind", "?")
+    name = pending.get("name", "?")
+    base = int(pending.get("value", 0) or 0)
+    eff = base + diff_mod
+    ru = char_ru(name) if kind == "Характеристика" else ""
+    name_disp = f"{name} ({ru})" if ru and ru != name else name
+    msg = (f"[ПРОВЕРКА] {kind}: {name_disp} · "
+           f"База: {base} · Сложность: {diff_label} ({diff_mod:+d}) · "
+           f"Эффективное значение: {eff}")
+    _send_quick_action(msg, sheet, chat_history, localS)
+    st.session_state.pending_check = None
+
+def _dedupe_rolls(rolls):
+    """Убирает дубли бросков, оставляя самую подробную версию.
+
+    Ключ дедупа — (expression, rolls, total).
+    Приоритет: с reason > без reason, с difficulty > без, с _from_text > без.
+    """
+    if not rolls:
+        return []
+    best = {}
+    order = []
+    for r in rolls:
+        if not isinstance(r, dict):
+            continue
+        if "error" in r:
+            k = ("__err__", id(r))
+            if k not in best:
+                best[k] = (0, r)
+                order.append(k)
+            continue
+        key = (
+            str(r.get("expression", "")),
+            tuple(r.get("rolls", []) or []),
+            int(r.get("total", 0) or 0),
+        )
+        priority = 0
+        if r.get("reason"):
+            priority += 1
+        if int(r.get("difficulty", 0) or 0) > 0:
+            priority += 2
+        if r.get("_from_text"):
+            priority += 1
+        if key not in best:
+            best[key] = (priority, r)
+            order.append(key)
+        elif best[key][0] < priority:
+            best[key] = (priority, r)
+    return [best[k][1] for k in order]
+
+
+
+def _render_pending_check_picker(sheet, chat_history, localS, source="default"):
+    """Меню выбора сложности. source — уникальный суффикс для ключей."""
+    pending = st.session_state.get("pending_check")
+    if not pending or pending.get("source") != source:
+        return
+    pname = pending["name"]
+    ru = char_ru(pname) if pending.get("kind") == "Характеристика" else ""
+    pname_disp = f"{pname} ({ru})" if ru and ru != pname else pname
+    val = int(pending.get("value", 0) or 0)
+    st.markdown(
+        f'<div class="pending-check-box">'
+        f' ПРОВЕРКА: {_esc(pname_disp)} · {val}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("ЛГК +20", key=f"pd_{source}_easy",
+                     use_container_width=True, help="Лёгкая (+20)"):
+            _apply_pending_check(pending, "Легко", 20, sheet, chat_history, localS)
+            st.rerun()
+    with c2:
+        if st.button("ОБЧ 0", key=f"pd_{source}_norm",
+                     use_container_width=True, help="Обычная (0)"):
+            _apply_pending_check(pending, "Обычно", 0, sheet, chat_history, localS)
+            st.rerun()
+    c3, c4 = st.columns(2)
+    with c3:
+        if st.button("СЛЖ -20", key=f"pd_{source}_hard",
+                     use_container_width=True, help="Сложная (-20)"):
+            _apply_pending_check(pending, "Сложно", -20, sheet, chat_history, localS)
+            st.rerun()
+    with c4:
+        if st.button("ОСЛ -40", key=f"pd_{source}_vhard",
+                     use_container_width=True, help="Очень сложная (-40)"):
+            _apply_pending_check(pending, "Очень сложно", -40, sheet, chat_history, localS)
+            st.rerun()
+    if st.button(" ОТМЕНА", key=f"pd_{source}_cancel", use_container_width=True):
+        st.session_state.pending_check = None
+        st.rerun()
+
+
+def render_roll(r: dict):
+    if not isinstance(r, dict):
+        st.warning(f"Некорректный результат броска: {r}")
+        return
+    if "error" in r:
+        st.error(f"Ошибка броска: {r['error']}")
+        return
+
+    expr = r.get("expression", "?")
+    reason = r.get("reason", "")
+    rolls = r.get("rolls", [])
+    mod = r.get("modifier", 0)
+    total = r.get("total", 0)
+    difficulty = r.get("difficulty", 0)
+    success = r.get("success")
+    margin = r.get("margin", 0)
+
+    roll1 = rolls[0] if rolls else total
+    is_check = "1d100" in expr.lower() and difficulty > 0 and success is not None
+
+    if is_check:
+        if success:
+            card_class = "roll-card--success"
+            status_icon = ""
+            status_text = "УСПЕХ"
+            margin_label = "СТЕПЕНИ УСПЕХА"
+        else:
+            card_class = "roll-card--fail"
+            status_icon = ""
+            status_text = "ПРОВАЛ"
+            margin_label = "СТЕПЕНИ ПРОВАЛА"
+    else:
+        card_class = "roll-card--info"
+        status_icon = ""
+        status_text = "РЕЗУЛЬТАТ"
+        margin_label = ""
+
+    mod_html = ""
+    if mod:
+        sign = "+" if mod > 0 else ""
+        mod_html = f'<div class="roll-mod">{sign}{mod}</div>'
+
+    reason_html = f'<div class="roll-reason">{_esc(reason)}</div>' if reason else ""
+
+    meta_parts = []
+    if difficulty > 0:
+        meta_parts.append(
+            f'<div class="roll-meta-item">'
+            f'<span class="label">СЛОЖНОСТЬ</span>'
+            f'<span class="value">{difficulty}</span>'
+            f'</div>'
+        )
+    if is_check:
+        meta_parts.append(
+            f'<div class="roll-meta-item">'
+            f'<span class="label">{margin_label}</span>'
+            f'<span class="value">{margin}</span>'
+            f'</div>'
+        )
+    meta_html = f'<div class="roll-meta">{"".join(meta_parts)}</div>' if meta_parts else ""
+
+    html = (
+        f'<div class="roll-card {card_class}">'
+        f'  <div class="roll-header">'
+        f'    <span class="roll-label"> БРОСОК</span>'
+        f'    <span class="roll-expr">{_esc(expr)}</span>'
+        f'    {reason_html}'
+        f'  </div>'
+        f'  <div class="roll-body">'
+        f'    <div class="roll-value">'
+        f'      <div class="roll-value-num">{roll1}</div>'
+        f'      <div class="roll-value-label">ВЫПАЛО</div>'
+        f'    </div>'
+        f'    {mod_html}'
+        f'  </div>'
+        f'  {meta_html}'
+        f'  <div class="roll-status">'
+        f'    <span class="roll-status-icon">{status_icon}</span>'
+        f'    <span class="roll-status-text">{status_text}</span>'
+        f'  </div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# ============================================================
+# БЫСТРЫЕ ДЕЙСТВИЯ
+# ============================================================
+def _find_in_equipment(sheet, roots):
+    for i, e in enumerate(sheet.get("equipment", [])):
+        el = e.lower()
+        for root in roots:
+            if root in el:
+                return i, e
+    return None, None
+
+
+def quick_fate_point(sheet):
+    fate = sheet.get("fate_points", {})
+    if fate.get("current", 0) < 1:
+        return None, "Нет Очков Судьбы"
+    fate["current"] -= 1
+    return "Игрок потратил 1 Очко Судьбы. Опиши, как судьба повернулась в его пользу.", None
+
+
+def quick_grenade(sheet):
+    idx, item = _find_in_equipment(sheet, ["гранат"])
+    if idx is None: return None, "Нет гранат"
+    sheet["equipment"].pop(idx)
+    return f"Игрок использовал гранату: {item}. Опиши взрыв.", None
+
+
+def quick_medkit(sheet):
+    idx, item = _find_in_equipment(sheet, ["аптеч", "медипак", "медпак"])
+    if idx is None: return None, "Нет аптечки"
+    sheet["equipment"].pop(idx)
+    w = sheet.get("wounds", {})
+    before = w.get("current", 0); max_w = w.get("max", before)
+    after = min(max_w, before + 2); w["current"] = after
+    return f"Игрок использовал аптечку ({item}). Раны: {before}  {after}.", None
+
+
+def quick_stimulant(sheet):
+    idx, item = _find_in_equipment(sheet, ["стимул", "боевой наркотик"])
+    if idx is None: return None, "Нет стимуляторов"
+    sheet["equipment"].pop(idx)
+    sheet.setdefault("effects", []).append("Стимулятор (+10 Ag, 3 хода)")
+    return f"Игрок принял стимулятор: {item}. Добавлен эффект «Стимулятор (+10 Ag, 3 хода)».", None
+
+
+def quick_remove_effect(sheet, effect_name):
+    effects = sheet.get("effects", [])
+    if effect_name in effects:
+        effects.remove(effect_name)
+        return f"Игрок снял эффект: {effect_name}.", None
+    return None, "Эффект не найден"
+
+
+def _send_quick_action(msg, sheet, chat_history, localS):
+    """Отправляет сообщение от кнопки в чат — Мастер ответит автоматически."""
+    if not msg.startswith("["):
+        msg = f"[ДЕЙСТВИЕ] {msg}"
+    try:
+        st.session_state.auto_user_message = msg
+        cc.save_character(sheet)
+        _ls_save(localS, sheet, chat_history)
+    except Exception as e:
+        print(f"[quick_action] ошибка сохранения: {e}")
+        st.session_state.auto_user_message = msg
+
+
+def render_theme_selector(localS, location="sidebar"):
+    current = st.session_state.get("theme", DEFAULT_THEME)
+    theme_keys = _theme_keys()
+    key_name = "theme_selector_sidebar" if location == "sidebar" else "theme_selector_main"
+
+    chosen = st.selectbox(
+        " Тема",
+        options=theme_keys,
+        index=theme_keys.index(current) if current in theme_keys else 0,
+        format_func=lambda k: theme_display(k),
+        key=key_name,
+    )
+
+    if chosen != current:
+        st.session_state.theme = chosen
+        _ls_save_theme(localS, chosen)
+        st.rerun()
+
+
+# ============================================================
+# ХЕЛПЕРЫ UI
+# ============================================================
+def render_status_bar():
+    date_str = datetime.now().strftime("%d.%m.%Y")
+    st.markdown(
+        f'<div class="terminal-status">'
+        f'<span> ROGUE TRADER</span>'
+        f'<span>ТЕРМИНАЛ ДОСТУПА</span>'
+        f'<span>{date_str}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_hero_panel():
+    st.markdown(
+        '<div class="hero-panel">'
+        '<div class="hero-title"> W A R H A M M E R   4 0 K</div>'
+        '<div class="hero-sub">'
+        '<span class="line"></span>'
+        '<span>RPG С ИИ-МАСТЕРОМ</span>'
+        '<span class="line"></span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_section_header(num: str, title: str, meta: str = ""):
+    meta_html = f'<span class="meta">{meta}</span>' if meta else ""
+    st.markdown(
+        f'<div class="section-header">'
+        f'<span class="num">{num}</span>'
+        f'<span class="title">{title}</span>'
+        f'<span class="line"></span>'
+        f'{meta_html}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_chat_name(role: str, player_name: str = "Игрок"):
+    label = "МАСТЕР" if role == "assistant" else player_name.upper()
+    cls = "chat-name--master" if role == "assistant" else "chat-name--user"
+    st.markdown(
+        f'<div class="chat-name {cls}">'
+        f'<span class="chat-name-dot"></span>'
+        f'<span>{label}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# АВАТАРКИ
+# ============================================================
+AVATAR_USER = ""
+
+
+# ============================================================
+# ВИЗАРД
+# ============================================================
+def init_wizard():
+    if "wizard_step" not in st.session_state:
+        st.session_state.wizard_step = 0
+    if "wizard_data" not in st.session_state:
+        st.session_state.wizard_data = {
+            "generation_method": None, "faction_id": None, "subfaction_id": None,
+            "archetype_id": None, "extra_choices": {}, "characteristics": {},
+            "name": "", "age": "", "appearance": "", "background": "",
+            "sheet": None, "dice_rolled_once": False, "reroll_used": False,
+        }
+
+
+def wizard_go(step: int):
+    st.session_state.wizard_step = step
+
+
+def render_wizard(localS):
+    init_wizard()
+    step = st.session_state.wizard_step
+    data = st.session_state.wizard_data
+
+    render_status_bar()
+    st.title(" Создание персонажа")
+    st.progress((step + 1) / 8)
+    st.caption(f"Шаг {step + 1} из 8")
+
+    if step == 0:
+        render_section_header("01", "СПОСОБ ГЕНЕРАЦИИ")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(" Броски кубиков (2d10 + мод)", use_container_width=True):
+                data["generation_method"] = "dice"; wizard_go(1); st.rerun()
+        with col2:
+            if st.button(" Распределение очков (point-buy)", use_container_width=True):
+                data["generation_method"] = "pointbuy"; wizard_go(1); st.rerun()
+
+    elif step == 1:
+        render_section_header("02", "ФРАКЦИЯ")
+        for fid in factions_data.FACTION_ORDER:
+            f = factions_data.FACTIONS[fid]
+            with st.container(border=True):
+                cols = st.columns([1, 8, 2])
+                with cols[0]: st.markdown(f"### {f['icon']}")
+                with cols[1]:
+                    st.markdown(f"**{f['name']}**")
+                    st.caption(f["description"])
+                with cols[2]:
+                    if st.button("Выбрать", key=f"faction_{fid}", use_container_width=True):
+                        data["faction_id"] = fid
+                        data["subfaction_id"] = None
+                        data["archetype_id"] = None
+                        wizard_go(2); st.rerun()
+        if st.button(" Назад"): wizard_go(0); st.rerun()
+
+    elif step == 2:
+        fid = data["faction_id"]
+        f = factions_data.FACTIONS[fid]
+        render_section_header("03", f"{f['name']} — ПУТЬ")
+        for sid, sub in f["subfactions"].items():
+            with st.container(border=True):
+                cols = st.columns([8, 2])
+                with cols[0]:
+                    st.markdown(f"**{sub['name']}**")
+                    st.caption(sub["description"])
+                with cols[1]:
+                    if st.button("Выбрать", key=f"sub_{sid}", use_container_width=True):
+                        data["subfaction_id"] = sid
+                        data["archetype_id"] = None
+                        wizard_go(3); st.rerun()
+        if st.button(" Назад"): wizard_go(1); st.rerun()
+
+    elif step == 3:
+        fid = data["faction_id"]
+        sid = data["subfaction_id"]
+        sub = factions_data.FACTIONS[fid]["subfactions"][sid]
+        render_section_header("04", f"{sub['name']} — АРХЕТИП")
+        for aid, arch in sub["archetypes"].items():
+            with st.container(border=True):
+                cols = st.columns([8, 2])
+                with cols[0]:
+                    st.markdown(f"**{arch['name']}**")
+                    st.caption(arch["description"])
+                with cols[1]:
+                    if st.button("Выбрать", key=f"arch_{aid}", use_container_width=True):
+                        data["archetype_id"] = aid
+                        data["extra_choices"] = {}
+                        wizard_go(4 if sub.get("extra_choices") else 5)
+                        st.rerun()
+        if st.button(" Назад"): wizard_go(2); st.rerun()
+
+    elif step == 4:
+        fid = data["faction_id"]
+        sid = data["subfaction_id"]
+        sub = factions_data.FACTIONS[fid]["subfactions"][sid]
+        render_section_header("05", "ДОПОЛНИТЕЛЬНЫЕ ПАРАМЕТРЫ")
+        for key, spec in sub.get("extra_choices", {}).items():
+            st.subheader(spec["label"])
+            choice = st.radio(spec["label"], options=spec["options"],
+                              key=f"extra_{key}", label_visibility="collapsed")
+            data["extra_choices"][spec["label"]] = choice
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button(" Назад"): wizard_go(3); st.rerun()
+        with cols[1]:
+            if st.button("Далее ", use_container_width=True): wizard_go(5); st.rerun()
+
+    elif step == 5:
+        fid = data["faction_id"]
+        sid = data["subfaction_id"]
+        sub = factions_data.FACTIONS[fid]["subfactions"][sid]
+        dice_mod = sub.get("dice_modifier", 25)
+        render_section_header("06", "ХАРАКТЕРИСТИКИ")
+        if data["generation_method"] == "dice":
+            if not data.get("dice_rolled_once"):
+                st.write(f"Бросок **2d10 + {dice_mod}**.")
+                if st.button(" Бросить кубики", use_container_width=True):
+                    data["characteristics"] = cc.generate_by_dice(dice_mod)
+                    data["dice_rolled_once"] = True; st.rerun()
+            else:
+                for ch in cc.CHARACTERISTICS:
+                    val = data["characteristics"][ch]
+                    st.write(f"**{cc.CHARACTERISTIC_NAMES_RU[ch]}**: {val} (+{cc.char_bonus(val)})")
+                st.write("---")
+                if not data.get("reroll_used"):
+                    rt = st.selectbox("Перебросить одну?",
+                                      options=["—"] + cc.CHARACTERISTICS,
+                                      format_func=lambda x: "—" if x == "—" else cc.CHARACTERISTIC_NAMES_RU[x])
+                    if st.button("Перебросить") and rt != "—":
+                        data["characteristics"] = cc.reroll_one(data["characteristics"], rt, dice_mod)
+                        data["reroll_used"] = True; st.rerun()
+                cols = st.columns(2)
+                with cols[0]:
+                    if st.button(" Назад"):
+                        wizard_go(4 if sub.get("extra_choices") else 3); st.rerun()
+                with cols[1]:
+                    if st.button("Далее ", use_container_width=True): wizard_go(6); st.rerun()
+        else:
+            if "pointbuy_values" not in st.session_state:
+                st.session_state.pointbuy_values = {ch: 25 for ch in cc.CHARACTERISTICS}
+            pv = st.session_state.pointbuy_values
+            for ch in cc.CHARACTERISTICS:
+                pv[ch] = st.slider(cc.CHARACTERISTIC_NAMES_RU[ch], 25, 45, pv[ch], key=f"pb_{ch}")
+            spent = sum(v - 25 for v in pv.values()); left = 100 - spent
+            st.write(f"**Осталось: {left}**")
+            cols = st.columns(2)
+            with cols[0]:
+                if st.button(" Назад"):
+                    wizard_go(4 if sub.get("extra_choices") else 3); st.rerun()
+            with cols[1]:
+                if st.button("Далее ", disabled=(left < 0), use_container_width=True):
+                    data["characteristics"] = dict(pv); wizard_go(6); st.rerun()
+
+    elif step == 6:
+        render_section_header("07", "ИМЯ И ДЕТАЛИ")
+        _gender_label = st.radio("Пол", ["Мужской", "Женский"], index=0, horizontal=True, key="wiz_gender_only")
+        data["gender"] = [k for k, v in GENDER_OPTIONS.items() if v == _gender_label][0]
+        data["name"] = st.text_input("Имя *", value=data.get("name", ""))
+        data["age"] = st.text_input("Возраст", value=data.get("age", ""))
+        data["appearance"] = st.text_area("Внешность", value=data.get("appearance", ""), height=100)
+        data["background"] = st.text_area("Предыстория", value=data.get("background", ""), height=150)
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button(" Назад"): wizard_go(5); st.rerun()
+        with cols[1]:
+            if st.button("Собрать лист ", use_container_width=True):
+                if not data["name"].strip(): st.error("Введи имя")
+                else: wizard_go(7); st.rerun()
+
+    elif step == 7:
+        render_section_header("08", "ЛИСТ ПЕРСОНАЖА")
+        if not data.get("sheet"):
+            with st.spinner("Мастер составляет лист..."):
+                try:
+                    fid, sid, aid = data["faction_id"], data["subfaction_id"], data["archetype_id"]
+                    f = factions_data.FACTIONS[fid]
+                    sub = f["subfactions"][sid]
+                    arch = sub["archetypes"][aid]
+                    sheet = cc.generate_full_sheet(
+                        kb=get_kb(), faction_id=fid, subfaction_id=sid, archetype_id=aid,
+                        faction_name=f["name"], subfaction_name=sub["name"], archetype_name=arch["name"],
+                        extra_choices=data.get("extra_choices", {}),
+                        characteristics=data["characteristics"],
+                        name=data["name"], age=data.get("age", ""),
+                        appearance=data.get("appearance", ""), background=data.get("background", ""),
+                    )
+                    sheet["generation_method"] = data["generation_method"]
+                    sheet["gender"] = data.get("gender", "male")
+                    data["sheet"] = sheet
+                except Exception as e:
+                    st.error(f"Ошибка: {e}")
+                    if st.button(" Назад"): wizard_go(6); st.rerun()
+                    return
+
+        sheet = data["sheet"]
+        st.subheader(sheet["name"])
+        st.caption(f"{sheet.get('faction','')}  {sheet.get('subfaction','')}  {sheet.get('archetype','')}")
+        cols = st.columns(9)
+        for i, ch in enumerate(cc.CHARACTERISTICS):
+            cols[i].metric(ch, f"{sheet['characteristics'][ch]}", f"+{sheet['bonuses'][ch]}")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Раны", f"{sheet['wounds']['current']}/{sheet['wounds']['max']}")
+        c2.metric("Судьба", f"{sheet['fate_points']['current']}/{sheet['fate_points']['max']}")
+        c3.metric("Порча", sheet.get("corruption", 0))
+        c4.metric("Пси-Рейтинг", sheet.get("psy_rating", 0))
+        c1, c2 = st.columns(2)
+        c1.metric(f" {sheet.get('currency','Троны')}", sheet.get("money", 0))
+        c2.metric(" Корабль", sheet["ship"]["name"] if sheet.get("ship") else "нет")
+        with st.expander("Снаряжение"):
+            for e in sheet.get("equipment", []): st.write(f"- {e}")
+        if sheet.get("background"):
+            with st.expander("Предыстория"): st.write(sheet["background"])
+        st.write("---")
+        cols = st.columns([1, 1, 2])
+        with cols[0]:
+            if st.button(" Назад"): data["sheet"] = None; wizard_go(6); st.rerun()
+        with cols[1]:
+            if st.button(" Перегенерировать", use_container_width=True):
+                data["sheet"] = None; st.rerun()
+        with cols[2]:
+            if st.button(" Подтвердить и начать игру", type="primary", use_container_width=True):
+                path = cc.save_character(sheet)
+                st.session_state.character = sheet
+                st.session_state.character_path = path
+                st.session_state.chat_history = []
+                cc.save_chat_history(sheet.get("name", "unnamed"), [])
+                _ls_save(localS, sheet, [])
+                st.session_state.wizard_step = 0
+                st.session_state.wizard_data = {}
+                st.session_state.in_wizard = False
+                st.rerun()
+
+
+# ============================================================
+# СТАРТОВЫЙ ЭКРАН
+# ============================================================
+def _download_save_payload(sheet, chat_history):
+    return json.dumps({
+        "format": SAVE_FORMAT, "version": SAVE_VERSION,
+        "character": sheet, "chat_history": chat_history,
+        "saved_at": datetime.now().isoformat(),
+    }, ensure_ascii=False, indent=2)
+
+
+def render_splash():
+    """Приветственный экран от Кота Баюна."""
+    st.markdown(
+        '<div style="text-align:center;margin:30px auto 18px;max-width:900px;">'
+        '<div style="font-family:var(--font-head, serif);font-size:2.2rem;'
+        'font-weight:700;color:var(--accent-bright, #e8d9b8);'
+        'letter-spacing:.16em;text-shadow:0 0 30px var(--accent-glow, rgba(201,169,97,.4));">'
+        '&#9876; WARHAMMER 40,000</div>'
+        '<div style="margin-top:6px;font-family:Consolas,monospace;'
+        'font-size:.88rem;letter-spacing:.32em;color:var(--ink-dim, #b8ac92);'
+        'text-transform:uppercase;">RPG &middot; ' + APP_VERSION + '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Приветствие — плашка
+    greeting_html = SPLASH_GREETING.strip()
+    greeting_html = greeting_html.replace("\n\n", "</p><p style='margin:0 0 14px;'>")
+    greeting_html = greeting_html.replace("\n", "<br>")
+    st.markdown(
+        '<div style="max-width:900px;margin:0 auto 22px;padding:32px 38px;'
+        'background:rgba(0,0,0,0.62);'
+        'border:1px solid var(--accent, #c9a961);'
+        'border-left:4px solid var(--accent, #c9a961);'
+        'border-radius:2px;'
+        'font-family:var(--font-body, Georgia, serif);font-size:1.1rem;'
+        'line-height:1.78;color:var(--ink, #ede4d3);'
+        'box-shadow:0 0 40px var(--accent-glow, rgba(201,169,97,.2)), '
+        'inset 0 0 60px rgba(0,0,0,0.35);">'
+        '<p style="margin:0 0 14px;">' + greeting_html + '</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Благодарности — отдельная плашка, имена крупно
+    credits_html = " &middot; ".join(SPLASH_CREDITS)
+    st.markdown(
+        '<div style="max-width:900px;margin:0 auto 22px;padding:24px 34px;'
+        'background:rgba(0,0,0,0.7);'
+        'border:1px solid var(--accent, #c9a961);'
+        'border-radius:2px;text-align:center;'
+        'box-shadow:0 0 30px var(--accent-glow, rgba(201,169,97,.25));">'
+        '<div style="font-family:Consolas,monospace;font-size:.85rem;'
+        'letter-spacing:.28em;color:var(--accent, #c9a961);margin-bottom:16px;'
+        'text-transform:uppercase;">&#10022; Благодарности за Альфа-Тест &#10022;</div>'
+        '<div style="font-family:var(--font-head, serif);'
+        'font-size:1.35rem;font-weight:700;color:var(--accent-bright, #e8d9b8);'
+        'letter-spacing:.12em;line-height:2;">' + credits_html + '</div>'
+        '<div style="margin-top:16px;font-family:var(--font-body, Georgia), serif;'
+        'font-style:italic;color:var(--ink-dim, #b8ac92);font-size:.98rem;">'
+        'и всем, кто ещё присоединится к нам впереди.'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div style="text-align:center;font-family:Consolas,monospace;'
+        'font-size:.82rem;color:var(--ink-faint, #8a8068);letter-spacing:.18em;'
+        'margin:0 0 22px;">'
+        + APP_VERSION + ' &middot; предварительная сборка'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    col1, col2, col3 = st.columns([2, 1, 2])
+    with col2:
+        if st.button("Продолжить", type="primary", use_container_width=True):
+            st.session_state.splash_done = True
+            st.rerun()
+
+def render_start_screen(localS):
+    render_status_bar()
+    render_hero_panel()
+
+    col_l, col_theme = st.columns([3, 1])
+    with col_theme:
+        render_theme_selector(localS, location="main")
+
+    render_section_header("01", "НОВАЯ ИГРА")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        with st.container(border=True):
+            st.markdown(
+                '<div style="font-family:Consolas,monospace;color:var(--accent,'
+                '#c9a961);font-size:1.8rem;letter-spacing:0.3em;'
+                'margin-bottom:6px;"></div>'
+                '<div style="font-family:Consolas,monospace;color:var(--accent-bright,'
+                '#e8d9b8);font-size:1.05rem;letter-spacing:0.18em;'
+                'text-transform:uppercase;font-weight:700;margin-bottom:6px;">'
+                'Создать персонажа</div>'
+                '<div style="color:var(--ink-dim,#b8ac92);font-size:0.9rem;'
+                'line-height:1.5;margin-bottom:14px;">'
+                '8 шагов · броски кубиков или распределение очков</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(" НАЧАТЬ СОЗДАНИЕ", type="primary", use_container_width=True):
+                st.session_state.wizard_step = 0
+                st.session_state.wizard_data = {}
+                st.session_state.in_wizard = True
+                st.rerun()
+    with col2:
+        with st.container(border=True):
+            st.markdown(
+                '<div style="font-family:Consolas,monospace;color:var(--accent,'
+                '#c9a961);font-size:1.8rem;letter-spacing:0.3em;'
+                'margin-bottom:6px;"></div>'
+                '<div style="font-family:Consolas,monospace;color:var(--accent-bright,'
+                '#e8d9b8);font-size:1.05rem;letter-spacing:0.18em;'
+                'text-transform:uppercase;font-weight:700;margin-bottom:6px;">'
+                'Загрузить сохранение</div>'
+                '<div style="color:var(--ink-dim,#b8ac92);font-size:0.9rem;'
+                'line-height:1.5;margin-bottom:6px;">'
+                'JSON-файл персонажа (лист + история)</div>',
+                unsafe_allow_html=True,
+            )
+            uploaded = st.file_uploader("JSON-файл сохранения", type=["json"],
+                                         label_visibility="collapsed")
+            if uploaded is not None:
+                try:
+                    data = json.loads(uploaded.read().decode("utf-8"))
+                    if data.get("format") != SAVE_FORMAT:
+                        st.error("Не наш формат сохранения.")
+                    elif not data.get("character"):
+                        st.error("Файл без персонажа.")
+                    else:
+                        st.session_state.character = data["character"]
+                        st.session_state.chat_history = data.get("chat_history", [])
+                        st.session_state.in_wizard = False
+                        cc.save_character(data["character"])
+                        cc.save_chat_history(data["character"].get("name", "unnamed"),
+                                             st.session_state.chat_history)
+                        _ls_save(localS, data["character"], st.session_state.chat_history)
+                        st.success("Персонаж загружен!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Ошибка чтения файла: {e}")
+
+    chars = cc.list_characters()
+    meta = f"{len(chars)} ЗАПИСЬ" if chars else "ПУСТО"
+    render_section_header("02", "ПЕРСОНАЖИ", meta)
+
+    if not chars:
+        st.info("Нет сохранённых персонажей.")
+    else:
+        for i, c in enumerate(chars, start=1):
+            with st.container(border=True):
+                st.markdown(
+                    f'<div style="display:flex;justify-content:space-between;'
+                    f'align-items:center;margin-bottom:14px;">'
+                    f'<span style="font-family:Consolas,monospace;color:var(--accent,'
+                    f'#c9a961);font-size:1.2rem;letter-spacing:0.2em;">*</span>'
+                    f'<span style="font-family:Consolas,monospace;color:var(--accent-dim,'
+                    f'#8a7444);font-size:0.78rem;letter-spacing:0.22em;">'
+                    f'ЗАПИСЬ {i:02d}</span>'
+                    f'</div>'
+                    f'<div style="font-family:Consolas,monospace;color:var(--heading,'
+                    f'#e8d9b8);font-size:1.5rem;letter-spacing:0.14em;font-weight:700;'
+                    f'margin-bottom:6px;">{c["name"]}</div>'
+                    f'<div style="height:1px;background:linear-gradient(90deg,'
+                    f'var(--accent-dim,#8a7444),transparent 70%);margin-bottom:12px;"></div>'
+                    f'<div style="color:var(--ink-dim,#b8ac92);font-family:Consolas,'
+                    f'monospace;font-size:0.88rem;letter-spacing:0.1em;'
+                    f'margin-bottom:16px;">'
+                    f'{c.get("faction","")} · {c.get("subfaction","")} · '
+                    f'{c.get("archetype","")}</div>',
+                    unsafe_allow_html=True,
+                )
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    if st.button(" ИГРАТЬ", key=f"load_{c['name']}",
+                                 use_container_width=True, type="primary"):
+                        sheet = cc.load_character(c["path"])
+                        chat = cc.load_chat_history(c["name"])
+                        st.session_state.character = sheet
+                        st.session_state.character_path = c["path"]
+                        st.session_state.chat_history = chat
+                        st.session_state.in_wizard = False
+                        _ls_save(localS, sheet, chat)
+                        st.rerun()
+                with b2:
+                    try:
+                        sheet_data = cc.load_character(c["path"])
+                        chat_data = cc.load_chat_history(c["name"])
+                        payload = _download_save_payload(sheet_data, chat_data)
+                        st.download_button(
+                            " СКАЧАТЬ",
+                            data=payload,
+                            file_name=f"{c['name']}_save.json",
+                            mime="application/json",
+                            key=f"dl_{c['name']}",
+                            use_container_width=True,
+                        )
+                    except Exception:
+                        st.caption("—")
+                with b3:
+                    if st.button(" УДАЛИТЬ", key=f"del_{c['name']}",
+                                 use_container_width=True):
+                        cc.delete_character(c["path"])
+                        cc.delete_chat_history(c["name"])
+                        st.rerun()
+
+    st.write("")
+    st.write("")
+    col_a, col_b, col_c = st.columns([3, 2, 3])
+    with col_b:
+        if st.button(" СБРОСИТЬ АВТОСОХРАНЕНИЕ", use_container_width=True):
+            _ls_clear(localS)
+            st.toast("Автосохранение очищено", icon="")
+
+
+# ============================================================
+# ВСТРОЕННЫЙ ЛИСТ ПЕРСОНАЖА (для мобильных)
+# ============================================================
+    st.markdown(
+        '<div style="text-align:center;font-family:Consolas,monospace;'
+        'font-size:.72rem;color:var(--ink-faint);letter-spacing:.18em;'
+        'margin-top:30px;">'
+        + APP_VERSION + ' \u00b7 40K RPG \u00b7 Кот Баюн, мурр'
+        + '</div>',
+        unsafe_allow_html=True,
+    )
+
+def render_character_inline(sheet, kb, localS, chat_history):
+    wounds = sheet.get("wounds", {"current": 0, "max": 0})
+    fate = sheet.get("fate_points", {"current": 0, "max": 0})
+
+    c1, c2 = st.columns(2)
+    c1.metric(" Раны", f"{wounds.get('current', 0)}/{wounds.get('max', 0)}")
+    c2.metric(" Судьба", f"{fate.get('current', 0)}/{fate.get('max', 0)}")
+    c1, c2 = st.columns(2)
+    c1.metric(" Порча", sheet.get("corruption", 0))
+    c2.metric(" Безумие", sheet.get("insanity", 0))
+
+    loc = sheet.get("location", "")
+    date = sheet.get("game_date", "")
+    if loc: st.markdown(f" **Локация:** {loc}")
+    if date: st.markdown(f" **Время:** {date}")
+
+    money = sheet.get("money", 0)
+    currency = sheet.get("currency", "Троны")
+    st.markdown(f" **{currency}:** {money}")
+
+    with st.expander(" Снаряжение", expanded=False):
+        eq = sheet.get("equipment", [])
+        if eq:
+            for e in eq: st.write(f" {e}")
+        else:
+            st.caption("— пусто —")
+
+    with st.expander(" Оружие", expanded=False):
+        for w in sheet.get("weapons", []):
+            st.markdown(f"**{w.get('name','')}**")
+            st.caption(w.get("stats", ""))
+            if w.get("notes"): st.caption(f"_{w['notes']}_")
+
+    with st.expander(" Таланты", expanded=False):
+        for t in sheet.get("talents", []): st.write(f" {t}")
+
+    with st.expander(" Навыки", expanded=False):
+        for s in sheet.get("skills", []):
+            st.write(f" **{s['name']}** ({s.get('characteristic','')}): {s.get('value','')}")
+
+    powers = sheet.get("psychic_powers", [])
+    if powers:
+        with st.expander(" Психосилы", expanded=False):
+            for p in powers: st.write(f" {p}")
+
+    with st.expander(" Задачи", expanded=False):
+        q = sheet.get("quests", [])
+        if q:
+            for item in q: st.write(f" {item}")
+        else:
+            st.caption("— нет —")
+
+    with st.expander(" NPC", expanded=False):
+        n = sheet.get("npcs", [])
+        if n:
+            for item in n: st.write(f" {item}")
+        else:
+            st.caption("— нет —")
+
+    effects = sheet.get("effects", [])
+    if effects:
+        with st.expander(" Эффекты", expanded=False):
+            for e in effects: st.write(f" {e}")
+
+    with st.expander(" Корабль", expanded=False):
+        ship = sheet.get("ship")
+        if not ship:
+            st.caption("— нет —")
+        else:
+            st.markdown(f"**{ship['name']}**")
+            st.caption(f"{ship.get('class','')}  {ship.get('type','')}")
+            st.write(ship.get("description", ""))
+
+    journal = sheet.get("journal", [])
+    if journal:
+        with st.expander(" Дневник", expanded=False):
+            for entry in journal: st.write(f" {entry}")
+
+
+# ============================================================
+# САЙДБАР — ЛИСТ ПЕРСОНАЖА
+# ============================================================
+def _norm_armour(arm):
+    """Нормализует броню в {zone: {value, equipped}, notes}."""
+    if not arm:
+        return {}
+    result = {"notes": arm.get("notes", "")}
+    for z in ["head", "body", "arms", "legs"]:
+        v = arm.get(z, 0)
+        if isinstance(v, dict):
+            result[z] = {
+                "value": int(v.get("value", 0) or 0),
+                "equipped": bool(v.get("equipped", True)),
+            }
+        else:
+            result[z] = {"value": int(v or 0), "equipped": True}
+    return result
+
+
+def _norm_weapons(ws):
+    """Нормализует оружие в dict с флагом equipped."""
+    result = []
+    for w in (ws or []):
+        if not isinstance(w, dict):
+            continue
+        nw = dict(w)
+        nw.setdefault("equipped", True)
+        result.append(nw)
+    return result
+
+
+def _ap_total(sheet):
+    """AP — только по экипированным зонам."""
+    arm = _norm_armour(sheet.get("armour", {}))
+    vals = []
+    for z in ["head", "body", "arms", "legs"]:
+        zz = arm.get(z, {})
+        if zz.get("equipped", True):
+            vals.append(int(zz.get("value", 0) or 0))
+    return max(vals) if vals else 0
+
+
+def _render_stat_bar(label: str, current: int, maximum: int, variant: str, icon: str = ""):
+    maximum = max(1, int(maximum or 1))
+    current = int(current or 0)
+    pct = max(0, min(100, round(100 * current / maximum)))
+    is_low = (variant == "wounds" and pct < 30)
+    low_class = " stat-bar--low" if is_low else ""
+    pulse_attr = ' data-pulse="on"' if is_low else ''
+    st.markdown(
+        f'<div class="stat-bar stat-bar--{variant}{low_class}"{pulse_attr}>'
+        f'  <div class="stat-bar-head">'
+        f'    <span class="stat-bar-label">{icon} {label}</span>'
+        f'    <span class="stat-bar-value">{current} / {maximum}</span>'
+        f'  </div>'
+        f'  <div class="stat-bar-track">'
+        f'    <div class="stat-bar-fill" style="width:{pct}%"></div>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+
+
+def render_location_bar(sheet):
+    """Полоса локации над чатом:  ЛОКАЦИЯ · значение ·  ВРЕМЯ · значение."""
+    sheet = sheet or {}
+    loc = str(sheet.get("location", "") or "").strip() or "Неизвестное место"
+    date = str(sheet.get("game_date", "") or "").strip() or "—"
+    st.markdown(
+        f'<div class="location-bar">'
+        f'  <span class="lbl"> ЛОКАЦИЯ</span>'
+        f'  <span class="val">{_esc(loc)}</span>'
+        f'  <span class="dot"></span>'
+        f'  <span class="lbl"> ВРЕМЯ</span>'
+        f'  <span class="val">{_esc(date)}</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+def _render_character_summary(sheet: dict, chat_history: list, localS):
+    name = sheet.get("name", "Безымянный")
+    faction = sheet.get("faction", "")
+    subfaction = sheet.get("subfaction", "")
+    archetype = sheet.get("archetype", "")
+    sub_line = " · ".join([x for x in [faction, subfaction, archetype] if x]) or "—"
+
+    st.markdown(
+        f'<div class="char-sheet-header">'
+        f'  <div class="char-avatar"></div>'
+        f'  <div style="min-width:0;">'
+        f'    <div class="char-sheet-name">{_esc(name)}</div>'
+        f'    <div class="char-sheet-sub">{_esc(sub_line)}</div>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    w = sheet.get("wounds", {}) or {}
+    _render_stat_bar("РАНЫ", int(w.get("current", 0) or 0),
+                     int(w.get("max", 1) or 1), "wounds", "")
+    f = sheet.get("fate_points", {}) or {}
+    _render_stat_bar("СУДЬБА", int(f.get("current", 0) or 0),
+                     int(f.get("max", 1) or 1), "fate", "")
+
+    xp = int(sheet.get("xp", 0) or 0)
+    rank = int(sheet.get("rank", 1) or 1)
+    xp_next = rank * 500
+    _render_stat_bar(f"ОПЫТ · РАНГ {rank}", xp, xp_next, "xp", "")
+
+    corr = int(sheet.get("corruption", 0) or 0)
+    ins = int(sheet.get("insanity", 0) or 0)
+    if corr > 0 or ins > 0:
+        c1, c2 = st.columns(2)
+        with c1:
+            if corr > 0:
+                _render_stat_bar("ПОРЧА", corr, max(corr, 10), "corruption", "")
+        with c2:
+            if ins > 0:
+                _render_stat_bar("БЕЗУМИЕ", ins, max(ins, 10), "insanity", "")
+
+    ap = _ap_total(sheet)
+    bonuses = sheet.get("bonuses", {}) or {}
+    ini = int(bonuses.get("Ag", 0) or 0)
+    per = int(bonuses.get("Per", 0) or 0)
+
+    st.markdown(
+        f'<div class="meta-grid">'
+        f'  <div class="meta-tile">'
+        f'    <div class="icon"></div>'
+        f'    <div class="label">БРОНЯ</div>'
+        f'    <div class="value">{ap}</div>'
+        f'  </div>'
+        f'  <div class="meta-tile">'
+        f'    <div class="icon"></div>'
+        f'    <div class="label">ИНИЦ</div>'
+        f'    <div class="value">{ini:+d}</div>'
+        f'  </div>'
+        f'  <div class="meta-tile">'
+        f'    <div class="icon"></div>'
+        f'    <div class="label">ВНИМ</div>'
+        f'    <div class="value">{per:+d}</div>'
+        f'  </div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    chars = sheet.get("characteristics", {}) or {}
+    with st.expander(" ПРОВЕРКИ", expanded=True, key="exp_chars"):
+        char_cols = st.columns(3)
+        for i, ch in enumerate(cc.CHARACTERISTICS):
+            val = int(chars.get(ch, 0) or 0)
+            bon = int(bonuses.get(ch, val // 10) or 0)
+            ru = char_ru(ch)
+            label = f"{ru} · {val}" if ru else f"{ch} · {val}"
+            with char_cols[i % 3]:
+                if st.button(label, key=f"chk_char_{ch}",
+                             use_container_width=True,
+                             help=f"{ch} — {char_ru_long(ch)}: база {val}, бонус {bon:+d}"):
+                    st.session_state.pending_check = {
+                        "source": "chars",
+                        "kind": "Характеристика", "name": ch, "value": val,
+                    }
+                    st.rerun()
+        _render_pending_check_picker(sheet, chat_history, localS, source="chars")
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+
+def _render_quick_actions(sheet, chat_history, localS):
+    with st.expander(" ДЕЙСТВИЯ", expanded=False, key="exp_actions"):
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button(" Судьба", use_container_width=True, help="Потратить Очко Судьбы"):
+                msg, err = quick_fate_point(sheet)
+                if err: st.toast(err, icon="")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+        with cols[1]:
+            if st.button(" Граната", use_container_width=True):
+                msg, err = quick_grenade(sheet)
+                if err: st.toast(err, icon="")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+        cols = st.columns(2)
+        with cols[0]:
+            if st.button(" Аптечка", use_container_width=True):
+                msg, err = quick_medkit(sheet)
+                if err: st.toast(err, icon="")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+        with cols[1]:
+            if st.button(" Стим", use_container_width=True):
+                msg, err = quick_stimulant(sheet)
+                if err: st.toast(err, icon="")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+
+        effects = sheet.get("effects", [])
+        if effects:
+            eff_to_remove = st.selectbox("Снять эффект", options=["—"] + effects,
+                                         key="effect_remove_select",
+                                         label_visibility="collapsed")
+            if eff_to_remove != "—" and st.button(" Снять", use_container_width=True):
+                msg, err = quick_remove_effect(sheet, eff_to_remove)
+                if err: st.toast(err, icon="")
+                else: _send_quick_action(msg, sheet, chat_history, localS); st.rerun()
+
+
+def render_character_sidebar(sheet, kb, model, localS, chat_history):
+    _render_character_summary(sheet, chat_history, localS)
+
+    # patch30: счётчик сессии
+    try:
+        import time as _tmod
+        if "_session_start" not in st.session_state:
+            st.session_state["_session_start"] = _tmod.time()
+        _elapsed_min = int((_tmod.time() - st.session_state["_session_start"]) / 60)
+        _turns = len(st.session_state.get("chat_history", [])) // 2
+        st.markdown(
+            f'<div style="font-family:Consolas,monospace;font-size:.72rem;'
+            f'letter-spacing:.14em;color:var(--ink-faint,#8a8068);'
+            f'text-transform:uppercase;margin:4px 0;">'
+            f'Ходов: {_turns} \u00b7 Время: {_elapsed_min} мин</div>',
+            unsafe_allow_html=True,
+        )
+    except Exception:
+        pass
+
+    # patch30: помощь
+    with st.sidebar.expander("Помощь"):
+        st.markdown("""
+**Основное**
+- Пиши в чат, что делает персонаж — Мастер ведёт сцену.
+- Клик по характеристике — бросок проверки.
+- `Действия`  Судьба, Аптечка, Граната, Стимулянт.
+
+**Советы**
+- Провал — это тоже развитие сюжета.
+- Управляй полом — он влияет на реплики NPC.
+- Сохранение автоматическое.
+""")
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+    # patch27: расширенный блок статов
+    try:
+        _gender_map = {"male": "Мужской", "female": "Женский"}
+        _g = _gender_map.get(sheet.get("gender", "male"), "Мужской")
+        _xp = int(sheet.get("xp", 0) or 0)
+        _rank = int(sheet.get("rank", 1) or 1)
+        _corr = int(sheet.get("corruption", 0) or 0)
+        _ins = int(sheet.get("insanity", 0) or 0)
+        _money = sheet.get("money", 0)
+        _cur = sheet.get("currency", "монет")
+        _c3 = st.columns(3)
+        _c3[0].metric("Пол", _g)
+        _c3[1].metric("Ранг", _rank)
+        _c3[2].metric("Опыт", f"{_xp}/{_rank * 500}")
+        _c2 = st.columns(2)
+        _c2[0].metric("Порча", _corr)
+        _c2[1].metric("Деньги", f"{_money} {_cur}")
+        if _ins > 0:
+            st.metric("Безумие", _ins)
+    except Exception as _e:
+        print(f"[sb stats] {_e}")
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+    _render_quick_actions(sheet, chat_history, localS)
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
+
+    tabs = st.tabs(["Перс", "Инвент", "Мир", "Корабль", "Заметки"])
+
+    with tabs[0]:
+        skills = sheet.get("skills", [])
+        if skills:
+            with st.expander(f" НАВЫКИ ({len(skills)})", expanded=False, key="exp_skills"):
+                for i, s in enumerate(skills):
+                    nm = s.get("name", "?")
+                    val = int(s.get("value", 0) or 0)
+                    ch = s.get("characteristic", "")
+                    ru_ch = char_ru(ch)
+                    ch_disp = ru_ch if ru_ch else ch
+                    if st.button(f"{nm} · {ch_disp} {val}", key=f"skl_{i}",
+                                 use_container_width=True,
+                                 help=f"Проверка навыка «{nm}» ({ch} — {char_ru_long(ch)})"):
+                        st.session_state.pending_check = {
+                            "source": "skills",
+                            "kind": "Навык", "name": nm, "value": val,
+                        }
+                        st.rerun()
+                _render_pending_check_picker(sheet, chat_history, localS, source="skills")
+
+        talents = sheet.get("talents", [])
+        if talents:
+            with st.expander(f" ТАЛАНТЫ ({len(talents)})", expanded=False, key="exp_talents"):
+                for i, t in enumerate(talents):
+                    if st.button(f" {t}", key=f"tal_{i}",
+                                 use_container_width=True,
+                                 help=f"Справка: {t}"):
+                        _send_quick_action(
+                            f'[СПРАВКА] Расскажи кратко по канону про талант: "{t}"',
+                            sheet, chat_history, localS)
+                        st.rerun()
+
+        weapons = sheet.get("weapons", [])
+        if weapons:
+            with st.expander(f" ОРУЖИЕ ({len(weapons)})", expanded=False, key="exp_weapons"):
+                for i, w in enumerate(weapons):
+                    wname = w.get("name", "?")
+                    stats = w.get("stats", "")
+                    equipped = bool(w.get("equipped", True))
+                    is_ranged = bool(re.search(r"\d+\s*м", stats))
+                    badge = "" if equipped else ""
+                    badge_color = "var(--accent-bright, #e8d9b8)" if equipped else "var(--ink-dim, #8a8068)"
+                    st.markdown(
+                        f'<div style="font-family:Consolas,monospace;font-size:0.85rem;'
+                        f'color:{badge_color};margin:12px 0 3px 0;'
+                        f'font-weight:700;letter-spacing:0.03em;">{badge} {_esc(wname)}</div>'
+                        f'<div style="font-family:Consolas,monospace;font-size:0.7rem;'
+                        f'color:var(--ink-dim, #b8ac92);margin-bottom:6px;'
+                        f'word-break:break-word;">{_esc(stats)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if equipped:
+                        c1, c2, c3 = st.columns(3)
+                        if is_ranged:
+                            labels = [("ОДИН", "одиночный выстрел", "single"),
+                                      ("ОЧЕР", "стрельба очередью", "burst"),
+                                      ("ПРИЦ", "прицельный выстрел", "aimed")]
+                        else:
+                            labels = [("АТАК", "обычная атака", "atk"),
+                                      ("ПАР", "парирование", "par"),
+                                      ("МОЩН", "мощная атака", "pow")]
+                        for col, (lbl, mode, sfx) in zip([c1, c2, c3], labels):
+                            with col:
+                                if st.button(lbl, key=f"w_{sfx}_{i}",
+                                             use_container_width=True,
+                                             help=f"{wname}: {mode}"):
+                                    _send_quick_action(
+                                        f'[АТАКА] {wname} — {mode}',
+                                        sheet, chat_history, localS)
+                                    st.rerun()
+                    else:
+                        st.caption("_Оружие убрано. Достань командой «Достаю X»._")
+                    if w.get("notes"):
+                        st.caption(f"_{w['notes']}_")
+
+        powers = sheet.get("psychic_powers", [])
+        if powers:
+            with st.expander(f" ПСИХОСИЛЫ ({len(powers)})", expanded=False, key="exp_psy"):
+                for i, p in enumerate(powers):
+                    pname = p if isinstance(p, str) else p.get("name", "?")
+                    st.markdown(
+                        f'<div style="font-family:Consolas,monospace;font-size:0.85rem;'
+                        f'color:var(--accent-bright, #e8d9b8);margin:12px 0 6px 0;'
+                        f'font-weight:700;letter-spacing:0.03em;">{_esc(pname)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    c1, c2, c3 = st.columns(3)
+                    modes = [("ТОЧН", "точечное применение", "pt"),
+                             ("ОБЛ", "по площади", "ar"),
+                             ("КОНЦ", "с концентрацией", "cc")]
+                    for col, (lbl, mode, sfx) in zip([c1, c2, c3], modes):
+                        with col:
+                            if st.button(lbl, key=f"p_{sfx}_{i}",
+                                         use_container_width=True,
+                                         help=f"{pname}: {mode}"):
+                                _send_quick_action(
+                                    f'[ПСИ] {pname} — {mode}',
+                                    sheet, chat_history, localS)
+                                st.rerun()
+
+        arm = _norm_armour(sheet.get("armour", {}))
+        if arm:
+            with st.expander(" БРОНЯ", expanded=False, key="exp_armour"):
+                zones = [("head", "Голова"), ("body", "Тело"),
+                         ("arms", "Руки"), ("legs", "Ноги")]
+                for z, zname in zones:
+                    zz = arm.get(z, {}) or {}
+                    v = int(zz.get("value", 0) or 0)
+                    eq = bool(zz.get("equipped", True))
+                    badge = "" if eq else ""
+                    col = "var(--accent-bright, #e8d9b8)" if eq else "var(--ink-dim, #8a8068)"
+                    extra = " · снято" if not eq else ""
+                    st.markdown(
+                        f'<div style="font-family:Consolas,monospace;font-size:0.84rem;'
+                        f'color:{col};padding:5px 0;border-bottom:1px dashed '
+                        f'color-mix(in srgb, var(--accent) 15%, transparent);">'
+                        f'{badge} {zname}: <b>{v}</b>{extra}</div>',
+                        unsafe_allow_html=True,
+                    )
+                if arm.get("notes"): st.caption(arm["notes"])
+
+    with tabs[1]:
+        st.markdown(f"###  {sheet.get('currency', 'Троны')}: **{sheet.get('money', 0)}**")
+        extra = sheet.get("extra_currencies", {})
+        if extra:
+            st.markdown("**Чужие валюты:**")
+            for cur, amt in extra.items(): st.write(f" {cur}: **{amt}**")
+        sr = sheet.get("special_resources", {})
+        if sr:
+            st.markdown("**Особые ресурсы:**")
+            for res, amt in sr.items(): st.write(f" {res}: **{amt}**")
+        equipment = sheet.get("equipment", [])
+        st.markdown(f"###  Снаряжение ({len(equipment)})")
+        if equipment:
+            for e in equipment: st.write(f" {e}")
+        else:
+            st.caption("— пусто —")
+        companions = sheet.get("companions", [])
+        if companions:
+            st.markdown("** Спутники:**")
+            for c in companions: st.write(f" {c}")
+
+    with tabs[2]:
+        loc = sheet.get("location", ""); date = sheet.get("game_date", "")
+        if loc: st.markdown(f" **Локация:** {loc}")
+        if date: st.markdown(f" **Время:** {date}")
+        quests = sheet.get("quests", [])
+        if quests:
+            st.markdown("** Задачи:**")
+            for q in quests: st.write(f" {q}")
+        npcs = sheet.get("npcs", [])
+        if npcs:
+            st.markdown("** NPC:**")
+            for n in npcs: st.write(f" {n}")
+        effects = sheet.get("effects", [])
+        if effects:
+            st.markdown("** Эффекты:**")
+            for e in effects: st.write(f" {e}")
+        goals = sheet.get("goals", [])
+        if goals:
+            st.markdown("** Цели:**")
+            for g in goals: st.write(f" {g}")
+        rep = sheet.get("reputation", {})
+        if rep:
+            st.markdown("** Репутация:**")
+            for k, v in rep.items():
+                if v != 0:
+                    sign = "+" if v > 0 else ""
+                    st.write(f" {k}: **{sign}{v}**")
+
+    with tabs[3]:
+        ship = sheet.get("ship")
+        if not ship:
+            st.info("У персонажа нет корабля.")
+        else:
+            st.markdown(f"###  {ship['name']}")
+            st.caption(f"{ship.get('class','')}  {ship.get('type','')}")
+            if ship.get("status"): st.write(f"**Статус:** {ship['status']}")
+            st.write(ship.get("description", ""))
+            hull = ship.get("hull", {}); crew = ship.get("crew", {})
+            c1, c2 = st.columns(2)
+            c1.metric("Корпус", f"{hull.get('current',0)}/{hull.get('max',0)}")
+            c2.metric("Экипаж", f"{crew.get('current',0)}/{crew.get('max',0)}")
+            if ship.get("weapons"):
+                st.markdown("**Оружие:**")
+                for w in ship["weapons"]: st.write(f" {w}")
+            if ship.get("features"):
+                st.markdown("**Особенности:**")
+                for f in ship["features"]: st.write(f" {f}")
+            if ship.get("notes"):
+                st.markdown("**Заметки:**"); st.write(ship["notes"])
+
+    with tabs[4]:
+        notes_key = f"notes_field_{sheet.get('name', 'unnamed')}"
+        if notes_key not in st.session_state:
+            st.session_state[notes_key] = sheet.get("notes", "")
+
+        def _save_notes():
+            st.session_state.character["notes"] = st.session_state[notes_key]
+            try:
+                cc.save_character(st.session_state.character)
+                _ls_save(localS, st.session_state.character,
+                         st.session_state.get("chat_history", []))
+            except Exception:
+                pass
+
+        st.markdown("** Заметки**")
+        st.text_area("Заметки", key=notes_key, height=200,
+                     label_visibility="collapsed",
+                     placeholder="Имена NPC, планы, зацепки...",
+                     on_change=_save_notes)
+        journal = sheet.get("journal", [])
+        if journal:
+            st.markdown("** Дневник**")
+            for entry in journal: st.write(f" {entry}")
+
+    st.write("---")
+    st.caption(f" Чанков: {(kb.chunk_count if kb else 0)} |  Ходов: {len(chat_history)}")
+
+    with st.expander(" Экспорт / Импорт"):
+        try:
+            payload = _download_save_payload(sheet, chat_history)
+            st.download_button(" Скачать сейв",
+                               data=payload,
+                               file_name=f"{sheet.get('name','unnamed')}_save.json",
+                               mime="application/json",
+                               use_container_width=True)
+        except Exception as e:
+            st.caption(f"Ошибка: {e}")
+        uploaded = st.file_uploader(" Загрузить сейв", type=["json"],
+                                     key="sidebar_upload",
+                                     label_visibility="collapsed")
+        if uploaded is not None:
+            try:
+                data = json.loads(uploaded.read().decode("utf-8"))
+                if data.get("format") != SAVE_FORMAT:
+                    st.error("Не наш формат.")
+                else:
+                    st.session_state.character = data["character"]
+                    _raw_chat = data.get("chat_history", [])
+                    cleaned_chat = []
+                    for m in _raw_chat:
+                        if isinstance(m, dict) and m.get("role") == "assistant":
+                            cleaned_text, _ = parse_state_block(m.get("content", ""))
+                            if cleaned_text and cleaned_text != "_…_":
+                                mc = dict(m)
+                                mc["content"] = cleaned_text
+                                cleaned_chat.append(mc)
+                        else:
+                            cleaned_chat.append(m)
+                    st.session_state.chat_history = cleaned_chat
+                    _ls_save(localS, data["character"], st.session_state.chat_history)
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Ошибка: {e}")
+
+    with st.expander(" Тема"):
+        render_theme_selector(localS, location="sidebar")
+
+    with st.expander(" Отладка"):
+        log_data = {
+            "character": sheet, "chat_history": chat_history,
+            "meta": {"model": model, "chunks_in_db": (kb.chunk_count if kb else 0),
+                     "vector_mode": kb.is_vector_mode,
+                     "exported_at": datetime.now().isoformat()},
+        }
+        st.download_button(" Скачать логи",
+                           data=json.dumps(log_data, ensure_ascii=False, indent=2),
+                           file_name=f"session_{sheet.get('name','unnamed')}.json",
+                           mime="application/json", use_container_width=True)
+        if st.button(" Последний запрос", use_container_width=True):
+            st.session_state.show_last_request = not st.session_state.get("show_last_request", False)
+        if st.session_state.get("show_last_request"):
+            st.code(st.session_state.get("last_request_to_giga", "—"), language="text")
+
+        if st.button(" Последний [STATE]", use_container_width=True):
+            st.session_state.show_last_state = not st.session_state.get("show_last_state", False)
+        if st.session_state.get("show_last_state"):
+            last_state = st.session_state.get("last_state_updates") or {}
+            if last_state:
+                st.json(last_state)
+            else:
+                st.caption("— пусто —")
+
+    st.write("---")
+    if st.button(" Заново", use_container_width=True, help="Начать историю заново"):
+        st.session_state.chat_history = []
+        cc.save_chat_history(sheet.get("name", "unnamed"), [])
+        _ls_save(localS, sheet, [])
+        st.rerun()
+    if st.button("Выйти в меню", use_container_width=True):
+        cc.save_chat_history(sheet.get("name", "unnamed"), chat_history)
+        _ls_save(localS, sheet, chat_history)
+        st.session_state.character = None
+        st.session_state.chat_history = []
+        st.session_state.show_last_request = False
+        st.rerun()
+
+
+def build_intro_message(sheet: dict) -> str:
+    return (
+        f"=== ПЕРСОНАЖ ИГРОКА ===\n"
+        f"{json.dumps(sheet, ensure_ascii=False, indent=2)}\n\n"
+        f"=== ЗАДАЧА ===\n"
+        f"Начни игру. Опиши первую сцену от второго лица.\n\n"
+        f"ЖЁСТКИЕ ТРЕБОВАНИЯ:\n"
+        f"1. Раса: {sheet.get('faction','?')}. Субфракция: {sheet.get('subfaction','?')}. "
+        f"Архетип: {sheet.get('archetype','?')}.\n"
+        f"2. Окружение ДОЛЖНО соответствовать расе.\n"
+        f"3. Длина: 3-5 предложений. Закончи на моменте для решения игрока.\n"
+        f"4. Не вводи NPC, чуждых расе персонажа.\n"
+        f"5. ОБЯЗАТЕЛЬНО укажи в [STATE] поля location= и date= для первой сцены."
+    )
+
+
+def render_chat(localS):
+    """Чат на новом ядре (Orchestrator). Визуал — из legacy."""
+    kb = get_kb()
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    with st.sidebar:
+        render_character_sidebar(st.session_state.character, kb, MODEL,
+                                 localS, st.session_state.chat_history)
+
+    # --- Автоочистка хвостовых user без пары ---
+    if st.session_state.chat_history:
+        _hh = st.session_state.chat_history
+        while _hh and _hh[-1].get("role") == "user":
+            _hh.pop()
+
+    render_status_bar()
+    render_location_bar(st.session_state.character)
+    st.title(" Сцена")
+
+    with st.expander("Свернуть лист персонажа", expanded=False):
+        render_character_inline(st.session_state.character, kb, localS,
+                                st.session_state.chat_history)
+
+    _pd = st.session_state.character or {}
+    _pname = _pd.get("name", "Игрок")
+    _pgen = {"male": "", "female": ""}.get(_pd.get("gender", "male"), "")
+    player_name = f"{_pname} {_pgen}".strip()
+
+    # ---- Первая сцена ----
+    if not st.session_state.chat_history:
+        orch = _get_orchestrator()
+        try:
+            state = _make_state(st.session_state.character)
+        except Exception as e:
+            st.error(f"Не удалось прочитать лист: {e}")
+            return
+        with st.spinner("Мастер ведёт сцену..."):
+            try:
+                result = orch.process_turn(
+                    "Начало приключения.", state, history=[]
+                )
+            except Exception as e:
+                # patch27: fallback
+                from datetime import datetime as _dt
+                try:
+                    _log_dir = Path(__file__).resolve().parent / "logs"
+                    _log_dir.mkdir(exist_ok=True)
+                    with open(_log_dir / "errors.log", "a", encoding="utf-8") as _f:
+                        import traceback as _tb
+                        _f.write(f"\n===== {_dt.now().isoformat()} =====\n")
+                        _f.write(f"input={user_input!r}\n")
+                        _f.write(_tb.format_exc() + "\n")
+                except Exception:
+                    pass
+                st.warning("[fallback-мастер] Что-то пошло не так. Попробуй переформулировать ход.")
+                with st.expander("Детали ошибки"):
+                    st.code(f"{type(e).__name__}: {e}", language="text")
+                return
+        st.session_state.character = state.to_dict()
+        st.session_state.chat_history.append({
+            "role": "assistant", "content": result.narrative, "rolls": [],
+        })
+        try:
+            cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
+                                 st.session_state.chat_history)
+            _ls_save(localS, st.session_state.character,
+                     st.session_state.chat_history)
+        except Exception:
+            pass
+
+    # ---- История ----
+    for msg in st.session_state.chat_history:
+        role = msg["role"]
+        content = msg.get("content", "")
+        with st.chat_message(role):
+            render_chat_name(role, player_name)
+            for r in _dedupe_rolls(msg.get("rolls", []) or []):
+                render_roll(r)
+            st.markdown(content)
+
+    user_input = st.chat_input("Что делаешь?")
+    auto_msg = st.session_state.pop("auto_user_message", None)
+    if auto_msg:
+        user_input = auto_msg
+    if not user_input:
+        return
+
+    st.session_state.chat_history.append({
+        "role": "user", "content": user_input, "rolls": [],
+    })
+    with st.chat_message("user"):
+        render_chat_name("user", player_name)
+        st.markdown(user_input)
+    try:
+        cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
+                             st.session_state.chat_history)
+        _ls_save(localS, st.session_state.character, st.session_state.chat_history)
+    except Exception:
+        pass
+
+    # ---- Собираем историю для мастера ----
+    turns = []
+    buf_user = None
+    for m in st.session_state.chat_history[:-1]:
+        if m["role"] == "user":
+            buf_user = m["content"]
+        elif m["role"] == "assistant" and buf_user is not None:
+            turns.append(CoreTurn(player=buf_user, master=m["content"]))
+            buf_user = None
+    # patch28: профиль персонажа из листа
+    _profile_parts = []
+    try:
+        _sd = st.session_state.character or {}
+        if _sd.get("name"):
+            _profile_parts.append(f"Имя персонажа: {_sd['name']}")
+        if _sd.get("gender"):
+            _gg = "мужской" if _sd["gender"] == "male" else "женский"
+            _profile_parts.append(f"Пол: {_gg}")
+        if _sd.get("age"):
+            _profile_parts.append(f"Возраст: {_sd['age']}")
+        if _sd.get("appearance"):
+            _profile_parts.append(f"Внешность: {_sd['appearance']}")
+        if _sd.get("background"):
+            _profile_parts.append(f"Предыстория: {_sd['background']}")
+        if _sd.get("archetype"):
+            _profile_parts.append(f"Архетип: {_sd['archetype']}")
+        if _sd.get("faction"):
+            _profile_parts.append(f"Фракция: {_sd['faction']}")
+    except Exception as _pe:
+        print(f"[profile] {_pe}")
+    if _profile_parts:
+        _profile_text = "\n".join(_profile_parts)
+    else:
+        _profile_text = ""
+
+    # patch27: RAG-контекст
+    _rag_ctx = ""
+    try:
+        if kb is not None:
+            _rag_ctx = (_profile_text + "\n\n" + (kb.format_context(user_input, top_k=3) or "")).strip()
+        else:
+            _rag_ctx = _profile_text
+    except Exception as _e:
+        print(f"[rag] {_e}")
+        _rag_ctx = _profile_text
+
+
+    orch = _get_orchestrator()
+    try:
+        state = _make_state(st.session_state.character)
+    except Exception as e:
+        st.error(f"Ошибка листа: {e}")
+        return
+
+    with st.chat_message("assistant"):
+        render_chat_name("assistant", player_name)
+        with st.spinner("Мастер ведёт сцену..."):
+            try:
+                result = orch.process_turn(user_input, state, history=turns, extra_context=_rag_ctx)
+                # --- Эффекты хода ---
+                try:
+                    _adapter = StateAdapter(st.session_state.character)
+                    _changes = apply_turn_effects_pro(_adapter, result)
+                    st.session_state.character = _adapter.to_dict()
+                    st.session_state._last_changes = _changes
+                    # Log
+                    try:
+                        _log_dir = Path(__file__).resolve().parent / "logs"
+                        _log_dir.mkdir(exist_ok=True)
+                        _log = _log_dir / "turn.log"
+                        with open(_log, "a", encoding="utf-8") as _f:
+                            from datetime import datetime as _dt
+                            _f.write(
+                                f"\n[{_dt.now().isoformat(timespec='seconds')}] "
+                                f"input={user_input!r} "
+                                f"action={getattr(result.command, 'action', '?')!r} "
+                                f"roll={result.roll.format_short() if result.roll else 'none'} "
+                                f"changes={_changes}\n"
+                            )
+                    except Exception:
+                        pass
+                except Exception as _eff_err:
+                    print(f"[effects] {_eff_err}")
+                    st.session_state._last_changes = []
+            except Exception as e:
+                tb = traceback.format_exc()
+                try:
+                    log_dir = Path(__file__).resolve().parent / "logs"
+                    log_dir.mkdir(exist_ok=True)
+                    with open(log_dir / "turn.log", "a", encoding="utf-8") as f:
+                        from datetime import datetime as _dt
+                        f.write(f"\n===== {_dt.now().isoformat()} =====\n")
+                        f.write(f"input: {user_input!r}\n")
+                        f.write(tb + "\n")
+                except Exception:
+                    pass
+                if (st.session_state.chat_history
+                        and st.session_state.chat_history[-1].get("role") == "user"):
+                    st.session_state.chat_history.pop()
+                try:
+                    cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
+                                         st.session_state.chat_history)
+                    _ls_save(localS, st.session_state.character,
+                             st.session_state.chat_history)
+                except Exception:
+                    pass
+                st.error(f"\u041e\u0448\u0438\u0431\u043a\u0430 \u0445\u043e\u0434\u0430: {type(e).__name__}: {e}")
+                with st.expander("Traceback \u2014 \u0441\u043a\u043e\u043f\u0438\u0440\u0443\u0439 \u0438 \u043f\u0440\u0438\u0448\u043b\u0438"):
+                    st.code(tb, language="text")
+                if st.button("\u041f\u043e\u0432\u0442\u043e\u0440\u0438\u0442\u044c \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u0445\u043e\u0434"):
+                    st.session_state.auto_user_message = user_input
+                    st.rerun()
+                return
+
+        st.session_state.character = state.to_dict()
+
+        rolls_to_render = []
+        if result.roll is not None:
+            r = result.roll.to_dict()
+            if "difficulty" not in r:
+                r["difficulty"] = r.get("target", 0)
+            rolls_to_render.append(r)
+        for r in _dedupe_rolls(rolls_to_render):
+            render_roll(r)
+        # patch27: карточки предметов
+        try:
+            import re as _re_i
+            _take = _re_i.search(
+                r"(беру|взять|забираю|подбираю|кладу)\s+([^.,;\n!?]{2,50})",
+                (user_input or "").lower()
+            )
+            if _take:
+                _item = _take.group(2).strip()
+                if _item and len(_item) > 1:
+                    st.markdown(
+                        '<div style="display:flex;gap:14px;align-items:center;'
+                        'padding:12px 18px;margin:8px 0;'
+                        'background:linear-gradient(135deg,'
+                        ' color-mix(in srgb, var(--accent) 22%, transparent),'
+                        ' rgba(0,0,0,0.4));'
+                        'border:1px solid var(--accent);'
+                        'border-left:4px solid var(--accent-bright);'
+                        'box-shadow:0 0 22px var(--accent-glow);">'
+                        '<div style="font-size:1.6rem;color:var(--accent-bright);"></div>'
+                        '<div>'
+                        '<div style="font-family:Consolas,monospace;font-size:.7rem;'
+                        'letter-spacing:.22em;color:var(--accent);">'
+                        '\u041f\u041e\u041b\u0423\u0427\u0415\u041d\u041e \u0412 \u0418\u041d\u0412\u0415\u041d\u0422\u0410\u0420\u042c</div>'
+                        f'<div style="font-family:var(--font-head);font-size:1.05rem;'
+                        f'color:var(--accent-bright);font-weight:700;">{_item}</div>'
+                        '</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+        except Exception as _ie:
+            print(f"[item] {_ie}")
+
+        # patch30: показ action
+        try:
+            if result.command is not None and result.command.action != "other":
+                _a = result.command.action
+                _t = result.command.target or ""
+                _s = result.command.skill or ""
+                _parts = [p for p in (_a, _t, _s) if p]
+                if _parts:
+                    st.markdown(
+                        '<div style="font-family:Consolas,monospace;font-size:.72rem;'
+                        'letter-spacing:.15em;color:var(--accent-dim, #8a7444);'
+                        'margin:6px 0 -4px;text-transform:uppercase;">'
+                        '' + " \u00b7 ".join(_parts) + '</div>',
+                        unsafe_allow_html=True,
+                    )
+        except Exception:
+            pass
+
+        st.markdown(result.narrative)
+
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": result.narrative,
+            "rolls": rolls_to_render,
+        })
+        try:
+            cc.save_chat_history(st.session_state.character.get("name", "unnamed"),
+                                 st.session_state.chat_history)
+            _ls_save(localS, st.session_state.character,
+                     st.session_state.chat_history)
+        except Exception:
+            pass
+
+    st.rerun()
+def render_onboarding():
+    """Мини-обучение: НРИ, WH40K, как играть, шутка про справку."""
+    st.markdown(
+        '<div style="text-align:center;margin:30px auto 20px;max-width:900px;">'
+        '<div style="font-family:var(--font-head, serif);font-size:2rem;'
+        'font-weight:700;color:var(--accent-bright, #e8d9b8);'
+        'letter-spacing:.18em;text-shadow:0 0 24px var(--accent-glow, rgba(201,169,97,.35));">'
+        '&#9876; ДОБРО ПОЖАЛОВАТЬ</div>'
+        '<div style="margin-top:8px;font-family:Consolas,monospace;'
+        'font-size:.85rem;letter-spacing:.3em;color:var(--ink-dim, #b8ac92);'
+        'text-transform:uppercase;">Краткое пособие для новичка</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Что такое НРИ?", expanded=True):
+        st.markdown("""
+**НРИ** (настольная ролевая игра) — это когда несколько человек садятся за стол,
+один ведёт историю (**Мастер**), остальные играют за своих **персонажей**.
+
+Мастер описывает мир, ситуации, NPC. Игроки говорят, что делает их персонаж.
+Кубики решают, получилось ли задуманное. Получается история, которую никто
+не планировал заранее — она рождается прямо за столом.
+
+Здесь Мастер — не человек. Его играет **искусственный интеллект**. Ты пишешь
+свободным текстом, он отвечает сценой. Это работает очень похоже на живого
+Мастера, только круглосуточно и без перерывов на чай.
+        """)
+
+    with st.expander("Что такое Warhammer 40,000?", expanded=True):
+        st.markdown("""
+**Warhammer 40,000** — мрачная вселенная далёкого будущего. Сорок первое
+тысячелетие. Человечество давно вышло в космос, но превратилось в огромную
+теократическую империю, раздираемую войнами со всех сторон.
+
+В этой вселенной есть:
+
+- **Империум Человечества** — бескрайняя бюрократическая машина, поклоняющаяся Императору;
+- **Космодесантники** — генетически улучшенные воины в силовой броне;
+- **Инквизиция** — те, кто жжёт ересь огнём и мечом;
+- **Хаос** — боги и демоны Варпа, искушающие смертных;
+- **Эльдары, Друкари, Орки, Некроны, Тау, Тираниды** — десятки ксеносов, каждый со своими планами;
+- **Механикус** — техножрецы Марса, верящие, что машина — это бог.
+
+Это мир **grimdark**: не чёрно-белый, а тёмно-серый с редкими проблесками.
+Здесь нет «хороших парней». Есть выжившие, продажные, фанатичные — и иногда,
+очень редко, те, кто всё ещё старается быть человеком.
+
+Если ты раньше не слышал про Warhammer — не страшно. Мастер расскажет.
+Если слышал — тебе повезло, впереди много пасхалок.
+        """)
+
+    with st.expander("Как играть (главное)", expanded=True):
+        st.markdown("""
+**1. Персонаж.** Слева — лист персонажа. Раны, Судьба, характеристики,
+инвентарь. Клик по характеристике (например, «РУК — 30») — бросок проверки.
+
+**2. Ход.** Пишешь в чат, что делает персонаж. Свободным текстом. Мастер ведёт
+сцену. Никаких команд, никаких «/attack» — только живая речь.
+
+**3. Проверка.** Мастер сам скажет, когда нужен бросок («Брось проверку
+Внимания»). Тогда жми нужную кнопку в сайдбаре.
+
+**4. Итог броска.** Появляется карточка: успех/провал, маржа, крит.
+Мастер описывает результат согласно броску. Провал — это не «ничего»,
+это тоже сюжет.
+
+**5. Быстрые действия.** Меню `Действия`  Очко Судьбы, Аптечка, Граната,
+Стимулянт. Это инструменты на крайний случай.
+
+**6. Сохранение.** Автоматически, привязано к твоему аккаунту.
+        """)
+
+    with st.expander("Если что-то непонятно", expanded=False):
+        st.markdown("""
+Если вдруг что-то не ясно — вызови кнопку **«Справка»**.
+
+...когда она появится. Пока её нет, так что — либо гугли, либо:
+
+- разуй глаза;
+- возьми печеньку;
+- будь умницей.
+
+Интерфейс интуитивно понятный. Мне так **на альфа-тесте сказали**, а я верю людям.
+
+А если серьёзно — тут всё просто. Пиши в чат, что делает твой персонаж.
+Хочешь уточнить что-то у Мастера прямо в тексте — просто спроси. Он ответит.
+        """)
+
+    st.markdown("---")
+    col1, col2, col3 = st.columns([2, 1, 2])
+    with col2:
+        if st.button("Понятно, начать", type="primary", use_container_width=True):
+            st.session_state.onboarding_shown = True
+            st.rerun()
+
+def _render_auth_gate():
+    """Экран входа/регистрации."""
+    st.markdown(
+        '<div class="hero-panel" style="margin-top:40px;">'
+        '<div class="hero-title"> WARHAMMER 40,000</div>'
+        '<div class="hero-sub">'
+        '<span class="line"></span>'
+        '<span>RPG \u00b7 ' + APP_VERSION + '</span>'
+        '<span class="line"></span>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    mode = st.session_state.get("auth_mode", "login")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Вход", use_container_width=True,
+                     type="primary" if mode == "login" else "secondary"):
+            st.session_state.auth_mode = "login"
+            st.rerun()
+    with col2:
+        if st.button("Регистрация", use_container_width=True,
+                     type="primary" if mode == "register" else "secondary"):
+            st.session_state.auth_mode = "register"
+            st.rerun()
+
+    st.markdown("---")
+
+    with st.form(key="auth_form", clear_on_submit=False):
+        st.markdown("**" + ("Вход в аккаунт" if mode == "login" else "Новый аккаунт") + "**")
+        login = st.text_input("Логин", max_chars=24, key="auth_login_input")
+        password = st.text_input("Пароль", type="password", key="auth_pwd_input")
+        password2 = None
+        if mode == "register":
+            password2 = st.text_input("Повтор пароля", type="password", key="auth_pwd2_input")
+        submitted = st.form_submit_button(
+            "Войти" if mode == "login" else "Создать",
+            type="primary", use_container_width=True,
+        )
+
+    if submitted:
+        try:
+            if mode == "register":
+                if password != password2:
+                    st.error("Пароли не совпадают")
+                else:
+                    register_user(login, password)
+                    _login_success(login)
+                    st.rerun()
+            else:
+                if verify_user(login, password):
+                    _login_success(login)
+                    st.rerun()
+                else:
+                    st.error("Неверный логин или пароль")
+        except AuthError as e:
+            st.error(str(e))
+        except Exception as e:
+            st.error(f"Ошибка: {e}")
+
+    if mode == "login":
+        accounts = list_accounts()
+        st.markdown(
+            '<div style="font-family:Consolas,monospace;font-size:.78rem;'
+            'color:var(--accent-dim, #8a7444);'
+            'margin:14px 0 4px;">'
+            'СУЩЕСТВУЮЩИЕ АККАУНТЫ:</div>'
+            '<div style="font-family:Consolas,monospace;font-size:.9rem;'
+            'color:var(--ink, #ede4d3);">'
+            + (", ".join(accounts) if accounts else "пока никого — создай первый")
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _login_success(login):
+    try:
+        import streamlit as _st_ls
+        if hasattr(_st_ls, 'session_state'):
+            _st_ls.session_state['_ls_saved_user'] = login
+    except Exception:
+        pass
+    """Сохраняет сессию и переключает каталоги."""
+    st.session_state.current_user = login
+    st.session_state.splash_done = False
+    st.session_state.onboarding_shown = False
+    st.session_state.character = None
+    st.session_state.chat_history = []
+    try:
+        udir = user_dir_for(login)
+        st.session_state.user_dir = str(udir)
+    except Exception as e:
+        print(f"[auth] {e}")
+
+
+def _logout():
+    """Выход: чистит сессию и кеш."""
+    try:
+        _get_orchestrator.clear()
+    except Exception:
+        pass
+    st.session_state.current_user = None
+    st.session_state.splash_done = False
+    st.session_state.onboarding_shown = False
+    st.session_state.character = None
+    st.session_state.chat_history = []
+    st.rerun()
+
+
+def main():
+    # patch28: однократный сброс темы на inquisition
+    if st.session_state.get("_theme_force_v") != "28":
+        st.session_state.theme = "inquisition"
+        st.session_state["_theme_force_v"] = "28"
+        try:
+            _ls_save_theme(localS, "inquisition")
+        except Exception:
+            pass
+    # Единая тема для всех экранов (auth, splash, игра)
+    if "theme" not in st.session_state:
+        st.session_state.theme = DEFAULT_THEME
+    try:
+        inject_custom_css(st.session_state.theme)
+    except Exception as _theme_err:
+        print(f"[theme] {_theme_err}")
+    if "auth_mode" not in st.session_state:
+        st.session_state.auth_mode = "login"
+    if "current_user" not in st.session_state:
+        st.session_state.current_user = None
+    if "splash_done" not in st.session_state:
+        st.session_state.splash_done = False
+    if "onboarding_shown" not in st.session_state:
+        st.session_state.onboarding_shown = False
+
+    if st.session_state.current_user is None:
+        _last = st.session_state.get("_ls_saved_user")
+        if _last:
+            st.session_state.current_user = _last
+        else:
+            _render_auth_gate()
+            return
+
+    if not st.session_state.splash_done:
+        render_splash()
+        return
+
+    if not st.session_state.onboarding_shown:
+        render_onboarding()
+        return
+    localS = LocalStorage() if HAS_LS else None
+
+
+
+    if "character" not in st.session_state: st.session_state.character = None
+    if "in_wizard" not in st.session_state: st.session_state.in_wizard = False
+    if "chat_history" not in st.session_state: st.session_state.chat_history = []
+    if "show_last_request" not in st.session_state: st.session_state.show_last_request = False
+
+    if localS and not st.session_state.get("ls_restore_done") and not st.session_state.character:
+        attempts = st.session_state.get("ls_attempts", 0)
+        if attempts < 4:
+            loaded = _ls_load(localS)
+            if loaded and loaded.get("character"):
+                char = loaded["character"]
+                chat = loaded.get("chat_history", [])
+                if not chat:
+                    try:
+                        file_chat = cc.load_chat_history(char.get("name", ""))
+                        if file_chat:
+                            chat = file_chat
+                    except Exception:
+                        pass
+                st.session_state.character = _ensure_gender(char)
+                # Чистка старой истории: выкидываем STATE-мусор из сообщений
+                cleaned_chat = []
+                for m in chat:
+                    if isinstance(m, dict) and m.get("role") == "assistant":
+                        cleaned_text, _ = parse_state_block(m.get("content", ""))
+                        if cleaned_text and cleaned_text != "_…_":
+                            mc = dict(m)
+                            mc["content"] = cleaned_text
+                            cleaned_chat.append(mc)
+                    else:
+                        cleaned_chat.append(m)
+                st.session_state.chat_history = cleaned_chat
+                st.session_state.ls_restore_done = True
+            else:
+                st.session_state.ls_attempts = attempts + 1
+                st.rerun()
+        else:
+            st.session_state.ls_restore_done = True
+
+    if st.session_state.character:
+        render_chat(localS)
+    elif st.session_state.in_wizard:
+        render_wizard(localS)
+    else:
+        render_start_screen(localS)
+
+
+if __name__ == "__main__":
+    main()
