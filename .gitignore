@@ -1,24 +1,38 @@
-# === СЕКРЕТЫ (НЕ ПОПАДУТ В GITHUB) ===
-.streamlit/secrets.toml
-API ключ.txt
-*.key
-
-# === БАЗА ДАННЫХ (СЛИШКОМ БОЛЬШАЯ) ===
-chroma_db/
-data_backup/
-
-# === ЛОКАЛЬНЫЕ ПЕРСОНАЖИ (не нужны в репо) ===
-characters/
-
-# === ВРЕМЕННЫЕ ФАЙЛЫ ===
+# Python
 __pycache__/
 *.py[cod]
-*.log
-tests/results_*.json
-tests/report_*.txt
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
 
-# === СИСТЕМНОЕ ===
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/��ਭ�/ 
+# Бэкапы
+*.bak
+*.bak[0-9]
+*.bak[0-9][0-9]
+
+# Секреты — НИКОГДА не коммитить
+.streamlit/secrets.toml
+secrets.toml
+*ключ*.txt
+*secret*.txt
+*key*.txt
+*.env
+.env
+
+# Локальные данные
+logs/
+*.log
+venv/
+.venv/
+
+# Тяжёлые бинарники / пересобираемое
+chroma_db/
+data/
+legacy/
+docs/screenshots/
+
+# Старые отчёты тестов (не нужны в репо)
+tests/report_*.txt
+tests/results_*.json
