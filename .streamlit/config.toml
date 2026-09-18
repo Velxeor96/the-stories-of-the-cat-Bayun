@@ -1,5 +1,5 @@
 [server]
-fileWatcherType = "none"
+fileWatcherType = "auto"
 
 [browser]
 gatherUsageStats = false
@@ -11,12 +11,6 @@ backgroundColor = "#0e0e10"
 secondaryBackgroundColor = "#1a1a1d"
 textColor = "#e8e0d0"
 font = "sans serif"
-
-[server]
-fileWatcherType = "auto"
-
-[browser]
-gatherUsageStats = false
 
 [client]
 toolbarMode = "minimal"

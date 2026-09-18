@@ -1,0 +1,63 @@
+{
+  "system": "wh40k_rogue_trader",
+  "version": 1,
+  "triggers": [
+    {
+      "id": "corruption_from_psychic",
+      "event": "psychic_power_used",
+      "description": "Любое использование пси-силы оставляет след в Имматериуме",
+      "conditions": [
+        {"path": "psy_rating", "op": ">=", "value": 1}
+      ],
+      "effects": [
+        {"op": "add", "path": "corruption", "value": 1}
+      ],
+      "message": "Применение пси-силы отзывается тонким эхом в варпе. +1 Порча."
+    },
+    {
+      "id": "corruption_from_warp_dust",
+      "event": "warp_dust_used",
+      "description": "Варп-пыль — быстрый путь к силе, но и к порче",
+      "conditions": [],
+      "effects": [
+        {"op": "add", "path": "corruption", "value": "1d5"}
+      ],
+      "message": "Варп-пыль вспыхивает в крови, оставляя тёмный след."
+    },
+    {
+      "id": "psychic_phenomenon_on_crit_fail",
+      "event": "critical_fail_psychic",
+      "description": "Критический провал на пси-проверке вызывает Психический Феномен",
+      "conditions": [],
+      "effects": [
+        {"op": "add", "path": "corruption", "value": "1d10"},
+        {"op": "add", "path": "insanity", "value": "1d5"}
+      ],
+      "message": "Психический Феномен: реальность искажается вокруг тебя."
+    },
+    {
+      "id": "death_on_zero_wounds",
+      "event": "wounds_dropped_to_zero",
+      "description": "Персонаж достиг 0 ран — смерть",
+      "conditions": [
+        {"path": "wounds.current", "op": "<=", "value": 0}
+      ],
+      "effects": [],
+      "message": "Твои раны смертельны. Тьма смыкается.",
+      "fatal": true
+    },
+    {
+      "id": "fate_burn_survive",
+      "event": "burn_fate_to_survive",
+      "description": "Сжёг Очко Судьбы, чтобы выжить при смертельном уроне",
+      "conditions": [
+        {"path": "fate_points.current", "op": ">=", "value": 1}
+      ],
+      "effects": [
+        {"op": "sub", "path": "fate_points.current", "value": 1},
+        {"op": "set", "path": "wounds.current", "value": 1}
+      ],
+      "message": "Ты сжигаешь Очко Судьбы и выходишь из-за грани. Остаёшься на 1 ране."
+    }
+  ]
+}
