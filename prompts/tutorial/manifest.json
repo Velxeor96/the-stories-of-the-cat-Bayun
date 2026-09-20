@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "module_id": "potent_tutorial",
+  "title": "Потент: обучение Вольного Торговца",
+  "characters": {
+    "magnus": {
+      "id": "magnus",
+      "name": "Магнус фон Вальд",
+      "gender": "male",
+      "background": "Потомок древней династии, обученный командовать с детства.",
+      "characteristics": {
+        "WS": 30,
+        "BS": 30,
+        "S": 35,
+        "T": 40,
+        "Ag": 30,
+        "Int": 40,
+        "Per": 35,
+        "WP": 45,
+        "Fel": 30
+      },
+      "skills": {
+        "Intimidate": {
+          "type": "basic",
+          "linked": "S",
+          "trained": false
+        },
+        "Command": {
+          "type": "basic",
+          "linked": "Fel",
+          "trained": false,
+          "talent_bonus": 10
+        },
+        "Melee": {
+          "type": "basic",
+          "linked": "S",
+          "trained": false
+        },
+        "Awareness": {
+          "type": "basic",
+          "linked": "Per",
+          "trained": false
+        },
+        "Dodge": {
+          "type": "basic",
+          "linked": "Ag",
+          "trained": false
+        },
+        "Charm": {
+          "type": "basic",
+          "linked": "Fel",
+          "trained": false
+        }
+      },
+      "wounds": 12,
+      "fate_points": 3,
+      "weapon_melee": {
+        "name": "Рукоять болт-пистолета",
+        "damage_bonus": "S",
+        "damage_dice": "1d5",
+        "primitive": true
+      },
+      "weapon_ranged": {
+        "name": "Болт-пистолет",
+        "damage": "1d10+4",
+        "penetration": 4,
+        "range": 30
+      },
+      "armour": 3
+    },
+    "selena": {
+      "id": "selena",
+      "name": "Селена Корвус",
+      "gender": "female",
+      "background": "Наследница торговой династии, выросшая среди сделок.",
+      "characteristics": {
+        "WS": 25,
+        "BS": 35,
+        "S": 25,
+        "T": 35,
+        "Ag": 35,
+        "Int": 45,
+        "Per": 40,
+        "WP": 40,
+        "Fel": 35
+      },
+      "skills": {
+        "Charm": {
+          "type": "basic",
+          "linked": "Fel",
+          "trained": false
+        },
+        "Awareness": {
+          "type": "advanced",
+          "linked": "Per",
+          "trained": true
+        },
+        "Commerce": {
+          "type": "advanced",
+          "linked": "Int",
+          "trained": true,
+          "talent_bonus": 10
+        },
+        "Dodge": {
+          "type": "basic",
+          "linked": "Ag",
+          "trained": false
+        },
+        "Intimidate": {
+          "type": "basic",
+          "linked": "S",
+          "trained": false
+        },
+        "Command": {
+          "type": "basic",
+          "linked": "Fel",
+          "trained": false
+        }
+      },
+      "wounds": 10,
+      "fate_points": 2,
+      "weapon_melee": {
+        "name": "Рукоять лаз-пистолета",
+        "damage_bonus": "S",
+        "damage_dice": "1d5",
+        "primitive": true
+      },
+      "weapon_ranged": {
+        "name": "Лаз-пистолет",
+        "damage": "1d10+2",
+        "penetration": 0,
+        "range": 30
+      },
+      "armour": 2
+    }
+  },
+  "scenes": [
+    {
+      "id": "scene_1_awakening",
+      "turn_min": 10,
+      "turn_max": 15,
+      "prompt_file": "scene_1_awakening.txt"
+    },
+    {
+      "id": "scene_2_mutiny",
+      "turn_min": 10,
+      "turn_max": 15,
+      "prompt_file": "scene_2_mutiny.txt"
+    },
+    {
+      "id": "scene_3_navigator",
+      "turn_min": 10,
+      "turn_max": 15,
+      "prompt_file": "scene_3_navigator.txt"
+    },
+    {
+      "id": "scene_4_warp",
+      "turn_min": 10,
+      "turn_max": 15,
+      "prompt_file": "scene_4_warp.txt"
+    },
+    {
+      "id": "scene_5_space_battle",
+      "turn_min": 15,
+      "turn_max": 20,
+      "prompt_file": "scene_5_space_battle.txt"
+    },
+    {
+      "id": "scene_6_final",
+      "turn_min": 5,
+      "turn_max": 10,
+      "prompt_file": "scene_6_final.txt"
+    }
+  ],
+  "difficulty_modifiers": {
+    "Trivial": 60,
+    "Easy": 30,
+    "Routine": 20,
+    "Ordinary": 10,
+    "Challenging": 0,
+    "Difficult": -10,
+    "Hard": -20,
+    "Very Hard": -30,
+    "Hellish": -60
+  }
+}

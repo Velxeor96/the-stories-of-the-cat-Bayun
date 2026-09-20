@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Бэкапы
+*.bak
+*.bak[0-9]
+*.bak[0-9][0-9]
+
+# Секреты — НИКОГДА не коммитить
+.streamlit/secrets.toml
+secrets.toml
+*ключ*.txt
+*secret*.txt
+*key*.txt
+*.env
+.env
+
+# Локальные данные
+logs/
+*.log
+venv/
+.venv/
+
+# Тяжёлые бинарники / пересобираемое
+chroma_db/
+data/
+legacy/
+docs/screenshots/
+
+# Старые отчёты тестов (не нужны в репо)
+tests/report_*.txt
+tests/results_*.json
+
+# Added by PATCH_9_FINAL_V1
+data/accounts/
+data/users/
+*.bak_pre_*
+_reference_from_old/
+*.pyc

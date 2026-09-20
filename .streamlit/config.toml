@@ -1,0 +1,17 @@
+[server]
+fileWatcherType = "poll"
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#8b1a1a"
+backgroundColor = "#0e0e10"
+secondaryBackgroundColor = "#1a1a1d"
+textColor = "#e8e0d0"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = true

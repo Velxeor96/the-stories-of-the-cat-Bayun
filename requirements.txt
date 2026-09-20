@@ -1,0 +1,9 @@
+streamlit
+gigachat==0.2.1
+chromadb
+curl_cffi
+beautifulsoup4
+streamlit-local-storage
+openai
+pytest
+pytest-watch

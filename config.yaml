@@ -1,0 +1,68 @@
+# config.yaml — реестр провайдеров и ролей для проекта Warhammer 40K RPG
+
+# ============================================================
+# ПРОВАЙДЕРЫ (где брать модели)
+# ============================================================
+providers:
+  gigachat:
+    name: "GigaChat (Sber)"
+    base_url: "https://gigachat.devices.sberbank.ru/api/v1"
+    api_key_env: "GIGACHAT_API_KEY"
+
+  # Старый KodikRouter. Ключ отозван 20.09.2026.
+  # Оставлен как справка — для возврата нужно просто перевыпустить KODIK_API_KEY
+  # и переключить роли обратно на deepseek_flash.
+  kodik:
+    name: "KodikRouter"
+    base_url: "https://api.kodikrouter.ru/v1"
+    api_key_env: "KODIK_API_KEY"
+
+# ============================================================
+# МОДЕЛИ
+# ============================================================
+models:
+  # --- GigaChat-2-Pro: целевая модель проекта ---
+  gigachat_pro:
+    id: "GigaChat-2-Pro"
+    provider: "gigachat"
+    context: 131072
+    description: "Сбер GigaChat-2-Pro. Аналитик, Мастер, Модератор, Лор."
+
+  # --- Резерв: DeepSeek Flash через KodikRouter (ключ отозван) ---
+  deepseek_flash:
+    id: "~deepseek/deepseek-v4-flash-latest"
+    provider: "kodik"
+    context: 1310720
+    description: "Резерв. Был быстрым и дешёвым, ключ отозван 20.09.2026."
+
+  aion_mini:
+    id: "aionlabs/aion-3.0-mini"
+    provider: "kodik"
+    context: 131072
+    description: "Резерв. Заточена под ролевые игры."
+
+# ============================================================
+# РОЛИ (какая модель за что отвечает)
+# ============================================================
+roles:
+  analyst:   "gigachat_pro"   # Разбор команд игрока в JSON
+  master:    "gigachat_pro"   # Художественный текст, сцены
+  moderator: "gigachat_pro"   # Проверка контента
+  lore:      "gigachat_pro"   # Ответы на лор-вопросы (RAG)
+
+# ============================================================
+# ПАРАМЕТРЫ ГЕНЕРАЦИИ ПО УМОЛЧАНИЮ
+# ============================================================
+defaults:
+  temperature: 0.7
+  max_tokens: 2000
+  timeout: 60          # секунд
+  default_provider: "gigachat"   # метка для будущих откатов одной строкой
+
+# ============================================================
+# РЕТРАИ (для core/llm_client.py)
+# ============================================================
+retries:
+  max_retries: 3
+  base_delay: 1.0   # секунды
+  max_delay: 30.0   # секунды
