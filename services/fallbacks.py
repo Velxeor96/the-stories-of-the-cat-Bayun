@@ -150,3 +150,45 @@ REPUTATION_FACTIONS = [
     "Империум", "Механикус", "Инквизиция", "Эльдары", "Друкари",
     "Орки", "Тау", "Некроны", "Хаос", "Тираниды",
 ]
+
+# === PATCH_13_FACTION_FIX: дополнить отсутствующие субфракции ===
+def _ensure_subfaction_names():
+    global SUBFACTION_NAMES
+    defaults = {
+        # imperium
+        "rogue_trader": "Вольный Торговец",
+        "space_marine": "Космодесантник",
+        "imperial_guard": "Имперская Гвардия",
+        "mechanicus": "Механикус",
+        "sororitas": "Сестра Битвы",
+        "arbites": "Арбитр",
+        # chaos
+        "chaos_marine": "Космодесантник Хаоса",
+        "dark_mechanicum": "Тёмный Механикум",
+        "cultist": "Культист",
+        # eldar
+        "asuryani": "Асуряни",
+        "harlequin": "Арлекин",
+        "exodite": "Экзодит",
+        # drukhari
+        "drukhari": "Друкхари",
+        # orks
+        "freebooter": "Фрибутер",
+        # tau
+        "tau": "Тау",
+        # necrons
+        "necron": "Некрон",
+        # genestealers
+        "genestealer": "Генокрад",
+    }
+    for k, v in defaults.items():
+        if k not in SUBFACTION_NAMES:
+            SUBFACTION_NAMES[k] = v
+
+
+_ensure_subfaction_names()
+try:
+    del _ensure_subfaction_names
+except NameError:
+    pass
+

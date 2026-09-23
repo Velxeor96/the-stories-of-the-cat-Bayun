@@ -130,5 +130,5 @@ def render() -> None:
                     set_setting(login, "kot_intro_seen", True)
                 except Exception as e:
                     print(f"[kot_intro] set_setting: {e}")
-            st.session_state.screen = "tutorial_prompt"
+            st.session_state.screen = "loading"
             st.rerun()

@@ -1,14 +1,11 @@
-"""ui/screens/wizard.py — создание персонажа."""
-import random
+# PATCH_13_FACTION_FIX_V1
+
+'''ui/screens/wizard.py — создание персонажа (FACTION-FIX V1).'''
+from __future__ import annotations
 
 import streamlit as st
 
-from persistence.characters import (
-    CharacterError,
-    list_characters,
-    load_character,
-    save_character,
-)
+from persistence.characters import CharacterError, save_character
 from services.character_creation import build_character, roll_characteristics
 from services.fallbacks import (
     CHARACTERISTIC_KEYS,
@@ -18,85 +15,136 @@ from services.fallbacks import (
 )
 
 
+FACTION_LORE = {
+    "imperium": "Ветераны и бюрократы, сражающиеся за Императора. Власть, вера, сталь.",
+    "chaos": "Проклятые и одержимые. Сила через Варп, цена — душа.",
+    "eldar": "Древняя раса с погибающего крафт-мира. Ловкость, чутьё, пророчества.",
+    "drukhari": "Тёмные родичи эльдар. Боль как искусство, тень как дом.",
+    "orks": "Зелёная орда. Просто. Громко. Весело.",
+    "tau": "Молодая империя Высшего Блага. Дальний бой, дроны, каста.",
+    "necrons": "Пробудившиеся машины древней династии. Нет боли. Нет страха. Нет пощады.",
+    "genestealers": "Скрытая угроза. Культ, что растёт изнутри. Ты — уже не ты.",
+}
+
+
 def _goto(screen: str) -> None:
     st.session_state.screen = screen
-    st.rerun()
 
 
-def _logout() -> None:
-    for k in ("user_login", "wizard_data", "active_character"):
-        st.session_state.pop(k, None)
-    _goto("splash")
+def _reset_subfaction_key() -> None:
+    '''Старое значение субфракции больше не актуально.'''
+    for k in list(st.session_state.keys()):
+        if k == "wz_subfaction" or k.startswith("wz_subfaction_"):
+            st.session_state.pop(k, None)
 
 
-def _existing_block(login: str) -> None:
-    chars = list_characters(login)
-    if not chars:
+def render() -> None:
+    login = st.session_state.get("user_login")
+    if not login:
+        st.warning("Сначала войди.")
+        if st.button("← На главную"):
+            _goto("splash")
+            st.rerun()
         return
 
-    with st.expander(f"У меня уже есть персонажи ({len(chars)})", expanded=False):
-        for name in chars:
-            c1, c2 = st.columns([3, 1])
-            with c1:
-                st.markdown(f"**{name}**")
-            with c2:
-                if st.button("Играть", key=f"pick_{name}", use_container_width=True):
-                    st.session_state.active_character = name
-                    _goto("game")
+    st.markdown(
+        "<h1 style='font-family:Georgia,serif;text-align:center;'>"
+        "🧬 Создание персонажа</h1>"
+        "<div style='text-align:center; color:#a0a0a0; font-style:italic; "
+        "margin-bottom:22px;'>Игрок: " + login + "</div>",
+        unsafe_allow_html=True,
+    )
 
+    # --- Существующие персонажи ---
+    from persistence.characters import list_characters
+    try:
+        existing = list_characters(login)
+    except Exception:
+        existing = []
+    if existing:
+        with st.expander(f"У меня уже есть персонажи ({len(existing)})",
+                         expanded=False):
+            for name in existing:
+                c1, c2 = st.columns([4, 1])
+                with c1:
+                    st.markdown(f"**{name}**")
+                with c2:
+                    if st.button("Играть", key=f"play_{name}",
+                                 use_container_width=True):
+                        st.session_state.active_character = name
+                        _goto("game")
+                        st.rerun()
 
-def _form_block(login: str) -> None:
-    with st.form("wizard_form"):
-        st.markdown("#### 1. Общее")
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            name = st.text_input("Имя персонажа", key="wz_name")
-        with c2:
-            gender = st.selectbox(
-                "Пол", options=["male", "female"],
-                format_func=lambda x: {"male": "Мужской", "female": "Женский"}[x],
-                key="wz_gender",
-            )
-
-        c1, c2 = st.columns(2)
-        with c1:
-            age = st.text_input("Возраст", value="30", key="wz_age")
-        with c2:
-            appearance = st.text_input("Внешность (кратко)", key="wz_appearance")
-
-        user_background = st.text_area(
-            "Краткая предыстория (необязательно)",
-            key="wz_background", height=80,
+    # --- Шаг 1: Общее ---
+    st.markdown("#### 1. Общее")
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        name = st.text_input("Имя персонажа", key="wz_name")
+    with c2:
+        gender = st.selectbox(
+            "Пол", options=["male", "female"],
+            format_func=lambda x: {"male": "Мужской", "female": "Женский"}[x],
+            key="wz_gender",
         )
 
-        st.markdown("#### 2. Фракция")
-        faction_id = st.selectbox(
-            "Фракция",
-            options=list(FACTIONS.keys()),
-            format_func=lambda x: FACTIONS[x]["name"],
-            key="wz_faction",
+    c1, c2 = st.columns(2)
+    with c1:
+        age = st.number_input("Возраст", min_value=16, max_value=600,
+                              value=30, step=1, key="wz_age")
+    with c2:
+        appearance = st.text_input("Внешность (кратко)", key="wz_appearance")
+
+    user_background = st.text_area(
+        "Краткая предыстория (необязательно)",
+        key="wz_background", height=80,
+    )
+
+    # --- Шаг 2: Фракция ---
+    st.markdown("#### 2. Фракция")
+    faction_ids = list(FACTIONS.keys())
+
+    faction_id = st.selectbox(
+        "Фракция",
+        options=faction_ids,
+        format_func=lambda x: FACTIONS[x]["name"],
+        key="wz_faction",
+        on_change=_reset_subfaction_key,
+    )
+
+    # Лор выбранной фракции
+    lore = FACTION_LORE.get(faction_id, "")
+    if lore:
+        st.markdown(
+            "<div style='background:#131316; border-left:3px solid #8b1a1a; "
+            "padding:8px 12px; border-radius:6px; margin:4px 0 14px 0; "
+            "color:#c8c0b0; font-style:italic; font-size:13px;'>"
+            + lore + "</div>",
+            unsafe_allow_html=True,
         )
 
+    # --- Шаг 2b: Субфракция (динамический key — при смене faction виджет свежий) ---
+    subfaction_options = FACTIONS[faction_id].get("subfactions", [])
+    if subfaction_options:
         subfaction_id = st.selectbox(
             "Субфракция",
-            options=FACTIONS[faction_id]["subfactions"],
+            options=subfaction_options,
             format_func=lambda x: SUBFACTION_NAMES.get(x, x),
-            key="wz_subfaction",
+            key=f"wz_subfaction_{faction_id}",
         )
+    else:
+        subfaction_id = None
+        st.info("У этой фракции нет субфракций.")
 
-        st.markdown("#### 3. Характеристики")
-        st.caption("Нажми «Сохранить» — сгенерируем 2d10+25 для каждой.")
-
-        submitted = st.form_submit_button(
-            "💾 Создать персонажа", type="primary", use_container_width=True,
-        )
-
-    if submitted:
-        if not name.strip():
-            st.error("Введите имя персонажа")
+    # --- Шаг 3: Характеристики ---
+    st.markdown("#### 3. Характеристики")
+    st.caption("Нажми «Сохранить» — сгенерируем 2d10+25 для каждой.")
+    if st.button("🎲 Сохранить персонажа", type="primary",
+                 use_container_width=True, key="wz_save"):
+        if not name or not name.strip():
+            st.error("Введи имя персонажа.")
             return
         try:
-            stats = roll_characteristics(random.Random())
+            stats = roll_characteristics()
             data = build_character(
                 name=name.strip(),
                 gender=gender,
@@ -109,34 +157,24 @@ def _form_block(login: str) -> None:
             )
             save_character(login, name.strip(), data)
             st.session_state.active_character = name.strip()
-            st.success(f"Персонаж «{name}» создан")
+            st.success(f"Персонаж «{name}» создан ({FACTIONS[faction_id]['name']})")
             _goto("game")
-        except (CharacterError, ValueError) as e:
+            st.rerun()
+        except CharacterError as e:
             st.error(str(e))
+        except Exception as e:
+            st.error(f"Ошибка: {type(e).__name__}: {e}")
+
+    # --- Отладка: показать текущий выбор ---
+    with st.expander("🔧 Текущий выбор (отладка)", expanded=False):
+        st.write({
+            "faction_id": faction_id,
+            "faction_name": FACTIONS[faction_id]["name"],
+            "subfaction_id": subfaction_id,
+            "subfaction_name": SUBFACTION_NAMES.get(subfaction_id, subfaction_id),
+            "available_subfactions": subfaction_options,
+        })
 
 
-def render() -> None:
-    login = st.session_state.get("user_login", "—")
-
-    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-    st.markdown(
-        "<h2 style='text-align: center; font-family: Georgia, serif; "
-        "letter-spacing: 3px;'>🧬 Создание персонажа</h2>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"<p style='text-align: center; opacity: 0.6;'>Игрок: {login}</p>",
-        unsafe_allow_html=True,
-    )
-
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        _existing_block(login)
-        _form_block(login)
-
-        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        if st.button("Выйти из аккаунта", use_container_width=True):
-            _logout()
-
-
-# ---------- game.py обновим тоже — покажем лист персонажа ----------
+if __name__ == "__main__":
+    pass
