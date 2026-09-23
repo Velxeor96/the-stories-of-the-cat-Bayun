@@ -43,3 +43,6 @@ data/users/
 *.bak_pre_*
 _reference_from_old/
 *.pyc
+ 
+.intro_reset_patch_*.flag 
+*.bak_pre_* 
