@@ -20,6 +20,8 @@ from ui.roll_card import (
     render_dialog_rolling,
 )
 from ui.loading_screen import full_css, full_html, get_phrases
+from services.state_parser import parse_state
+from services.state_applier import apply_changes
 
 
 _ROLL_MARKER = "<!--ROLLCARD:"
@@ -552,6 +554,14 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
         with st.expander("Способности", expanded=False):
             _render_abilities(char)
         st.markdown("---")
+        if st.button("Персонаж", use_container_width=True,
+                     key="game_character"):
+            st.session_state.screen = "character"
+            st.rerun()
+        if st.button("Хроники", use_container_width=True,
+                     key="game_chronicles"):
+            st.session_state.screen = "chronicles"
+            st.rerun()
         if st.button("Развитие", use_container_width=True,
                      key="game_progression"):
             st.session_state.screen = "progression"
@@ -560,15 +570,34 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
             st.session_state.tutorial_mode = True
             st.session_state.screen = "tutorial"
             st.rerun()
-        if st.button("Выйти в меню", use_container_width=True, key="game_exit"):
+        if st.button("Главное меню", use_container_width=True,
+                     key="game_to_menu"):
+            _back_to_menu()
+        if st.button("Выход", use_container_width=True, key="game_exit"):
             _logout()
 
 
-def _logout() -> None:
-    for k in ("user_login", "active_character", "orchestrator",
-              "tutorial_mode", "roll_card_variant"):
+def _back_to_menu() -> None:
+    # Возврат в главное меню: login сохраняем, чистим только сессию игры.
+    for k in ("active_character", "_game_loading_pending",
+              "_game_loading_ready", "_roll_dialog_state",
+              "_attack_open", "_attack_weapon", "_attack_result",
+              "_pending_chat"):
         st.session_state.pop(k, None)
     st.session_state.screen = "main_menu"
+    st.rerun()
+
+
+def _logout() -> None:
+    # Полный выход: удаляем логин, сбрасываем landing-флаг.
+    for k in ("user_login", "active_character", "orchestrator",
+              "tutorial_mode", "roll_card_variant",
+              "_post_login_landed_for", "_game_loading_pending",
+              "_game_loading_ready", "_roll_dialog_state",
+              "_attack_open", "_attack_weapon", "_attack_result",
+              "_pending_chat"):
+        st.session_state.pop(k, None)
+    st.session_state.screen = "splash"
     st.rerun()
 
 
@@ -779,13 +808,20 @@ def render() -> None:
             finally:
                 placeholder.empty()
 
+        clean_text, changes = parse_state(result.narrative or "")
+        if changes:
+            applied = apply_changes(char, changes)
+            if applied:
+                _save_char(login, char_name, char)
+                print("[game] state applied: " + ", ".join(applied))
+
         if result.roll:
             roll_dict = result.roll.to_dict()
             cmd = result.command
             st.session_state["_roll_dialog_state"] = {
                 "phase": "await",
                 "prompt": prompt,
-                "narrative": result.narrative,
+                "narrative": clean_text,
                 "roll": roll_dict,
                 "char_name": char_name,
                 "command_info": {
@@ -799,6 +835,6 @@ def render() -> None:
             st.rerun()
             return
 
-        st.markdown(result.narrative)
-        append_turn(login, char_name, prompt, result.narrative)
+        st.markdown(clean_text)
+        append_turn(login, char_name, prompt, clean_text)
         st.rerun()

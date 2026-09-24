@@ -1,6 +1,5 @@
 # scripts/patch.py
-# PATCH_16G — шестерня Механикум на ВСЕХ загрузочных экранах.
-# Фразы остаются по фракции персонажа.
+# PATCH_16K — разделяем «Главное меню» и «Выход».
 # Запуск: python scripts\patch.py
 from __future__ import annotations
 
@@ -9,67 +8,21 @@ import shutil
 import sys
 from pathlib import Path
 
-TAG = "PATCH_16G"
+TAG = "PATCH_16K"
 ROOT = Path(__file__).resolve().parent.parent
-FILES: dict = {}
 
 
-FILES["VERSION"] = "1.5.3\n"
-
-
-# =====================================================================
-# ui/loading_screen.py — заменить _sigil / _sigil_inline на mechanicum
-# =====================================================================
-def _patch_loading_sigils():
-    p = ROOT / "ui" / "loading_screen.py"
+def _read_game():
+    p = ROOT / "ui" / "screens" / "game.py"
     if not p.exists():
-        return "ERROR: loading_screen.py not found"
-    src = p.read_text(encoding="utf-8")
-    if 'sigil_svg("mechanicum"' in src and "_sigil_theme" not in src:
-        return "skip (already patched)"
+        return None, "ERROR: game.py not found"
+    try:
+        return p, p.read_text(encoding="utf-8")
+    except Exception as e:
+        return None, "ERROR read: " + type(e).__name__ + ": " + str(e)
 
-    old1 = (
-        'def _sigil(theme):\n'
-        '    try:\n'
-        '        from ui.assets import sigil_svg\n'
-        '        return sigil_svg(theme or "dark", 140)\n'
-        '    except Exception:\n'
-        '        return ""\n'
-    )
-    new1 = (
-        '# PATCH_16G — все загрузки используют шестерню Механикум.\n'
-        '# Тема фракции остаётся для фраз, но не для иконки.\n'
-        'def _sigil(theme):\n'
-        '    try:\n'
-        '        from ui.assets import sigil_svg\n'
-        '        return sigil_svg("mechanicum", 140)\n'
-        '    except Exception:\n'
-        '        return ""\n'
-    )
-    if old1 not in src:
-        return "ERROR: _sigil anchor not found"
-    src = src.replace(old1, new1, 1)
 
-    old2 = (
-        'def _sigil_inline(theme):\n'
-        '    try:\n'
-        '        from ui.assets import sigil_svg\n'
-        '        return sigil_svg(theme or "dark", 96)\n'
-        '    except Exception:\n'
-        '        return ""\n'
-    )
-    new2 = (
-        'def _sigil_inline(theme):\n'
-        '    try:\n'
-        '        from ui.assets import sigil_svg\n'
-        '        return sigil_svg("mechanicum", 96)\n'
-        '    except Exception:\n'
-        '        return ""\n'
-    )
-    if old2 not in src:
-        return "ERROR: _sigil_inline anchor not found"
-    src = src.replace(old2, new2, 1)
-
+def _write_game(p, src):
     try:
         ast.parse(src)
     except SyntaxError as e:
@@ -79,163 +32,136 @@ def _patch_loading_sigils():
         shutil.copy2(p, bak)
     except Exception as e:
         return "ERROR backup: " + type(e).__name__ + ": " + str(e)
-    p.write_text(src, encoding="utf-8")
+    try:
+        p.write_text(src, encoding="utf-8")
+    except Exception as e:
+        return "ERROR write: " + type(e).__name__ + ": " + str(e)
     return "backup + patched"
 
 
-FILES["CHANGELOG.md"] = r"""# Changelog
+# =====================================================================
+# 1. Заменить _logout на пару: _back_to_menu + новый _logout
+# =====================================================================
+def step_logout_split():
+    p, src = _read_game()
+    if p is None:
+        return src
 
-Все значимые изменения проекта «Истории кота Баюна».
+    old = (
+        "def _logout() -> None:\n"
+        "    for k in (\"user_login\", \"active_character\", \"orchestrator\",\n"
+        "              \"tutorial_mode\", \"roll_card_variant\"):\n"
+        "        st.session_state.pop(k, None)\n"
+        "    st.session_state.screen = \"main_menu\"\n"
+        "    st.rerun()\n"
+    )
+    new = (
+        "def _back_to_menu() -> None:\n"
+        "    # Возврат в главное меню: login сохраняем, чистим только сессию игры.\n"
+        "    for k in (\"active_character\", \"_game_loading_pending\",\n"
+        "              \"_game_loading_ready\", \"_roll_dialog_state\",\n"
+        "              \"_attack_open\", \"_attack_weapon\", \"_attack_result\",\n"
+        "              \"_pending_chat\"):\n"
+        "        st.session_state.pop(k, None)\n"
+        "    st.session_state.screen = \"main_menu\"\n"
+        "    st.rerun()\n"
+        "\n"
+        "\n"
+        "def _logout() -> None:\n"
+        "    # Полный выход: удаляем логин, сбрасываем landing-флаг.\n"
+        "    for k in (\"user_login\", \"active_character\", \"orchestrator\",\n"
+        "              \"tutorial_mode\", \"roll_card_variant\",\n"
+        "              \"_post_login_landed_for\", \"_game_loading_pending\",\n"
+        "              \"_game_loading_ready\", \"_roll_dialog_state\",\n"
+        "              \"_attack_open\", \"_attack_weapon\", \"_attack_result\",\n"
+        "              \"_pending_chat\"):\n"
+        "        st.session_state.pop(k, None)\n"
+        "    st.session_state.screen = \"splash\"\n"
+        "    st.rerun()\n"
+    )
 
-## [1.5.3] — 2026-09-24
-
-### Changed
-
-- **Шестерня Механикум на ВСЕХ загрузочных экранах.**
-  Раньше в загрузке крутился символ темы игрока. Теперь — всегда
-  Opus Machina. Логика: когитатор — это Механикум, он ведёт адепта
-  от логина до первой сцены. Символ фракции появляется в игре.
-- Фразы по-прежнему зависят от темы персонажа — дух-машины
-  подстраивается под мир адепта.
-
-## [1.5.2] — 2026-09-24
-
-### Changed
-
-- Визуал экрана «Развитие»: карточки характеристик, крупные цифры,
-  подсветка профильных, единый стиль.
-
-## [1.5.1] — 2026-09-24
-
-### Fixed
-
-- Русификация экрана «Развитие».
-
-## [1.5.0] — 2026-09-24
-
-### Added
-
-- Универсальный экран загрузки: INITIATIO, wizard→game,
-  продолжение из меню, inline-спиннер Мастера.
-- Фразы по фракциям.
-- Символ темы вместо шестерни Механикум.
-
-## [1.4.5] — 2026-09-24
-
-### Added
-
-- Профильные характеристики для всех субфракций.
-
-## [1.4.4] — 2026-09-24
-
-### Fixed
-
-- Русские имена навыков в карточке броска.
-
-## [1.4.3] — 2026-09-24
-
-### Fixed
-
-- Кнопки БРОСИТЬ/ОТМЕНИТЬ не висят.
-
-## [1.4.2] — 2026-09-24
-
-### Added
-
-- Интерактивный бросок d100.
-
-## [1.4.1] — 2026-09-24
-
-### Added
-
-- Карточка броска (большая + компактная).
-- 16 фракционных стилей.
-
-### Fixed
-
-- «Моржа» → «Степень успеха: N».
-
-## [1.4.0] — 2026-09-24
-
-### Added
-
-- Мастер выдаёт XP за победу.
-- Стартовый XP = 300.
-- Кнопка «Развитие» в сайдбаре.
-
-## [1.3.0] — 2026-09-24
-
-### Added
-
-- Секретные темы (код «АЛЬФА»).
-
-## [1.2.0] — 2026-09-23
-
-### Added
-
-- Тема «Хаос».
-
-## [1.1.0] — 2026-09-23
-
-### Added
-
-- Сиглы фракций, прокачка, INITIATIO.
-
-## [1.0.0] — 2026-09-23
-
-Первый полноценный релиз.
-"""
+    if old not in src:
+        if "def _back_to_menu()" in src:
+            return "skip (already patched)"
+        return "ERROR: _logout anchor not found"
+    src2 = src.replace(old, new, 1)
+    return _write_game(p, src2)
 
 
-def _write_one(rel_path, content):
-    dst = ROOT / rel_path
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    existed = dst.exists()
-    if existed:
-        try:
-            old = dst.read_text(encoding="utf-8")
-        except Exception as e:
-            return "ERROR reading: " + type(e).__name__ + ": " + str(e)
-        if old == content:
-            return "skip (identical)"
-    if dst.suffix == ".py":
-        try:
-            ast.parse(content)
-        except SyntaxError as e:
-            return ("ERROR SyntaxError: line " + str(e.lineno)
-                    + ": " + str(e.msg))
-    if existed:
-        bak = dst.with_name(dst.name + ".bak_pre_" + TAG)
-        try:
-            shutil.copy2(dst, bak)
-        except Exception as e:
-            return "ERROR backup: " + type(e).__name__ + ": " + str(e)
+# =====================================================================
+# 2. Заменить одну кнопку на две в сайдбаре
+# =====================================================================
+def step_sidebar_buttons():
+    p, src = _read_game()
+    if p is None:
+        return src
+
+    old = (
+        '        if st.button("Выйти в меню", use_container_width=True, key="game_exit"):\n'
+        '            _logout()\n'
+    )
+    new = (
+        '        if st.button("Главное меню", use_container_width=True,\n'
+        '                     key="game_to_menu"):\n'
+        '            _back_to_menu()\n'
+        '        if st.button("Выход", use_container_width=True, key="game_exit"):\n'
+        '            _logout()\n'
+    )
+
+    if old not in src:
+        if 'key="game_to_menu"' in src:
+            return "skip (already patched)"
+        return "ERROR: sidebar buttons anchor not found"
+    src2 = src.replace(old, new, 1)
+    return _write_game(p, src2)
+
+
+# =====================================================================
+# 3. Проверка
+# =====================================================================
+def final_check():
+    p, src = _read_game()
+    if p is None:
+        return False, "game.py not found"
     try:
-        dst.write_text(content, encoding="utf-8")
-    except Exception as e:
-        return "ERROR write: " + type(e).__name__ + ": " + str(e)
-    return "backup + overwrite" if existed else "create"
+        ast.parse(src)
+    except SyntaxError as e:
+        return False, "line " + str(e.lineno) + ": " + str(e.msg)
+
+    if "def _back_to_menu()" not in src:
+        return False, "_back_to_menu missing"
+    if 'st.session_state.screen = "splash"' not in src:
+        return False, "_logout doesn't go to splash"
+    if 'key="game_to_menu"' not in src:
+        return False, "menu button missing"
+    return True, "OK"
 
 
 def main():
     print("=" * 64)
-    print("PATCH " + TAG + " — шестерня на всех загрузках")
+    print("PATCH " + TAG + " — Главное меню vs Выход")
     print("ROOT: " + str(ROOT))
     print("=" * 64)
+
     any_error = False
 
-    print("[1/2] Файлы:")
-    for rel in FILES:
-        status = _write_one(rel, FILES[rel])
-        if status.startswith("ERROR"):
-            any_error = True
-        print("  " + rel.ljust(34) + " -> " + status)
-
-    print("[2/2] Точечные правки:")
-    status = _patch_loading_sigils()
+    print("[1/3] Разделить _logout на _back_to_menu + _logout:")
+    status = step_logout_split()
     if status.startswith("ERROR"):
         any_error = True
-    print("  " + "loading_screen sigils".ljust(34) + " -> " + status)
+    print("      -> " + status)
+
+    print("[2/3] Заменить кнопку в сайдбаре:")
+    status = step_sidebar_buttons()
+    if status.startswith("ERROR"):
+        any_error = True
+    print("      -> " + status)
+
+    print("[3/3] Финальная проверка:")
+    ok, msg = final_check()
+    print("      -> " + msg)
+    if not ok:
+        any_error = True
 
     print("=" * 64)
     print("DONE" + (" (with errors)" if any_error else " — ok"))

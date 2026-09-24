@@ -73,6 +73,35 @@ class Master:
                        history: list, extra_context: str) -> str:
         parts = []
 
+        # PATCH_16I: scene-lock по фракции персонажа
+        try:
+            if isinstance(state, dict):
+                fid = str(state.get("faction_id") or "")
+                fname = str(state.get("faction") or fid)
+                loc = state.get("location") or {}
+                if isinstance(loc, dict):
+                    place = str(loc.get("place") or loc.get("world") or "")
+                else:
+                    place = str(loc)
+                if fname:
+                    lock = (
+                        "=== ФРАКЦИЯ СЦЕНЫ ===\n"
+                        + "Персонаж принадлежит фракции: " + fname + ".\n"
+                    )
+                    if place:
+                        lock += "Текущее место: " + place + ".\n"
+                    lock += (
+                        "Используй только NPC, отсылки и реалии этой "
+                        "фракции. Не вводи в сцену орков, тиранид, "
+                        "эльдар, некронов, тау, космодесант и прочих, "
+                        "если они не упомянуты в листе персонажа или "
+                        "в предыдущих ходах."
+                    )
+                    parts.append(lock)
+        except Exception as _e:
+            print("[master] scene-lock fail: "
+                  + type(_e).__name__ + ": " + str(_e))
+
         # Состояние персонажа
         summary = ""
         if hasattr(state, "get_summary"):

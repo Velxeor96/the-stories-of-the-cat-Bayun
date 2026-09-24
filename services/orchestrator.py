@@ -98,13 +98,20 @@ class Orchestrator:
         rag_ctx = ""
         rag_sources: list = []
         rag_n = 0
+        # PATCH_16I: faction filter for RAG
+        faction = None
+        if isinstance(state, dict):
+            faction = state.get("faction_id") or None
         if self.kb is not None:
             enriched = self._enrich_query(player_input, command)
             try:
-                chunks = self.kb.search(enriched, top_k=4) or []
+                chunks = self.kb.search(enriched, top_k=4,
+                                        faction=faction) or []
                 rag_n = len(chunks)
                 if chunks:
-                    rag_ctx = self.kb.format_context(enriched, top_k=4)
+                    rag_ctx = self.kb.format_context(
+                        enriched, top_k=4, faction=faction,
+                    )
                     rag_sources = self._extract_sources(chunks)
                 print(f"[orchestrator] RAG q={enriched[:70]!r} → {rag_n} chunks")
             except Exception as e:

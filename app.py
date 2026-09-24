@@ -42,6 +42,7 @@ from ui.screens import (  # noqa: E402
     splash, about, auth, onboarding, tutorial, wizard, game,
     kot_intro, tutorial_prompt, tutorial_help, loading,
     main_menu, loads, settings_screen, credits, progression,
+    character, chronicles,
 )
 
 try:
@@ -69,6 +70,8 @@ SCREENS = {
     "settings_screen": settings_screen.render,
     "credits": credits.render,
     "progression": progression.render,
+    "character": character.render,
+    "chronicles": chronicles.render,
 }
 
 _PRELOGIN = {"splash", "auth"}

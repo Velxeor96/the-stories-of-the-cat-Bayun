@@ -18,6 +18,21 @@ CHROMA_DIR = str(_ROOT / "chroma_db")
 COLLECTION_NAME = "knowledge"
 
 
+
+
+# PATCH_16I — маппинг папок data/ в реальные фракции.
+FOLDER_TO_FACTION = {
+    'imperium': 'imperium',
+    'chaos': 'chaos',
+    'eldar': 'eldar',
+    'necrons': 'necrons',
+    'orks': 'orks',
+    'tau': 'tau',
+    'tyranids': 'tyranids',
+    'general': 'general',
+    'glossary': 'general',
+}
+
 FACTION_KEYWORDS = {
     "eldar": [
         "эльдар", "аэльдари", "асуриани", "друкхари", "арлекин", "экзодит",
@@ -91,9 +106,9 @@ def _load_fallback_chunks() -> list[dict]:
     for faction_dir in sorted(data_dir.iterdir()):
         if not faction_dir.is_dir():
             continue
-        faction = faction_dir.name
-        if faction in ("users", "accounts", "_replacements"):
+        if faction_dir.name in ("users", "accounts", "_replacements"):
             continue
+        faction = FOLDER_TO_FACTION.get(faction_dir.name, faction_dir.name)
         for txt in faction_dir.glob("*.txt"):
             try:
                 text = txt.read_text(encoding="utf-8", errors="replace")
@@ -189,12 +204,14 @@ class KnowledgeBase:
                     break
         return found
 
-    def search(self, query: str, top_k: int = 4) -> list[dict]:
+    def search(self, query: str, top_k: int = 4,
+               faction: str | None = None) -> list[dict]:
         if self._ready:
-            return self._search_vector(query, top_k)
-        return self._search_fallback(query, top_k)
+            return self._search_vector(query, top_k, faction=faction)
+        return self._search_fallback(query, top_k, faction=faction)
 
-    def _search_vector(self, query: str, top_k: int = 4) -> list[dict]:
+    def _search_vector(self, query: str, top_k: int = 4,
+                       faction: str | None = None) -> list[dict]:
         query_lower = query.lower()
         query_factions = self._detect_factions(query)
         file_hints = _query_file_hints(query_lower)
@@ -252,6 +269,11 @@ class KnowledgeBase:
 
         combined = priority_chunks + top_priority + mid_priority + low_priority
 
+        if faction:
+            allowed = {faction, 'general'}
+            combined = [c for c in combined
+                        if c.get('faction', 'general') in allowed]
+
         result: list[dict] = []
         seen_texts: set[str] = set()
         for c in combined:
@@ -265,7 +287,8 @@ class KnowledgeBase:
 
         return result
 
-    def _search_fallback(self, query: str, top_k: int = 4) -> list[dict]:
+    def _search_fallback(self, query: str, top_k: int = 4,
+                         faction: str | None = None) -> list[dict]:
         if not self._fallback_chunks:
             return []
 
@@ -295,11 +318,17 @@ class KnowledgeBase:
                 score *= 3
             scored.append((score, chunk))
 
+        if faction:
+            allowed = {faction, 'general'}
+            scored = [(s, c) for s, c in scored
+                      if c.get('faction', 'general') in allowed]
+
         scored.sort(key=lambda x: -x[0])
         return [c for _, c in scored[:top_k]]
 
-    def format_context(self, query: str, top_k: int = 4) -> str:
-        chunks = self.search(query, top_k=top_k)
+    def format_context(self, query: str, top_k: int = 4,
+                       faction: str | None = None) -> str:
+        chunks = self.search(query, top_k=top_k, faction=faction)
         if not chunks:
             return ""
         lines = ["=== СПРАВКА ИЗ БАЗЫ ЗНАНИЙ ==="]
