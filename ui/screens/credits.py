@@ -1,5 +1,5 @@
-# PATCH_15H
-# ui/screens/credits.py — создатели + благодарности тестерам.
+# PATCH_15W
+# ui/screens/credits.py — создатели + благодарности тестерам и донатерам.
 from __future__ import annotations
 
 import streamlit as st
@@ -8,10 +8,13 @@ from ui.assets import sigil_svg
 from ui.theme import _current
 
 
-# Впиши имена тестеров в список TESTERS. Пример:
-#     TESTERS = ["Адепт Иван", "Сестра Анна", "Магос Пётр"]
-# Если список пуст — рендерится общая благодарность.
-TESTERS = [
+THANKS_NAMES = [
+    "Ксения",
+    "Анна",
+    "Игорь",
+    "Сергей",
+    "Роман",
+    "друзья Романа (кем бы вы ни были, ребят)",
 ]
 
 
@@ -53,33 +56,60 @@ CREDITS_CSS = '''<style>
     text-align: center;
     margin-top: 12px;
 }
-.credits-thanks {
-    max-width: 640px; margin: 12px auto;
-    padding: 14px 22px;
+.thanks-card {
+    max-width: 640px; margin: 14px auto;
+    padding: 18px 22px;
     border: 1px solid var(--accent);
+    border-left: 3px solid var(--accent-soft);
     border-radius: 8px;
     background: rgba(255,255,255,0.02);
     text-align: left;
     color: var(--fg);
+    font-family: Georgia, serif;
+    line-height: 1.7;
 }
-.credits-thanks .head {
-    color: var(--fg-dim); letter-spacing: 3px;
-    font-size: 12px; margin-bottom: 8px;
+.thanks-card .head {
+    color: var(--accent-soft); letter-spacing: 4px;
+    font-size: 12px; text-transform: uppercase;
+    margin-bottom: 12px;
 }
-.credits-thanks .names { color: var(--fg); }
+.thanks-card .lead {
+    color: var(--fg); font-size: 14px;
+    margin-bottom: 14px;
+}
+.thanks-card ul {
+    list-style: none; padding: 0; margin: 8px 0 12px 0;
+}
+.thanks-card li {
+    padding: 3px 0; color: var(--fg);
+    border-bottom: 1px dashed rgba(255,255,255,0.05);
+}
+.thanks-card li:last-child { border-bottom: none; }
+.thanks-card .tail {
+    color: var(--fg-dim); font-size: 13px; font-style: italic;
+    margin-top: 12px;
+}
 </style>'''
 
 
 def _thanks_block():
-    if TESTERS:
-        names = ", ".join(str(n) for n in TESTERS)
-    else:
-        names = "адепты, чьи имена сокрыты за печатями Механикум"
+    items = "".join("<li>" + str(n) + "</li>" for n in THANKS_NAMES)
     return (
-        "<div class='credits-thanks'>"
-        + "<div class='head'>БЛАГОДАРНОСТИ · ТЕСТЕРЫ</div>"
-        + "<div class='names'>" + names + "</div>"
-        + "</div>"
+        "<div class='thanks-card'>"
+        "<div class='head'>БЛАГОДАРНОСТИ</div>"
+        "<div class='lead'>"
+        "Этот проект жив не благодаря нам. Он жив благодаря вам. "
+        "Тем, кто тестировал ранние сборки, находил баги там, где "
+        "их не должно было быть, и терпеливо писал нам, что опять "
+        "сломалось. Тем, кто в полночь спорил с нашими решениями "
+        "и оказывался прав. Тем, кто возвращался."
+        "</div>"
+        "<ul>" + items + "</ul>"
+        "<div class='tail'>"
+        "Адептус Механикус знает: даже в мрачной тьме далёкого "
+        "будущего есть свет. Его зажигают те, кто рядом."
+        "</div>"
+        "</div>"
     )
 
 

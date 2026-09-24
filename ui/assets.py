@@ -1,6 +1,6 @@
-# PATCH_15U
-# ui/assets.py — сиглы фракций.
-# Fallback Эльдар = "Глаз Иши": стилизованный глаз с слезой.
+# PATCH_15X
+# ui/assets.py — сиглы фракций с mtime-кэшем.
+# PNG читается с диска заново, если файл изменился или появился.
 from __future__ import annotations
 
 import base64
@@ -9,20 +9,20 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 _SIGILS_DIR = _ROOT / "static" / "sigils"
 
-_CACHE: dict[str, object] = {}
+_CACHE: dict = {}
 _ID: list = [0]
 _PNG_SIG = b"\x89PNG\r\n\x1a\n"
 
 
-def _nid(prefix: str) -> str:
+def _nid(prefix):
     _ID[0] += 1
     return prefix + "_" + str(_ID[0])
 
 
-def sigil_svg(theme: str = "dark", size: int = 96) -> str:
+def sigil_svg(theme="dark", size=96):
     raw = _load_raw(theme)
     if raw is not None:
-        kind, content = raw  # type: ignore
+        kind, content = raw
         if kind == "svg":
             return _fit_svg_inline(str(content), size)
         if kind == "png":
@@ -31,18 +31,39 @@ def sigil_svg(theme: str = "dark", size: int = 96) -> str:
     return fn(size)
 
 
-def _load_raw(theme: str):
-    if theme in _CACHE:
-        return _CACHE[theme]
+def _load_raw(theme):
     svg_p = _SIGILS_DIR / (theme + ".svg")
     png_p = _SIGILS_DIR / (theme + ".png")
+
+    path = None
+    kind = None
+    if svg_p.exists():
+        path = svg_p
+        kind = "svg"
+    elif png_p.exists():
+        path = png_p
+        kind = "png"
+    else:
+        _CACHE[theme] = (0.0, None)
+        print("[assets] " + theme + ": no PNG/SVG in static/sigils")
+        return None
+
+    try:
+        mtime = float(path.stat().st_mtime)
+    except Exception:
+        mtime = 0.0
+
+    cached = _CACHE.get(theme)
+    if cached and cached[0] == mtime:
+        return cached[1]
+
     result = None
     try:
-        if svg_p.exists():
+        if kind == "svg":
             result = ("svg", svg_p.read_text(encoding="utf-8"))
             print("[assets] " + theme + ".svg loaded ("
                   + str(len(result[1])) + " chars)")
-        elif png_p.exists():
+        elif kind == "png":
             data = png_p.read_bytes()
             if len(data) < 8 or data[:8] != _PNG_SIG:
                 print("[assets] " + theme + ".png has non-PNG signature ("
@@ -52,17 +73,16 @@ def _load_raw(theme: str):
                 result = ("png", base64.b64encode(data).decode("ascii"))
                 print("[assets] " + theme + ".png loaded ("
                       + str(len(data)) + " bytes)")
-        else:
-            print("[assets] " + theme + ": no PNG/SVG in static/sigils")
     except Exception as e:
         print("[assets] load " + theme + " fail: "
               + type(e).__name__ + ": " + str(e))
         result = None
-    _CACHE[theme] = result
+
+    _CACHE[theme] = (mtime, result)
     return result
 
 
-def _accent_rgb() -> tuple:
+def _accent_rgb():
     hexc = "#b03030"
     try:
         from ui.theme import THEMES, _current
@@ -83,11 +103,11 @@ def _accent_rgb() -> tuple:
         return (0.69, 0.19, 0.19)
 
 
-def _fmt(v: float) -> str:
+def _fmt(v):
     return format(v, ".4f")
 
 
-def _fit_png_colorized(b64: str, size: int, theme: str) -> str:
+def _fit_png_colorized(b64, size, theme):
     r, g, b = _accent_rgb()
     fid = _nid("sf_" + theme)
     fr = str(int(round(r * 255)))
@@ -124,7 +144,7 @@ def _fit_png_colorized(b64: str, size: int, theme: str) -> str:
     )
 
 
-def _strip_prefix(s: str) -> str:
+def _strip_prefix(s):
     s = s.strip()
     if s.startswith("<?xml"):
         i = s.find("?>")
@@ -147,7 +167,7 @@ def _strip_prefix(s: str) -> str:
     return s
 
 
-def _fit_svg_inline(svg_text: str, size: int) -> str:
+def _fit_svg_inline(svg_text, size):
     s = _strip_prefix(svg_text)
     style = ('style="width:' + str(size) + 'px;height:' + str(size) + 'px;"')
     if s.startswith("<svg "):
@@ -157,7 +177,7 @@ def _fit_svg_inline(svg_text: str, size: int) -> str:
     return s
 
 
-def _wrap(size: int, body: str) -> str:
+def _wrap(size, body):
     return (
         '<svg width="' + str(size) + '" height="' + str(size) + '" '
         'viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
@@ -165,8 +185,7 @@ def _wrap(size: int, body: str) -> str:
     )
 
 
-# --- Fallback SVG ---------------------------------------------------
-def _imperial(size: int) -> str:
+def _imperial(size):
     body = (
         '<g fill="#d4a017" stroke="#7a5a10" stroke-width="0.5">'
         '<path d="M50 42 L92 20 L94 24 L52 45 Z"/>'
@@ -190,7 +209,7 @@ def _imperial(size: int) -> str:
     return _wrap(size, body)
 
 
-def _mechanicum(size: int) -> str:
+def _mechanicum(size):
     teeth = []
     for i in range(16):
         ang = i * 22.5
@@ -222,7 +241,7 @@ def _mechanicum(size: int) -> str:
     return _wrap(size, body)
 
 
-def _chaos(size: int) -> str:
+def _chaos(size):
     body = (
         '<path d="M50 5 L54 42 L88 20 L60 44 '
         'L95 50 L60 56 L88 80 L54 58 '
@@ -235,7 +254,7 @@ def _chaos(size: int) -> str:
     return _wrap(size, body)
 
 
-def _imperial_guard(size: int) -> str:
+def _imperial_guard(size):
     body = (
         '<g fill="#c8b878" stroke="#5a5a30" stroke-width="0.5">'
         '<path d="M45 46 L6 32 L4 36 L43 50 Z"/>'
@@ -260,7 +279,7 @@ def _imperial_guard(size: int) -> str:
     return _wrap(size, body)
 
 
-def _tau(size: int) -> str:
+def _tau(size):
     body = (
         '<circle cx="50" cy="50" r="42" fill="none" '
         'stroke="#c87f2a" stroke-width="2.6"/>'
@@ -276,35 +295,28 @@ def _tau(size: int) -> str:
     return _wrap(size, body)
 
 
-def _eldar(size: int) -> str:
-    # "Глаз Иши" — стилизованный эльдарский глаз со слезой.
+def _eldar(size):
     body = (
         '<g fill="#4ab8a8">'
-        # Верхнее веко: толстая диагональная полоса
         '<path d="M 5 52 L 5 58 L 22 55 '
         'L 50 42 L 82 22 L 92 14 L 92 22 '
         'L 68 36 L 72 40 L 72 46 '
         'L 58 50 L 22 62 L 5 65 Z"/>'
-        # Нижнее веко: дуга от левого угла до правого
         '<path d="M 22 62 Q 46 80 72 46 '
         'L 68 42 Q 46 72 26 58 Z"/>'
-        # Радужка (полукруг)
         '<path d="M 38 52 A 12 12 0 0 1 62 52 '
         'L 62 50 L 38 50 Z"/>'
-        # Ножка-хвост вниз
         '<path d="M 44 64 L 44 92 L 54 92 L 54 64 Z"/>'
-        # Слеза
         '<path d="M 22 68 Q 16 82 16 88 '
         'Q 16 96 22 96 Q 28 96 28 88 '
         'Q 28 82 22 68 Z"/>'
         '</g>'
-        # Зрачок — фон темы
         '<circle cx="50" cy="52" r="5" fill="#0a0e0e"/>'
     )
     return _wrap(size, body)
 
 
-def _necrons(size: int) -> str:
+def _necrons(size):
     body = (
         '<path d="M50 10 L90 82 L10 82 Z" fill="none" '
         'stroke="#4ab84a" stroke-width="3"/>'
@@ -321,7 +333,7 @@ def _necrons(size: int) -> str:
     return _wrap(size, body)
 
 
-def _orks(size: int) -> str:
+def _orks(size):
     body = (
         '<path d="M50 18 C 64 18 74 30 74 44 C 74 54 70 60 66 64 '
         'L 66 72 C 66 76 62 80 50 80 C 38 80 34 76 34 72 '
@@ -341,7 +353,7 @@ def _orks(size: int) -> str:
     return _wrap(size, body)
 
 
-def _tyranids(size: int) -> str:
+def _tyranids(size):
     body = (
         '<path d="M50 8 C 72 12 88 30 88 52 C 88 70 76 84 60 90 '
         'L 50 96 L 40 90 C 24 84 12 70 12 52 C 12 30 28 12 50 8 Z" '
@@ -362,7 +374,7 @@ def _tyranids(size: int) -> str:
     return _wrap(size, body)
 
 
-def _dark(size: int) -> str:
+def _dark(size):
     body = (
         '<circle cx="50" cy="50" r="42" fill="none" stroke="#8b1a1a" '
         'stroke-width="1" opacity="0.4"/>'

@@ -155,6 +155,8 @@ def render() -> None:
                 subfaction_id=subfaction_id,
                 characteristics=stats,
             )
+            if int(data.get("xp", 0) or 0) == 0:
+                data["xp"] = 300
             save_character(login, name.strip(), data)
             st.session_state.active_character = name.strip()
             st.success(f"Персонаж «{name}» создан ({FACTIONS[faction_id]['name']})")

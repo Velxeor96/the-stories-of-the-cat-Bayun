@@ -1,5 +1,5 @@
-# PATCH_15I
-# ui/screens/settings_screen.py — тема, логи, отладка, сброс вводного потока.
+# PATCH_15W
+# ui/screens/settings_screen.py — тема, логи, отладка, история, протоколы.
 from __future__ import annotations
 
 import json
@@ -9,11 +9,34 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.theme import _current
+from ui.theme import _current, render_theme_selector
 from ui.version_info import get_current_version, get_changelog
 
 
-def render() -> None:
+_PROTOCOL_CSS = '''<style>
+.proto-box {
+    border: 1px solid var(--accent);
+    border-left: 3px solid var(--accent-soft);
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 10px 0 14px 0;
+    background: rgba(255,255,255,0.02);
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 13px;
+    color: var(--fg-dim);
+    line-height: 1.6;
+}
+.proto-box .head {
+    color: var(--accent-soft);
+    letter-spacing: 3px;
+    font-size: 12px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+</style>'''
+
+
+def render():
     st.markdown(
         "<h2 style='font-family: Georgia, serif; letter-spacing: 5px; "
         "text-align: center;'>НАСТРОЙКИ</h2>",
@@ -40,10 +63,10 @@ def render() -> None:
 
 
 def _tab_theme():
+    login = st.session_state.get("user_login") or ""
     st.write("Выберите тему оформления:")
     try:
-        from ui.theme import render_theme_selector
-        render_theme_selector()
+        render_theme_selector(login=login)
     except Exception as e:
         st.error("Не удалось отрисовать выбор темы: "
                  + type(e).__name__ + ": " + str(e))
@@ -104,6 +127,72 @@ def _tab_debug():
     if st.button("Сбросить вводный поток", key="settings_reset_intro"):
         _reset_intro()
 
+    st.markdown("---")
+    _protocol_section()
+
+
+def _protocol_section():
+    st.markdown(_PROTOCOL_CSS, unsafe_allow_html=True)
+    st.markdown(
+        "<div class='proto-box'>"
+        "<div class='head'>+++ СЕКРЕТНЫЕ ПРОТОКОЛЫ МЕХАНИКУМ +++</div>"
+        "Дух-машины ожидает священный сигнал.<br/>"
+        "Ввод: единожды.<br/>"
+        "Действие: необратимо.<br/>"
+        "Печати и одобрения: не требуются."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    login = st.session_state.get("user_login")
+    if not login:
+        st.caption("Нет активной сессии.")
+        return
+
+    code = st.text_input(
+        "Сигнал",
+        value="",
+        key="_secret_protocol_code",
+        label_visibility="collapsed",
+        placeholder="",
+    )
+    if st.button("АКТИВИРОВАТЬ ПРОТОКОЛ",
+                 key="_secret_protocol_go",
+                 type="primary",
+                 use_container_width=True):
+        _activate_protocol(login, code)
+
+
+def _activate_protocol(login, code):
+    try:
+        from services.unlocks import unlock
+    except Exception as e:
+        st.error("Модуль протоколов недоступен: "
+                 + type(e).__name__ + ": " + str(e))
+        return
+    ok, new_themes, msg = unlock(login, code)
+    if not ok:
+        st.warning("+++ ОТКАЗАНО +++ " + str(msg))
+        return
+    if new_themes:
+        st.session_state["_flash_unlock"] = "+++ ПРОТОКОЛ ПРИНЯТ +++ " + str(msg)
+        st.session_state.screen = "main_menu"
+        st.rerun()
+    else:
+        st.session_state["_flash_unlock"] = "+++ УЖЕ АКТИВЕН +++ " + str(msg)
+        st.session_state.screen = "main_menu"
+        st.rerun()
+
+
+def _tab_versions():
+    st.write("Текущая версия: " + get_current_version())
+    st.markdown("---")
+    body = get_changelog()
+    if body:
+        st.markdown(body)
+    else:
+        st.caption("История изменений недоступна.")
+
 
 def _reset_intro():
     login = st.session_state.get("user_login")
@@ -121,13 +210,3 @@ def _reset_intro():
     st.session_state["screen"] = "kot_intro"
     st.success("Сброшено. Идём на kot_intro.")
     st.rerun()
-
-
-def _tab_versions():
-    st.write("Текущая версия: " + get_current_version())
-    st.markdown("---")
-    body = get_changelog()
-    if body:
-        st.markdown(body)
-    else:
-        st.caption("История изменений недоступна.")

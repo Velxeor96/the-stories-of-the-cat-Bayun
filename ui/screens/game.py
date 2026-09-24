@@ -677,6 +677,10 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
             st.session_state.roll_card_variant = choice
 
         st.markdown("---")
+        if st.button("Развитие", use_container_width=True,
+                     key="game_progression"):
+            st.session_state.screen = "progression"
+            st.rerun()
         if st.button("Обучение", use_container_width=True, key="game_tut"):
             st.session_state.tutorial_mode = True
             st.session_state.screen = "tutorial"

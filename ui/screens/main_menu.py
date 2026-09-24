@@ -1,17 +1,17 @@
-# PATCH_15F
-# ui/screens/main_menu.py — главное меню (7 кнопок).
+# PATCH_15W
+# ui/screens/main_menu.py — главное меню с фильтром тем и бейджем титула.
 from __future__ import annotations
 
 import streamlit as st
+
+from ui.assets import sigil_svg
+from ui.theme import THEMES, _current, available_themes, theme_title
 from ui.version_info import (
     get_current_version,
     get_changelog_top,
     mark_version_seen,
     has_seen_current,
 )
-
-from ui.assets import sigil_svg
-from ui.theme import _current, render_theme_selector
 
 
 MENU_CSS = '''<style>
@@ -31,10 +31,21 @@ MENU_CSS = '''<style>
     text-shadow: 0 0 24px var(--accent-glow);
     margin: 8px 0 4px 0;
 }
-.menu-sub {
+.menu-user {
     color: var(--fg-dim); font-style: italic;
     letter-spacing: 3px; font-size: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
+}
+.menu-badge {
+    display: inline-block;
+    margin-left: 8px; padding: 2px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    color: var(--accent-soft);
+    font-style: normal;
+    font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.03);
 }
 .menu-char {
     color: var(--fg-dim); font-size: 14px;
@@ -48,17 +59,22 @@ MENU_CSS = '''<style>
 </style>'''
 
 
-def render() -> None:
+def render():
+    flash = st.session_state.pop("_flash_unlock", None)
+    if flash:
+        st.success(str(flash))
     _maybe_show_changelog()
     _theme_strip()
     if st.session_state.get("_show_changelog_dialog"):
         _show_changelog_now()
+
     st.markdown(MENU_CSS, unsafe_allow_html=True)
     theme = _current()
     sigil = sigil_svg(theme, size=90)
 
     login = st.session_state.get("user_login") or "—"
     names, last = _info()
+    title = theme_title(theme)
 
     active = st.session_state.get("active_character")
     if active and active in names:
@@ -75,11 +91,15 @@ def render() -> None:
         char_line = ("<div class='menu-char'>"
                      "Персонаж не выбран</div>")
 
+    badge = ""
+    if title:
+        badge = "<span class='menu-badge'>" + str(title) + "</span>"
+
     html = (
         "<div class='menu-wrap'>"
         + "<div class='menu-sigil'>" + sigil + "</div>"
         + "<div class='menu-title'>CAT BAYUN</div>"
-        + "<div class='menu-sub'>" + str(login) + "</div>"
+        + "<div class='menu-user'>" + str(login) + badge + "</div>"
         + char_line
         + "</div>"
     )
@@ -133,6 +153,34 @@ def render() -> None:
             _logout()
 
 
+def _theme_strip():
+    login = st.session_state.get("user_login") or ""
+    keys = available_themes(login)
+    if not keys:
+        return
+    cur = _current()
+    if cur not in keys:
+        st.session_state.ui_theme = keys[0]
+        st.rerun()
+        return
+    try:
+        idx = keys.index(cur)
+    except ValueError:
+        idx = 0
+    choice = st.radio(
+        "Тема",
+        options=keys,
+        index=idx,
+        format_func=lambda k: THEMES[k]["label"],
+        horizontal=True,
+        key="_main_menu_theme_pick",
+        label_visibility="collapsed",
+    )
+    if choice != cur:
+        st.session_state.ui_theme = choice
+        st.rerun()
+
+
 def _info():
     login = st.session_state.get("user_login")
     if not login:
@@ -156,7 +204,7 @@ def _info():
     return names, last
 
 
-def _continue() -> None:
+def _continue():
     login = st.session_state.get("user_login")
     if not login:
         return
@@ -184,7 +232,7 @@ def _continue() -> None:
     st.rerun()
 
 
-def _logout() -> None:
+def _logout():
     keys = list(st.session_state.keys())
     for k in keys:
         if k == "screen":
@@ -197,29 +245,7 @@ def _logout() -> None:
     st.rerun()
 
 
-def _theme_strip() -> None:
-    from ui.theme import THEMES
-    keys = list(THEMES.keys())
-    cur = _current()
-    try:
-        idx = keys.index(cur)
-    except ValueError:
-        idx = 0
-    choice = st.radio(
-        "Тема",
-        options=keys,
-        index=idx,
-        format_func=lambda k: THEMES[k]["icon"] + " " + THEMES[k]["label"],
-        horizontal=True,
-        key="_main_menu_theme_pick",
-        label_visibility="collapsed",
-    )
-    if choice != cur:
-        st.session_state.ui_theme = choice
-        st.rerun()
-
-
-def _maybe_show_changelog() -> None:
+def _maybe_show_changelog():
     login = st.session_state.get("user_login")
     if not login:
         return
@@ -228,12 +254,12 @@ def _maybe_show_changelog() -> None:
     st.session_state["_show_changelog_dialog"] = True
 
 
-def _show_changelog_now() -> None:
+def _show_changelog_now():
     _changelog_dialog()
 
 
 @st.dialog("Что нового")
-def _changelog_dialog() -> None:
+def _changelog_dialog():
     st.markdown("### Версия " + get_current_version())
     body = get_changelog_top()
     if body:

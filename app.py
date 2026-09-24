@@ -1,10 +1,10 @@
-# PATCH_15H_HARD_ROUTER
+# PATCH_15Y_HARD_ROUTER
 # app.py — точка входа и маршрутизация (HARD ROUTER + LANDING GUARD).
 import streamlit as st
 
 st.set_page_config(
     page_title="Warhammer 40K RPG",
-    page_icon="⚔️",
+    page_icon="XB",
     layout="wide",
 )
 
@@ -41,7 +41,7 @@ _force_reset()
 from ui.screens import (  # noqa: E402
     splash, about, auth, onboarding, tutorial, wizard, game,
     kot_intro, tutorial_prompt, tutorial_help, loading,
-    main_menu, loads, settings_screen, credits,
+    main_menu, loads, settings_screen, credits, progression,
 )
 
 try:
@@ -68,6 +68,7 @@ SCREENS = {
     "loads": loads.render,
     "settings_screen": settings_screen.render,
     "credits": credits.render,
+    "progression": progression.render,
 }
 
 _PRELOGIN = {"splash", "auth"}
@@ -108,21 +109,12 @@ def _resolve_screen():
             return _fix("splash", "no login")
         return screen
 
-    # Landing-guard: первый переход в сессию после логина всегда ведёт
-    # на kot_intro / loading / main_menu — игнорируя "зависший" screen
-    # из прошлой активности (например, wizard).
-    if not st.session_state.get("_post_login_landed"):
-        st.session_state["_post_login_landed"] = True
-        if not _setting(login, "kot_intro_seen"):
-            return _fix("kot_intro", "landing")
-        return _fix("loading", "landing")
-
-    if not _setting(login, "kot_intro_seen"):
-        if screen != "kot_intro":
-            return _fix("kot_intro", "first login")
-
-    # PATCH_15T: loading_seen больше не учитывается — INITIATIO
-    # всегда идёт через landing (см. выше).
+    # Landing: при каждом НОВОМ логине ведём на kot_intro.
+    # Повторные rerun'ы в той же сессии уже помечены.
+    landed_for = st.session_state.get("_post_login_landed_for", "")
+    if landed_for != login:
+        st.session_state["_post_login_landed_for"] = login
+        return _fix("kot_intro", "landing")
 
     if screen in _PRELOGIN:
         return _fix("main_menu", "post-login")
@@ -146,6 +138,6 @@ if screen in SCREENS:
     SCREENS[screen]()
 else:
     st.warning("Неизвестный экран: " + repr(screen))
-    if st.button("← На главную"):
+    if st.button("На главную"):
         st.session_state.screen = "splash"
         st.rerun()

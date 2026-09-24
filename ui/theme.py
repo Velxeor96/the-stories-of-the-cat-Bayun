@@ -1,5 +1,5 @@
-# PATCH_15R
-# ui/theme.py — 10 тем: нейтральная + 9 фракций (включая Хаос).
+# PATCH_15W
+# ui/theme.py — 16 тем: 10 базовых + 6 скрытых (открываются кодом).
 from __future__ import annotations
 
 import streamlit as st
@@ -7,8 +7,7 @@ import streamlit as st
 
 THEMES = {
     "dark": {
-        "label": "Нейтральная",
-        "icon": "⚔",
+        "label": "Нейтральная", "icon": "N", "hidden": False,
         "vars": {
             "--accent": "#8b1a1a",
             "--accent-soft": "#b03030",
@@ -27,8 +26,7 @@ THEMES = {
         },
     },
     "imperial": {
-        "label": "Империум",
-        "icon": "✠",
+        "label": "Империум", "icon": "I", "hidden": False,
         "vars": {
             "--accent": "#b8860b",
             "--accent-soft": "#d4a017",
@@ -47,8 +45,7 @@ THEMES = {
         },
     },
     "mechanicum": {
-        "label": "Механикум",
-        "icon": "⚙",
+        "label": "Механикум", "icon": "M", "hidden": False,
         "vars": {
             "--accent": "#a02020",
             "--accent-soft": "#c83838",
@@ -67,8 +64,7 @@ THEMES = {
         },
     },
     "chaos": {
-        "label": "Хаос",
-        "icon": "✺",
+        "label": "Хаос", "icon": "C", "hidden": False,
         "vars": {
             "--accent": "#7a0a0a",
             "--accent-soft": "#a82020",
@@ -87,8 +83,7 @@ THEMES = {
         },
     },
     "imperial_guard": {
-        "label": "Имперская гвардия",
-        "icon": "✪",
+        "label": "Имперская гвардия", "icon": "G", "hidden": False,
         "vars": {
             "--accent": "#6b7a3a",
             "--accent-soft": "#8a9a4f",
@@ -107,8 +102,7 @@ THEMES = {
         },
     },
     "tau": {
-        "label": "Тау",
-        "icon": "◎",
+        "label": "Тау", "icon": "T", "hidden": False,
         "vars": {
             "--accent": "#c87f2a",
             "--accent-soft": "#e6a04a",
@@ -127,8 +121,7 @@ THEMES = {
         },
     },
     "eldar": {
-        "label": "Эльдары",
-        "icon": "✦",
+        "label": "Эльдары", "icon": "E", "hidden": False,
         "vars": {
             "--accent": "#2a8a7a",
             "--accent-soft": "#4ab8a8",
@@ -147,8 +140,7 @@ THEMES = {
         },
     },
     "necrons": {
-        "label": "Некроны",
-        "icon": "☥",
+        "label": "Некроны", "icon": "Nc", "hidden": False,
         "vars": {
             "--accent": "#4ab84a",
             "--accent-soft": "#7ae07a",
@@ -167,8 +159,7 @@ THEMES = {
         },
     },
     "orks": {
-        "label": "Орки",
-        "icon": "☠",
+        "label": "Орки", "icon": "O", "hidden": False,
         "vars": {
             "--accent": "#4a8a1a",
             "--accent-soft": "#7ac83a",
@@ -187,8 +178,7 @@ THEMES = {
         },
     },
     "tyranids": {
-        "label": "Тираниды",
-        "icon": "☣",
+        "label": "Тираниды", "icon": "T", "hidden": False,
         "vars": {
             "--accent": "#8a2aa0",
             "--accent-soft": "#b84ad0",
@@ -204,6 +194,120 @@ THEMES = {
             "--shadow": "rgba(0,0,0,0.75)",
             "--radial-1": "rgba(184, 74, 208, 0.12)",
             "--radial-2": "rgba(70, 200, 130, 0.06)",
+        },
+    },
+    "tzeench": {
+        "label": "Тзинч", "icon": "Tz", "hidden": True,
+        "vars": {
+            "--accent": "#2a7ab8",
+            "--accent-soft": "#4aa8e0",
+            "--accent-glow": "rgba(74, 168, 224, 0.5)",
+            "--bg": "#050810",
+            "--bg-alt": "#0a0e18",
+            "--panel": "#0e1420",
+            "--panel-hi": "#141c2c",
+            "--border": "#1e2a44",
+            "--border-hi": "#2e4060",
+            "--fg": "#d0d8e8",
+            "--fg-dim": "#8894a8",
+            "--shadow": "rgba(0,0,0,0.8)",
+            "--radial-1": "rgba(74, 168, 224, 0.14)",
+            "--radial-2": "rgba(200, 74, 154, 0.10)",
+        },
+    },
+    "khorn": {
+        "label": "Кхорн", "icon": "Kh", "hidden": True,
+        "vars": {
+            "--accent": "#a02020",
+            "--accent-soft": "#d4a017",
+            "--accent-glow": "rgba(200, 32, 32, 0.5)",
+            "--bg": "#0a0202",
+            "--bg-alt": "#100504",
+            "--panel": "#160808",
+            "--panel-hi": "#20100a",
+            "--border": "#3a1010",
+            "--border-hi": "#5a2810",
+            "--fg": "#e8c8b0",
+            "--fg-dim": "#a08868",
+            "--shadow": "rgba(0,0,0,0.85)",
+            "--radial-1": "rgba(200, 32, 32, 0.16)",
+            "--radial-2": "rgba(184, 134, 11, 0.10)",
+        },
+    },
+    "noorgl": {
+        "label": "Нургл", "icon": "Ng", "hidden": True,
+        "vars": {
+            "--accent": "#6b7a3a",
+            "--accent-soft": "#8a5a2a",
+            "--accent-glow": "rgba(107, 122, 58, 0.45)",
+            "--bg": "#080a05",
+            "--bg-alt": "#0e120a",
+            "--panel": "#13180e",
+            "--panel-hi": "#1a2014",
+            "--border": "#28301a",
+            "--border-hi": "#3a4228",
+            "--fg": "#d8d4b0",
+            "--fg-dim": "#908868",
+            "--shadow": "rgba(0,0,0,0.8)",
+            "--radial-1": "rgba(107, 122, 58, 0.14)",
+            "--radial-2": "rgba(138, 90, 42, 0.10)",
+        },
+    },
+    "slaanesh": {
+        "label": "Слаанеш", "icon": "Sl", "hidden": True,
+        "vars": {
+            "--accent": "#8a2aa0",
+            "--accent-soft": "#d84ad0",
+            "--accent-glow": "rgba(216, 74, 208, 0.5)",
+            "--bg": "#0c0510",
+            "--bg-alt": "#140818",
+            "--panel": "#190b20",
+            "--panel-hi": "#22102c",
+            "--border": "#341c40",
+            "--border-hi": "#4c2c58",
+            "--fg": "#e8d0e8",
+            "--fg-dim": "#a890a8",
+            "--shadow": "rgba(0,0,0,0.8)",
+            "--radial-1": "rgba(216, 74, 208, 0.14)",
+            "--radial-2": "rgba(138, 42, 160, 0.10)",
+        },
+    },
+    "inquisition": {
+        "label": "Инквизиция", "icon": "In", "hidden": True,
+        "vars": {
+            "--accent": "#7a0a0a",
+            "--accent-soft": "#d4a017",
+            "--accent-glow": "rgba(212, 160, 23, 0.45)",
+            "--bg": "#040303",
+            "--bg-alt": "#0a0707",
+            "--panel": "#0e0a0a",
+            "--panel-hi": "#160e0c",
+            "--border": "#241612",
+            "--border-hi": "#3a2418",
+            "--fg": "#e0d0b8",
+            "--fg-dim": "#948468",
+            "--shadow": "rgba(0,0,0,0.9)",
+            "--radial-1": "rgba(122, 10, 10, 0.16)",
+            "--radial-2": "rgba(212, 160, 23, 0.08)",
+        },
+    },
+    "gidra": {
+        "label": "Альфа Легион", "icon": "Al", "hidden": True,
+        "vars": {
+            "--accent": "#1a8a7a",
+            "--accent-soft": "#2ac8b8",
+            "--accent-glow": "rgba(42, 200, 184, 0.5)",
+            "--bg": "#03080a",
+            "--bg-alt": "#08100f",
+            "--panel": "#0c1614",
+            "--panel-hi": "#121e1c",
+            "--border": "#1a2c28",
+            "--border-hi": "#284238",
+            "--fg": "#c8e0d8",
+            "--fg-dim": "#7a948a",
+            "--shadow": "rgba(0,0,0,0.85)",
+            "--radial-1": "rgba(42, 200, 184, 0.14)",
+            "--radial-2": "rgba(26, 138, 122, 0.10)",
         },
     },
 }
@@ -339,24 +443,60 @@ a { color: var(--accent-soft) !important; }
 '''
 
 
-def _current() -> str:
+def _current():
     return st.session_state.get("ui_theme", _DEFAULT)
 
 
-def _build_css() -> str:
+def _build_css():
     t = THEMES.get(_current(), THEMES[_DEFAULT])
     vars_css = "\n    ".join(f"{k}: {v};" for k, v in t["vars"].items())
     return BASE_CSS.replace("{vars}", vars_css)
 
 
-def apply_theme() -> None:
+def apply_theme():
     st.markdown("<style>" + _build_css() + "</style>",
                 unsafe_allow_html=True)
 
 
-def render_theme_selector(key_prefix: str = "theme") -> None:
-    options = list(THEMES.keys())
+def available_themes(login=""):
+    # Список ключей тем: базовые + разблокированные скрытые.
+    unlocked = set()
+    if login:
+        try:
+            from services.unlocks import get_unlocked
+            unlocked = get_unlocked(login)
+        except Exception as e:
+            print("[theme] unlocks fail: "
+                  + type(e).__name__ + ": " + str(e))
+    out = []
+    for key, cfg in THEMES.items():
+        if cfg.get("hidden"):
+            if key in unlocked:
+                out.append(key)
+        else:
+            out.append(key)
+    return out
+
+
+def theme_title(theme_key=""):
+    # Титул для уникальной темы, иначе пустая строка.
+    if not theme_key:
+        return ""
+    try:
+        from services.unlocks import title_for_theme
+        return title_for_theme(theme_key)
+    except Exception:
+        return ""
+
+
+def render_theme_selector(key_prefix="theme", login=""):
+    options = available_themes(login)
     current = _current()
+    if current not in options:
+        if options:
+            st.session_state.ui_theme = options[0]
+            st.rerun()
+        return
     idx = options.index(current) if current in options else 0
 
     st.markdown(
@@ -369,7 +509,7 @@ def render_theme_selector(key_prefix: str = "theme") -> None:
         "Тема",
         options=options,
         index=idx,
-        format_func=lambda k: THEMES[k]["icon"] + "  " + THEMES[k]["label"],
+        format_func=lambda k: THEMES[k]["label"],
         key=key_prefix + "_selector",
         label_visibility="collapsed",
     )
@@ -378,5 +518,5 @@ def render_theme_selector(key_prefix: str = "theme") -> None:
         st.rerun()
 
 
-def current_theme_icon() -> str:
+def current_theme_icon():
     return THEMES.get(_current(), THEMES[_DEFAULT])["icon"]
