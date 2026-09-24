@@ -1,9 +1,10 @@
-# PATCH_15K
-# ui/screens/game.py — игровой экран: сайдбар (локация, полоски, экипировка,
-# оружие, навыки, способности) + чат с Мастером + карточка броска.
+# PATCH_15Z
+# ui/screens/game.py — игровой экран: сайдбар + чат с Мастером.
 from __future__ import annotations
 
 import json
+import random
+import time
 from typing import Optional
 
 import streamlit as st
@@ -12,18 +13,17 @@ from persistence.chats import append_turn, load_history
 from persistence.characters import CharacterError, load_character
 from services.fallbacks import CHARACTERISTIC_NAMES
 from services.orchestrator import Orchestrator
+from ui.roll_card import (
+    render_roll_card,
+    render_spinner_html,
+    render_dialog_await,
+    render_dialog_rolling,
+)
+from ui.loading_screen import full_css, full_html, get_phrases
 
 
 _ROLL_MARKER = "<!--ROLLCARD:"
 _ROLL_MARKER_END = "-->"
-
-_VARIANTS = ["ornate", "classic", "compact", "minimal"]
-_VARIANT_LABELS = {
-    "ornate": "Орнамент",
-    "classic": "Классика",
-    "compact": "Компактная",
-    "minimal": "Минимал",
-}
 
 
 # =====================================================================
@@ -111,7 +111,7 @@ _SIDEBAR_CSS = '''<style>
 
 
 # =====================================================================
-# Roll card
+# Helpers для истории чата
 # =====================================================================
 def _pack_narrative(narrative: str, roll: Optional[dict]) -> str:
     if not roll:
@@ -123,7 +123,7 @@ def _pack_narrative(narrative: str, roll: Optional[dict]) -> str:
     return narrative + "\n" + _ROLL_MARKER + payload + _ROLL_MARKER_END
 
 
-def _unpack_narrative(text: str) -> tuple[str, Optional[dict]]:
+def _unpack_narrative(text: str) -> tuple:
     if _ROLL_MARKER not in text:
         return text, None
     head, tail = text.split(_ROLL_MARKER, 1)
@@ -137,92 +137,6 @@ def _unpack_narrative(text: str) -> tuple[str, Optional[dict]]:
     return head.rstrip(), roll
 
 
-def _render_roll_card(roll: Optional[dict], variant: str = "ornate") -> None:
-    if not roll:
-        return
-
-    d100 = roll.get("roll", roll.get("d100", "?"))
-    target = roll.get("target", "?")
-    difficulty = roll.get("difficulty", "Ordinary")
-    reason = roll.get("reason", "") or ""
-    degrees = roll.get("degrees", 0)
-    success = bool(roll.get("success"))
-    crit_s = bool(roll.get("crit_success"))
-    crit_f = bool(roll.get("crit_fail"))
-
-    if crit_s:
-        icon, color, label = "*", "#FFD700", "КРИТИЧЕСКИЙ УСПЕХ"
-    elif crit_f:
-        icon, color, label = "!", "#8B0000", "КРИТИЧЕСКИЙ ПРОВАЛ"
-    elif success:
-        icon, color, label = "+", "#2E7D32", "УСПЕХ"
-    else:
-        icon, color, label = "-", "#B71C1C", "ПРОВАЛ"
-
-    sub_line = (reason + " * маржа " + str(degrees)) if reason \
-        else ("маржа " + str(degrees))
-
-    if variant == "compact":
-        html = (
-            "<div style='color:" + color + ";font-family:monospace;font-size:14px;"
-            "padding:4px 0;'><b>" + icon + " " + label + "</b> &nbsp;·&nbsp; "
-            "d100=<b>" + str(d100) + "</b> vs <b>" + str(target) + "</b> "
-            "&nbsp;·&nbsp; " + str(difficulty) + ", маржа " + str(degrees) + "</div>"
-        )
-        st.markdown(html, unsafe_allow_html=True)
-        return
-
-    if variant == "minimal":
-        html = (
-            "<div style='color:" + color + ";padding:2px 0;'>"
-            "<b>" + icon + " " + label + "</b>: d100=" + str(d100)
-            + " / " + str(target) + " (" + str(difficulty) + ")</div>"
-        )
-        st.markdown(html, unsafe_allow_html=True)
-        return
-
-    if variant == "classic":
-        html = (
-            "<div style='border-left:4px solid " + color + ";padding:10px 14px;"
-            "background:#1a1a1d;border-radius:4px;margin:6px 0;"
-            "font-family:monospace;'>"
-            "<div style='color:" + color + ";font-weight:bold;font-size:15px;'>"
-            + icon + " " + label + "</div>"
-            "<div style='color:#e8e0d0;font-size:14px;margin-top:4px;'>"
-            "d100 = <b>" + str(d100) + "</b> · порог <b>" + str(target)
-            + "</b> · " + str(difficulty) + "</div>"
-            "<div style='color:#a0a0a0;font-size:12px;margin-top:2px;'>"
-            + sub_line + "</div>"
-            "</div>"
-        )
-        st.markdown(html, unsafe_allow_html=True)
-        return
-
-    html = (
-        "<div style='border:2px double " + color + ";border-radius:12px;"
-        "padding:14px 18px;margin:8px 0;"
-        "background:linear-gradient(180deg,#1a1a1d 0%,#0e0e10 100%);"
-        "text-align:center;font-family:Georgia,serif;'>"
-        "<div style='color:" + color + ";font-size:12px;letter-spacing:6px;'>"
-        "&#9672; &#9672; &#9672;</div>"
-        "<div style='color:" + color + ";font-size:22px;margin:6px 0;"
-        "font-weight:bold;'>" + icon + " " + label + " " + icon + "</div>"
-        "<div style='color:#e8e0d0;font-size:14px;'>"
-        "d100 = <b>" + str(d100) + "</b> &nbsp;·&nbsp; "
-        "Порог = <b>" + str(target) + "</b></div>"
-        "<div style='color:#a0a0a0;font-size:12px;margin-top:6px;'>"
-        + sub_line + "</div>"
-        "<div style='color:" + color + ";font-size:12px;"
-        "letter-spacing:6px;margin-top:6px;'>"
-        "&#9672; &#9672; &#9672;</div>"
-        "</div>"
-    )
-    st.markdown(html, unsafe_allow_html=True)
-
-
-# =====================================================================
-# Persistence helpers
-# =====================================================================
 def _save_char(login: str, name: str, char: dict) -> bool:
     try:
         from persistence.characters import save_character
@@ -259,7 +173,6 @@ def _render_bars(char: dict) -> None:
     fp = char.get("fate_points") or {}
     xp = int(char.get("xp", 0) or 0)
     xp_next = 500
-
     html = ""
     html += _bar("Раны", int(w.get("current", 0)), int(w.get("max", 0)), "hp")
     html += _bar("Судьба", int(fp.get("current", 0)), int(fp.get("max", 0)), "fate")
@@ -275,7 +188,6 @@ def _render_location(char: dict) -> None:
     place = loc.get("place") or loc.get("name") or "—"
     date = char.get("game_date") or "—"
     desc = loc.get("description") or loc.get("desc") or ""
-
     html = (
         "<div class='gx-loc'>"
         "<div class='row'><span class='lbl'>МИР</span>"
@@ -307,11 +219,17 @@ def _armour_slots(char: dict) -> dict:
 
 def _slot_label(k: str) -> str:
     return {
-        "head": "Голова",
-        "body": "Торс",
-        "arms": "Руки",
-        "legs": "Ноги",
+        "head": "Голова", "body": "Торс",
+        "arms": "Руки", "legs": "Ноги",
     }.get(k, k)
+
+
+def _item_name(it) -> str:
+    if isinstance(it, str):
+        return it
+    if isinstance(it, dict):
+        return str(it.get("name") or it.get("title") or "предмет")
+    return str(it)
 
 
 def _render_armour(char: dict, login: str, char_name: str) -> None:
@@ -325,12 +243,7 @@ def _render_armour(char: dict, login: str, char_name: str) -> None:
             "<div class='val'>" + str(v) + "</div>"
             "</div>"
         )
-    if slots.get("notes"):
-        html += ("<div style='font-size:11px;color:var(--fg-dim);"
-                 "margin-top:4px;'>" + str(slots["notes"]) + "</div>")
     st.markdown(html, unsafe_allow_html=True)
-
-    # Управление слотами: надеть из рюкзака / снять
     equip = char.get("equipment") or []
     if equip:
         with st.popover("Надеть из рюкзака", use_container_width=True):
@@ -352,7 +265,6 @@ def _render_armour(char: dict, login: str, char_name: str) -> None:
                 armour[slot] = _item_name(item)
                 if _save_char(login, char_name, char):
                     st.rerun()
-
     for k in ("head", "body", "arms", "legs"):
         if slots.get(k):
             if st.button("Снять: " + _slot_label(k),
@@ -367,14 +279,6 @@ def _render_armour(char: dict, login: str, char_name: str) -> None:
                     st.rerun()
 
 
-def _item_name(it) -> str:
-    if isinstance(it, str):
-        return it
-    if isinstance(it, dict):
-        return str(it.get("name") or it.get("title") or "предмет")
-    return str(it)
-
-
 def _render_equipment(char: dict, login: str, char_name: str) -> None:
     equip = char.get("equipment") or []
     if equip:
@@ -385,14 +289,12 @@ def _render_equipment(char: dict, login: str, char_name: str) -> None:
         st.markdown(chips, unsafe_allow_html=True)
     else:
         st.caption("Рюкзак пуст.")
-
     with st.popover("Добавить предмет", use_container_width=True):
         nm = st.text_input("Название", key="equip_add_name")
         if st.button("Добавить", key="equip_add_do") and nm.strip():
             char.setdefault("equipment", []).append(nm.strip())
             if _save_char(login, char_name, char):
                 st.rerun()
-
     if equip:
         with st.popover("Удалить предмет", use_container_width=True):
             idx = st.selectbox(
@@ -448,7 +350,6 @@ def _attack_dialog(login: str, char_name: str, char: dict) -> None:
             st.session_state.pop("_attack_weapon", None)
             st.rerun()
         return
-
     name = _weapon_name(w)
     skill = _weapon_skill(w, char)
     dmg = _weapon_damage(w)
@@ -486,7 +387,7 @@ def _attack_dialog(login: str, char_name: str, char: dict) -> None:
 
     res = st.session_state.get("_attack_result")
     if res:
-        _render_roll_card(res, variant="ornate")
+        render_roll_card(res, fresh=True)
         if res.get("success"):
             damage_line = ""
             if dmg:
@@ -512,7 +413,6 @@ def _attack_dialog(login: str, char_name: str, char: dict) -> None:
                     damage_line = "Урон: " + str(dmg)
             if damage_line:
                 st.info(damage_line)
-
             if st.button("Отправить Мастеру", type="primary",
                          key="atk_send", use_container_width=True):
                 msg = ("Атакую: " + name + " [" + skill + " " + str(res.get("roll"))
@@ -523,7 +423,6 @@ def _attack_dialog(login: str, char_name: str, char: dict) -> None:
                 st.session_state.pop("_attack_weapon", None)
                 st.session_state.pop("_attack_result", None)
                 st.rerun()
-
     if st.button("Отмена", key="atk_cancel", use_container_width=True):
         st.session_state.pop("_attack_open", None)
         st.session_state.pop("_attack_weapon", None)
@@ -603,7 +502,6 @@ def _render_abilities(char: dict) -> None:
     psy = char.get("psychic_powers") or []
     tal = char.get("talents") or []
     psy_rating = int(char.get("psy_rating", 0) or 0)
-
     if psy_rating > 0 and psy:
         st.markdown("<div class='gx-sec'>Психосилы (PSY "
                     + str(psy_rating) + ")</div>", unsafe_allow_html=True)
@@ -632,13 +530,10 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
             ("Мужской" if char.get("gender") == "male" else "Женский")
             + " · " + str(char.get("age", "?")) + " лет"
         )
-
         st.markdown("<div class='gx-sec'>Локация</div>",
                     unsafe_allow_html=True)
         _render_location(char)
-
         _render_bars(char)
-
         st.markdown("<div class='gx-sec'>Характеристики</div>",
                     unsafe_allow_html=True)
         stats = char.get("characteristics") or {}
@@ -646,36 +541,16 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
         for i, (key, val) in enumerate(stats.items()):
             with cols[i % 3]:
                 st.metric(CHARACTERISTIC_NAMES.get(key, key), val)
-
         with st.expander("Экипировка", expanded=False):
             _render_armour(char, login, char_name)
             st.markdown("---")
             _render_equipment(char, login, char_name)
-
         with st.expander("Оружие", expanded=False):
             _render_weapons(char, login, char_name)
-
         with st.expander("Навыки", expanded=False):
             _render_skills(char, login, char_name)
-
         with st.expander("Способности", expanded=False):
             _render_abilities(char)
-
-        st.markdown("---")
-        if "roll_card_variant" not in st.session_state:
-            st.session_state.roll_card_variant = "ornate"
-        idx = _VARIANTS.index(st.session_state.roll_card_variant) \
-            if st.session_state.roll_card_variant in _VARIANTS else 0
-        choice = st.selectbox(
-            "Карточка броска",
-            options=_VARIANTS,
-            index=idx,
-            format_func=lambda v: _VARIANT_LABELS.get(v, v),
-            key="_roll_card_variant_widget",
-        )
-        if choice != st.session_state.roll_card_variant:
-            st.session_state.roll_card_variant = choice
-
         st.markdown("---")
         if st.button("Развитие", use_container_width=True,
                      key="game_progression"):
@@ -706,7 +581,6 @@ def _get_orch() -> Orchestrator:
 
 
 def _render_messages(history: list) -> None:
-    variant = st.session_state.get("roll_card_variant", "ornate")
     for msg in history:
         role = msg.get("role")
         text = msg.get("text", "")
@@ -717,8 +591,108 @@ def _render_messages(history: list) -> None:
         clean_text, roll = _unpack_narrative(text)
         with st.chat_message("assistant"):
             if roll:
-                _render_roll_card(roll, variant=variant)
+                render_roll_card(roll, fresh=False)
             st.markdown(clean_text)
+
+
+# =====================================================================
+# Interactive roll dialog
+# =====================================================================
+@st.dialog("Бросок d100")
+def _roll_dialog() -> None:
+    pend = st.session_state.get("_roll_dialog_state")
+    if not pend:
+        st.session_state.pop("_roll_dialog_state", None)
+        st.rerun()
+        return
+
+    phase = pend.get("phase", "await")
+    roll = pend.get("roll")
+    cmd_info = pend.get("command_info", {})
+
+    if phase == "await":
+        render_dialog_await(cmd_info)
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("БРОСИТЬ", type="primary",
+                         use_container_width=True, key="rd_go"):
+                pend["phase"] = "rolling"
+                st.session_state["_roll_dialog_state"] = pend
+                st.rerun()
+        with c2:
+            if st.button("ОТМЕНИТЬ", use_container_width=True, key="rd_cancel"):
+                st.session_state.pop("_roll_dialog_state", None)
+                st.rerun()
+        return
+
+    if phase == "rolling":
+        placeholder = st.empty()
+        for i in range(30):
+            n = random.randint(1, 100)
+            with placeholder:
+                render_dialog_rolling(n)
+            time.sleep(0.08)
+        pend["phase"] = "reveal"
+        st.session_state["_roll_dialog_state"] = pend
+        st.rerun()
+        return
+
+    if phase == "reveal":
+        if roll:
+            render_roll_card(roll, fresh=True)
+        time.sleep(2.5)
+        pend["phase"] = "done"
+        st.session_state["_roll_dialog_state"] = pend
+        st.rerun()
+        return
+
+    if phase == "done":
+        _finalize_pending_turn(pend)
+        return
+
+    st.session_state.pop("_roll_dialog_state", None)
+    st.rerun()
+
+
+def _finalize_pending_turn(pend: dict) -> None:
+    login = st.session_state.get("user_login")
+    char_name = pend.get("char_name") or st.session_state.get("active_character")
+    prompt = pend.get("prompt", "")
+    narrative = pend.get("narrative", "")
+    roll_dict = pend.get("roll")
+    if login and char_name and prompt:
+        try:
+            append_turn(login, char_name, prompt,
+                        _pack_narrative(narrative, roll_dict))
+        except Exception as e:
+            print("[game] append_turn fail: "
+                  + type(e).__name__ + ": " + str(e))
+    st.session_state.pop("_roll_dialog_state", None)
+    st.rerun()
+
+
+
+
+def _run_game_loading() -> None:
+    st.markdown(full_css(), unsafe_allow_html=True)
+    try:
+        from ui.theme import _current
+        theme = _current()
+    except Exception:
+        theme = "dark"
+    pool = get_phrases(theme)
+    import random as _rnd
+    phrase = pool[0]
+    st.markdown(
+        full_html(theme, 100, phrase,
+                  subtitle="когитатор готовит сессию"),
+        unsafe_allow_html=True,
+    )
+    try:
+        _get_orch()
+    except Exception as e:
+        print("[game] orch init fail: "
+              + type(e).__name__ + ": " + str(e))
 
 
 # =====================================================================
@@ -727,11 +701,20 @@ def _render_messages(history: list) -> None:
 def render() -> None:
     login = st.session_state.get("user_login")
     char_name = st.session_state.get("active_character")
-
     if not login or not char_name:
         st.session_state.screen = "main_menu"
         st.rerun()
         return
+
+    if st.session_state.get("_game_loading_pending"):
+        _run_game_loading()
+        st.session_state.pop("_game_loading_pending", None)
+        st.session_state["_game_loading_ready"] = True
+        st.rerun()
+        return
+
+    if st.session_state.pop("_game_loading_ready", False):
+        pass
 
     try:
         char = load_character(login, char_name)
@@ -744,7 +727,10 @@ def render() -> None:
 
     st.markdown(_SIDEBAR_CSS, unsafe_allow_html=True)
 
-    # Открыть диалог атаки, если выбран
+    if st.session_state.get("_roll_dialog_state"):
+        _roll_dialog()
+        return
+
     if st.session_state.get("_attack_open"):
         _attack_dialog(login, char_name, char)
         return
@@ -752,8 +738,8 @@ def render() -> None:
     _render_sidebar(char, login, char_name)
 
     st.markdown(
-        "<h2 style='font-family: Georgia, serif;'>" + str(char.get("name", ""))
-        + "</h2>",
+        "<h2 style='font-family: Georgia, serif;'>"
+        + str(char.get("name", "")) + "</h2>",
         unsafe_allow_html=True,
     )
 
@@ -762,13 +748,18 @@ def render() -> None:
     init_key = "__init_scene__" + str(login) + "__" + str(char_name)
     if not history and init_key not in st.session_state:
         st.session_state[init_key] = True
-        with st.spinner("Мастер открывает сцену..."):
+        placeholder = st.empty()
+        with placeholder:
+            st.markdown(render_spinner_html(), unsafe_allow_html=True)
+        try:
             orch = _get_orch()
             result = orch.process_turn("Начало приключения.", char, history=[])
-            roll_dict = result.roll.to_dict() if result.roll else None
-            narrative = _pack_narrative(result.narrative, roll_dict)
-            append_turn(login, char_name, "Начало приключения.", narrative)
-            history = load_history(login, char_name)
+        finally:
+            placeholder.empty()
+        roll_dict = result.roll.to_dict() if result.roll else None
+        narrative = _pack_narrative(result.narrative, roll_dict)
+        append_turn(login, char_name, "Начало приключения.", narrative)
+        history = load_history(login, char_name)
 
     _render_messages(history)
 
@@ -778,15 +769,36 @@ def render() -> None:
     if prompt:
         with st.chat_message("user"):
             st.markdown(prompt)
-        variant = st.session_state.get("roll_card_variant", "ornate")
         with st.chat_message("assistant"):
-            with st.spinner("Мастер ведёт сцену..."):
+            placeholder = st.empty()
+            with placeholder:
+                st.markdown(render_spinner_html(), unsafe_allow_html=True)
+            try:
                 orch = _get_orch()
                 result = orch.process_turn(prompt, char, history=history)
-            if result.roll:
-                _render_roll_card(result.roll.to_dict(), variant=variant)
-            st.markdown(result.narrative)
-        roll_dict = result.roll.to_dict() if result.roll else None
-        append_turn(login, char_name, prompt,
-                    _pack_narrative(result.narrative, roll_dict))
+            finally:
+                placeholder.empty()
+
+        if result.roll:
+            roll_dict = result.roll.to_dict()
+            cmd = result.command
+            st.session_state["_roll_dialog_state"] = {
+                "phase": "await",
+                "prompt": prompt,
+                "narrative": result.narrative,
+                "roll": roll_dict,
+                "char_name": char_name,
+                "command_info": {
+                    "skill": str(getattr(cmd, "skill", "") or "Проверка")
+                             if cmd else "Проверка",
+                    "difficulty": str(getattr(cmd, "difficulty", "Ordinary"))
+                                  if cmd else "Ordinary",
+                    "target": roll_dict.get("target", "?"),
+                },
+            }
+            st.rerun()
+            return
+
+        st.markdown(result.narrative)
+        append_turn(login, char_name, prompt, result.narrative)
         st.rerun()

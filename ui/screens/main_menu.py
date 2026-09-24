@@ -228,6 +228,7 @@ def _continue():
     except Exception as e:
         print("[main_menu] set_setting fail: "
               + type(e).__name__ + ": " + str(e))
+    st.session_state["_game_loading_pending"] = True
     st.session_state.screen = "game"
     st.rerun()
 

@@ -157,8 +157,12 @@ def render() -> None:
             )
             if int(data.get("xp", 0) or 0) == 0:
                 data["xp"] = 300
+            if subfaction_id:
+                data["archetype_id"] = subfaction_id
+                data["subfaction_id"] = subfaction_id
             save_character(login, name.strip(), data)
             st.session_state.active_character = name.strip()
+            st.session_state["_game_loading_pending"] = True
             st.success(f"Персонаж «{name}» создан ({FACTIONS[faction_id]['name']})")
             _goto("game")
             st.rerun()

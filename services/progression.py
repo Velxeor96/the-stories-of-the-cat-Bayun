@@ -1,4 +1,4 @@
-# HOTFIX_15Y
+# PATCH_15Z2
 # services/progression.py — правила прокачки Rogue Trader.
 from __future__ import annotations
 
@@ -19,16 +19,68 @@ CHAR_COSTS = {
 SKILL_COSTS = {"Trained": 100, "Experienced": 200, "Veteran": 300}
 TALENT_COSTS = {"basic": 400, "prereq": 600, "universal": 750}
 
+
+# Профильные характеристики по субфракциям.
+# Ключ = subfaction_id из services/fallbacks.py FACTIONS.
 ARCHETYPE_CHARS = {
-    "rogue_trader":  ["Fel", "Int", "Per"],
-    "arch_militant": ["WS", "BS", "S", "T"],
-    "astropath":     ["WP", "Per", "Int"],
-    "explorator":    ["Int", "T", "Per"],
-    "void_master":   ["Ag", "Int", "Per"],
-    "missionary":    ["Fel", "WP", "S"],
-    "navigator":     ["WP", "Int", "Per"],
-    "seneschal":     ["Int", "Fel", "Per"],
+    # --- Imperium ---
+    "rogue_trader":    ["Fel", "Int", "Per"],
+    "space_marine":    ["WS", "BS", "S", "T"],
+    "imperial_guard":  ["BS", "T", "Ag"],
+    "mechanicus":      ["Int", "T", "Per"],
+    "sororitas":       ["WS", "WP", "Fel"],
+    "arbites":         ["WS", "Int", "Per"],
+    # --- Chaos ---
+    "chaos_marine":    ["WS", "BS", "S"],
+    "dark_mechanicum": ["Int", "WP", "T"],
+    "cultist":         ["Fel", "WP", "Ag"],
+    # --- Eldar ---
+    "asuryani":        ["Ag", "BS", "WP"],
+    "harlequin":       ["Ag", "WS", "Fel"],
+    "exodite":         ["Ag", "Per", "T"],
+    # --- Drukhari ---
+    "drukhari":        ["Ag", "WS", "Per"],
+    # --- Orks ---
+    "freebooter":      ["S", "T", "WS"],
+    # --- Tau ---
+    "tau":             ["BS", "Ag", "Int"],
+    # --- Necrons ---
+    "necron":          ["S", "T", "WP"],
+    # --- Genestealers ---
+    "genestealer":     ["Fel", "WP", "Ag"],
+    # --- Legacy (Rogue Trader careers) ---
+    "arch_militant":   ["WS", "BS", "S", "T"],
+    "astropath":       ["WP", "Per", "Int"],
+    "explorator":      ["Int", "T", "Per"],
+    "void_master":     ["Ag", "Int", "Per"],
+    "missionary":      ["Fel", "WP", "S"],
+    "navigator":       ["WP", "Int", "Per"],
+    "seneschal":       ["Int", "Fel", "Per"],
 }
+
+
+
+
+LEVELS_RU = {
+    'Trained': 'Базовый',
+    'Experienced': 'Опытный',
+    'Veteran': 'Ветеран',
+}
+
+
+def level_ru(level):
+    return LEVELS_RU.get(str(level), str(level))
+
+
+TALENT_KIND_RU = {
+    'basic': 'Простой',
+    'prereq': 'С пререквизитом',
+    'universal': 'Универсальный',
+}
+
+
+def talent_kind_ru(kind):
+    return TALENT_KIND_RU.get(str(kind), str(kind))
 
 
 def total_spent_xp(char):
@@ -61,7 +113,10 @@ def rank_progress(char):
 
 
 def is_proficient(char, stat):
-    arch = str(char.get("archetype_id") or char.get("archetype") or "").lower()
+    arch = str(char.get("archetype_id") or char.get("subfaction_id") or
+               char.get("archetype") or "").lower()
+    if not arch:
+        return False
     lst = ARCHETYPE_CHARS.get(arch, [])
     return stat in lst
 

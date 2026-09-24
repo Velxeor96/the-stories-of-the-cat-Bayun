@@ -1,5 +1,5 @@
-# HOTFIX_15Y
-# ui/screens/progression.py — экран «Развитие» (Rogue Trader).
+# PATCH_16F
+# ui/screens/progression.py — экран «Развитие» (визуал).
 from __future__ import annotations
 
 import streamlit as st
@@ -10,50 +10,206 @@ from services.fallbacks import CHARACTERISTIC_NAMES
 
 
 _CSS = '''<style>
-.pg-head { text-align: center; padding: 8px 20px 4px 20px; }
+.pg-head {
+    text-align: center;
+    padding: 8px 20px 4px 20px;
+}
 .pg-title {
     font-family: Georgia, serif;
-    font-size: 34px; letter-spacing: 5px;
+    font-size: 44px;
+    letter-spacing: 10px;
     color: var(--fg);
-    text-shadow: 0 0 22px var(--accent-glow);
-    margin-bottom: 4px;
+    text-shadow: 0 0 30px var(--accent-glow),
+                 0 0 60px var(--accent-glow);
+    margin-bottom: 6px;
 }
-.pg-sub { color: var(--fg-dim); font-size: 13px; letter-spacing: 2px; }
+.pg-sub {
+    color: var(--fg-dim);
+    font-size: 13px;
+    letter-spacing: 3px;
+    font-style: italic;
+}
 .pg-rank {
-    max-width: 620px; margin: 12px auto 18px auto;
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 6px;
-    padding: 10px 16px;
-    background: rgba(255,255,255,0.03);
-    color: var(--fg);
+    max-width: 720px;
+    margin: 18px auto 24px auto;
+    border: 1px solid var(--border-hi);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 18px 24px;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--accent) 6%, var(--panel)) 0%,
+        var(--panel) 100%);
+    box-shadow: 0 4px 20px var(--shadow),
+                0 0 30px var(--accent-glow);
 }
 .pg-rank .row {
-    display: flex; justify-content: space-between;
-    font-size: 13px; padding: 2px 0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    padding: 4px 0;
+    border-bottom: 1px dashed rgba(255,255,255,0.05);
 }
-.pg-rank .lbl { color: var(--fg-dim); letter-spacing: 1px; }
-.pg-rank .val { color: var(--fg); font-weight: 600; }
+.pg-rank .row:last-of-type { border-bottom: none; }
+.pg-rank .lbl {
+    color: var(--fg-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+.pg-rank .val {
+    color: var(--fg);
+    font-family: Georgia, serif;
+    font-weight: bold;
+    font-size: 20px;
+}
+.pg-rank .val.acc {
+    color: var(--accent);
+    text-shadow: 0 0 10px var(--accent-glow);
+}
 .pg-bar {
-    height: 10px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border);
-    border-radius: 4px; overflow: hidden;
-    margin-top: 8px;
+    height: 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border-hi);
+    border-radius: 7px;
+    overflow: hidden;
+    margin-top: 12px;
+    position: relative;
 }
 .pg-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--accent) 0%, var(--accent-soft) 100%);
-    box-shadow: 0 0 10px var(--accent-glow);
+    background: linear-gradient(90deg,
+        var(--accent) 0%, var(--accent-soft) 100%);
+    box-shadow: 0 0 14px var(--accent-glow);
+    transition: width 0.4s ease;
 }
-.pg-char {
-    display: flex; justify-content: space-between;
+.pg-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 18px 0 22px 0;
+}
+.pg-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 14px 12px 14px;
+    background: linear-gradient(180deg,
+        color-mix(in srgb, var(--accent) 4%, var(--panel)) 0%,
+        var(--panel) 100%);
+    text-align: center;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+}
+.pg-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 24px var(--accent-glow);
+    transform: translateY(-2px);
+}
+.pg-card.prof {
+    border-left: 3px solid var(--accent);
+}
+.pg-card.elite {
+    border-left: 3px solid var(--border-hi);
+    opacity: 0.92;
+}
+.pg-card .cap {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    margin-bottom: 6px;
+}
+.pg-card .val {
+    font-family: Georgia, serif;
+    font-size: 42px;
+    font-weight: bold;
+    color: var(--fg);
+    text-shadow: 0 0 16px var(--accent-glow);
+    line-height: 1;
+    margin: 4px 0 8px 0;
+}
+.pg-card .name {
+    font-size: 12px;
+    color: var(--fg-dim);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+.pg-card .lvl {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border: 1px solid var(--border-hi);
+    border-radius: 10px;
+    color: var(--fg-dim);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+.pg-card .lvl.prof {
+    border-color: var(--accent);
+    color: var(--accent-soft);
+}
+.pg-card .cost {
+    font-size: 11px;
+    color: var(--fg-dim);
+    letter-spacing: 1px;
+    margin-top: 6px;
+}
+.pg-card .cost b {
+    color: var(--accent-soft);
+    font-size: 14px;
+}
+.pg-card .cost.max {
+    color: #b08020;
+    font-weight: 600;
+}
+.pg-sec {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin: 22px 0 12px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+}
+.pg-info {
+    max-width: 720px;
+    margin: 12px auto;
+    padding: 10px 16px;
+    border-left: 3px solid var(--accent);
+    background: rgba(255,255,255,0.02);
+    border-radius: 6px;
+    color: var(--fg-dim);
+    font-size: 12px;
+    letter-spacing: 1px;
+}
+.pg-skill-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     border-bottom: 1px solid rgba(255,255,255,0.06);
-    padding: 4px 0; font-size: 13px;
+    padding: 8px 4px;
+    font-size: 14px;
 }
-.pg-char .name { color: var(--fg); }
-.pg-char .val { color: var(--accent-soft); font-weight: 600; }
-.pg-char .note { color: var(--fg-dim); font-size: 11px; margin-left: 8px; }
+.pg-skill-row .name {
+    color: var(--fg);
+    font-family: Georgia, serif;
+}
+.pg-skill-row .lvl {
+    color: var(--accent-soft);
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-size: 12px;
+}
+.pg-chip {
+    display: inline-block;
+    padding: 4px 12px;
+    margin: 3px 4px 3px 0;
+    border: 1px solid var(--border-hi);
+    border-radius: 12px;
+    font-size: 13px;
+    color: var(--fg);
+    background: rgba(255,255,255,0.03);
+}
 </style>'''
 
 
@@ -118,7 +274,8 @@ def render():
     st.markdown("---")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("В игру", use_container_width=True, key="pg_to_game"):
+        if st.button("В игру", use_container_width=True,
+                     type="primary", key="pg_to_game"):
             st.session_state.screen = "game"
             st.rerun()
     with c2:
@@ -136,12 +293,12 @@ def _rank_block(char):
     pct = int(min(100, max(0, (spent - cur) * 100 / span)))
     html = (
         "<div class='pg-rank'>"
-        "<div class='row'><span class='lbl'>РАНГ</span>"
-        "<span class='val'>" + rank_name + "</span></div>"
+        "<div class='row'><span class='lbl'>Ранг</span>"
+        "<span class='val acc'>" + rank_name + "</span></div>"
         "<div class='row'><span class='lbl'>Потрачено XP</span>"
         "<span class='val'>" + str(spent) + "</span></div>"
         "<div class='row'><span class='lbl'>Свободно XP</span>"
-        "<span class='val'>" + str(free_xp) + "</span></div>"
+        "<span class='val acc'>" + str(free_xp) + "</span></div>"
         "<div class='row'><span class='lbl'>Следующий ранг</span>"
         "<span class='val'>" + str(nxt) + " XP</span></div>"
         "<div class='pg-bar'><div class='pg-bar-fill' "
@@ -157,55 +314,99 @@ def _tab_chars(char):
     if not stats:
         st.caption("Характеристик нет.")
         return
-    st.caption("Свободно XP: " + str(free))
+
+    prof_count = sum(1 for s in stats if P.is_proficient(char, s))
+    st.markdown(
+        "<div class='pg-info'>"
+        "Профильных характеристик: <b>" + str(prof_count) + "</b> · "
+        "Элитных: <b>" + str(len(stats) - prof_count) + "</b> · "
+        "Свободно XP: <b>" + str(free) + "</b>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    cards = []
     for stat, val in stats.items():
         name = CHARACTERISTIC_NAMES.get(stat, stat)
         lvl = P.char_advance_level(char, stat)
         cost = P.char_advance_cost(char, stat)
-        prof = "профильная" if P.is_proficient(char, stat) else "элитная"
-        note = "+" + str(lvl * 5) + " / +15 · " + prof
-        c1, c2, c3 = st.columns([3, 2, 2])
-        with c1:
-            st.markdown(
-                "<div class='pg-char'>"
-                "<span class='name'>" + name + "</span>"
-                "<span class='val'>" + str(val) + "</span>"
-                "<span class='note'>" + note + "</span>"
-                "</div>",
-                unsafe_allow_html=True,
-            )
-        with c2:
-            if cost < 0:
-                st.caption("максимум")
+        is_prof = P.is_proficient(char, stat)
+        cls = "pg-card prof" if is_prof else "pg-card elite"
+        lvl_cls = "lvl prof" if is_prof else "lvl"
+        lvl_text = "+" + str(lvl * 5) + " / +15"
+        if cost < 0:
+            cost_block = "<div class='cost max'>максимум</div>"
+            btn_key = None
+        else:
+            cost_block = ("<div class='cost'>цена: <b>"
+                          + str(cost) + "</b> XP</div>")
+            btn_key = cost
+        cards.append({
+            "stat": stat,
+            "name": name,
+            "val": val,
+            "cls": cls,
+            "lvl_cls": lvl_cls,
+            "lvl_text": lvl_text,
+            "cost_block": cost_block,
+            "btn_key": btn_key,
+            "disabled": (cost < 0 or free < cost),
+        })
+
+    # Сетка по 3 карточки в ряд
+    row_size = 3
+    for i in range(0, len(cards), row_size):
+        chunk = cards[i:i + row_size]
+        cols = st.columns(3)
+        for j, c in enumerate(chunk):
+            with cols[j]:
+                _render_char_card(c, char)
+
+
+def _render_char_card(c, char):
+    html = (
+        "<div class='" + c["cls"] + "'>"
+        "<div class='cap'>" + c["stat"] + "</div>"
+        "<div class='val'>" + str(c["val"]) + "</div>"
+        "<div class='name'>" + c["name"] + "</div>"
+        "<div class='" + c["lvl_cls"] + "'>" + c["lvl_text"] + "</div>"
+        + c["cost_block"]
+        + "</div>"
+    )
+    st.markdown(html, unsafe_allow_html=True)
+    if c["btn_key"] is not None:
+        if st.button("+5", key="pg_char_" + c["stat"],
+                     disabled=c["disabled"], use_container_width=True):
+            ok, msg = P.buy_char_advance(char, c["stat"])
+            if ok:
+                _save(char)
+                st.success(msg)
+                st.rerun()
             else:
-                st.caption("цена: " + str(cost) + " XP")
-        with c3:
-            if cost >= 0:
-                disabled = free < cost
-                if st.button("+5", key="pg_char_" + stat,
-                             disabled=disabled, use_container_width=True):
-                    ok, msg = P.buy_char_advance(char, stat)
-                    if ok:
-                        _save(char)
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
+                st.error(msg)
 
 
 def _tab_skills(char):
     skills = char.get("skills") or []
     free = int(char.get("xp", 0) or 0)
-    st.caption("Свободно XP: " + str(free))
-    st.caption("Trained — 100 / Experienced — 200 / Veteran — 300")
+    st.markdown(
+        "<div class='pg-info'>"
+        "Ступени: <b>Базовый</b> 100 · <b>Опытный</b> 200 · "
+        "<b>Ветеран</b> 300 · Свободно XP: <b>" + str(free) + "</b>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     known = []
     for s in skills:
         if isinstance(s, dict):
             known.append(str(s.get("name")))
         else:
             known.append(str(s))
+
     if known:
-        st.markdown("**Уже известные:**")
+        st.markdown("<div class='pg-sec'>Уже известные</div>",
+                    unsafe_allow_html=True)
         for nm in known:
             lvl = "Trained"
             for s in skills:
@@ -213,13 +414,19 @@ def _tab_skills(char):
                     lvl = str(s.get("level") or "Trained")
             c1, c2 = st.columns([3, 2])
             with c1:
-                st.write(nm + " (" + lvl + ")")
+                st.markdown(
+                    "<div class='pg-skill-row'><span class='name'>"
+                    + nm + "</span><span class='lvl'>"
+                    + P.level_ru(lvl) + "</span></div>",
+                    unsafe_allow_html=True,
+                )
             with c2:
                 order = ["Trained", "Experienced", "Veteran"]
                 if lvl in order and order.index(lvl) < len(order) - 1:
                     nxt = order[order.index(lvl) + 1]
                     cst = P.skill_cost(nxt)
-                    if st.button("-> " + nxt + " (" + str(cst) + ")",
+                    if st.button("→ " + P.level_ru(nxt)
+                                 + " (" + str(cst) + " XP)",
                                  key="pg_sk_up_" + nm,
                                  disabled=free < cst,
                                  use_container_width=True):
@@ -232,10 +439,11 @@ def _tab_skills(char):
                             st.error(msg)
                 else:
                     st.caption("максимум")
-    st.markdown("---")
-    st.markdown("**Добавить новый навык:**")
+
+    st.markdown("<div class='pg-sec'>Добавить новый навык</div>",
+                unsafe_allow_html=True)
     new_nm = st.text_input("Название", key="pg_sk_new")
-    if st.button("Купить Trained (100 XP)", key="pg_sk_new_go",
+    if st.button("Изучить (Базовый, 100 XP)", key="pg_sk_new_go",
                  disabled=not new_nm.strip() or free < 100):
         ok, msg = P.buy_skill(char, new_nm.strip())
         if ok:
@@ -248,23 +456,36 @@ def _tab_skills(char):
 
 def _tab_talents(char):
     free = int(char.get("xp", 0) or 0)
-    st.caption("Свободно XP: " + str(free))
-    st.caption("Базовый — 400 / с пререквизитом — 600 / Universal — 750")
+    st.markdown(
+        "<div class='pg-info'>"
+        "Простой — 400 · С пререквизитом — 600 · "
+        "Универсальный — 750 · Свободно XP: <b>" + str(free) + "</b>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     tal = char.get("talents") or []
     if tal:
-        st.markdown("**Взятые таланты:**")
-        st.write(", ".join(str(t) for t in tal))
+        st.markdown("<div class='pg-sec'>Взятые таланты</div>",
+                    unsafe_allow_html=True)
+        chips = "".join(
+            "<span class='pg-chip'>" + str(t) + "</span>"
+            for t in tal
+        )
+        st.markdown(chips, unsafe_allow_html=True)
     else:
         st.caption("Талантов нет.")
-    st.markdown("---")
+
+    st.markdown("<div class='pg-sec'>Взять новый талант</div>",
+                unsafe_allow_html=True)
     nm = st.text_input("Название таланта", key="pg_tal_new")
     kind = st.selectbox(
         "Тип",
         options=["basic", "prereq", "universal"],
         format_func=lambda k: {
-            "basic": "Базовый (400 XP)",
+            "basic": "Простой (400 XP)",
             "prereq": "С пререквизитом (600 XP)",
-            "universal": "Universal (750 XP)",
+            "universal": "Универсальный (750 XP)",
         }.get(k, k),
         key="pg_tal_kind",
     )
@@ -287,25 +508,40 @@ def _tab_psy(char):
         return
     free = int(char.get("xp", 0) or 0)
     max_val = P.available_psy_value(char)
-    st.caption("PSY: " + str(psy_rating) + " · свободно XP: " + str(free))
-    st.caption("Максимальное Value по рангу: " + str(max_val))
+    st.markdown(
+        "<div class='pg-info'>"
+        "PSY: <b>" + str(psy_rating) + "</b> · "
+        "Свободно XP: <b>" + str(free) + "</b> · "
+        "Максимальный уровень техники по рангу: <b>"
+        + str(max_val) + "</b>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     powers = char.get("psychic_powers") or []
     if powers:
-        st.markdown("**Известные техники:**")
-        st.write(", ".join(str(p) for p in powers))
+        st.markdown("<div class='pg-sec'>Известные техники</div>",
+                    unsafe_allow_html=True)
+        chips = "".join(
+            "<span class='pg-chip'>" + str(p) + "</span>"
+            for p in powers
+        )
+        st.markdown(chips, unsafe_allow_html=True)
     else:
         st.caption("Психосил нет.")
-    st.markdown("---")
+
+    st.markdown("<div class='pg-sec'>Изучить новую</div>",
+                unsafe_allow_html=True)
     nm = st.text_input("Название техники", key="pg_psy_new")
     val = st.selectbox(
-        "Value",
+        "Уровень",
         options=[200, 300, 400],
         index=0,
         format_func=lambda v: str(v) + " XP",
         key="pg_psy_val",
     )
     if val > max_val:
-        st.warning("Rank too low для Value " + str(val) + ".")
+        st.warning("Ранг слишком низок для уровня " + str(val) + ".")
     if st.button("Изучить (" + str(val) + " XP)", key="pg_psy_go",
                  disabled=not nm.strip() or free < val or val > max_val):
         ok, msg = P.buy_psy(char, nm.strip(), val)
