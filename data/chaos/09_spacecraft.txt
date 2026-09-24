@@ -5,28 +5,6 @@ LANG: ru
 PURPOSE: Корабли и флоты Хаоса, Ересь Хоруса, космические сражения.
 ---
 
-===
-Chaos Warfleets
-===
-
----
-
-===
-Origins of Warfleets
-===
-
----
-
-===
-Rogue Traders Militant and Early Exploration
-===
-
----
-
-===
-Imperial Fleet Development
-===
-
 # Имперский флот и флота Хаоса времен Ереси Хоруса
 
 ## армада империалис и разнообразие кораблей
