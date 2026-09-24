@@ -29,7 +29,8 @@ venv/
 
 # Тяжёлые бинарники / пересобираемое
 chroma_db/
-data/
+# data/ убрано в PATCH_16L — лор должен уходить на GitHub.
+# Приватные части data/ исключаются отдельными правилами ниже.
 legacy/
 docs/screenshots/
 
@@ -47,3 +48,6 @@ _reference_from_old/
 .intro_reset_patch_*.flag 
 *.bak_pre_* 
 Wh40K/ 
+
+# служебные материалы, публиковать не нужно
+data/_replacements/

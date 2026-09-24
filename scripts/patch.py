@@ -1,171 +1,138 @@
 # scripts/patch.py
-# PATCH_16K — разделяем «Главное меню» и «Выход».
+# PATCH_16L — убрать data/ из .gitignore, чтобы лор ушёл на GitHub.
+# Оставляем защищёнными: data/users/, data/accounts/, data/_replacements/.
 # Запуск: python scripts\patch.py
 from __future__ import annotations
 
-import ast
 import shutil
 import sys
 from pathlib import Path
 
-TAG = "PATCH_16K"
+TAG = "PATCH_16L"
 ROOT = Path(__file__).resolve().parent.parent
+GITIGNORE = ROOT / ".gitignore"
+
+PROTECTED_MUST_EXIST = (
+    "data/users/",
+    "data/accounts/",
+)
+PROTECTED_ADD_IF_MISSING = (
+    "data/_replacements/",
+)
 
 
-def _read_game():
-    p = ROOT / "ui" / "screens" / "game.py"
-    if not p.exists():
-        return None, "ERROR: game.py not found"
-    try:
-        return p, p.read_text(encoding="utf-8")
-    except Exception as e:
-        return None, "ERROR read: " + type(e).__name__ + ": " + str(e)
-
-
-def _write_game(p, src):
-    try:
-        ast.parse(src)
-    except SyntaxError as e:
-        return "ERROR SyntaxError: line " + str(e.lineno) + ": " + str(e.msg)
-    bak = p.with_name(p.name + ".bak_pre_" + TAG)
-    try:
-        shutil.copy2(p, bak)
-    except Exception as e:
-        return "ERROR backup: " + type(e).__name__ + ": " + str(e)
-    try:
-        p.write_text(src, encoding="utf-8")
-    except Exception as e:
-        return "ERROR write: " + type(e).__name__ + ": " + str(e)
-    return "backup + patched"
-
-
-# =====================================================================
-# 1. Заменить _logout на пару: _back_to_menu + новый _logout
-# =====================================================================
-def step_logout_split():
-    p, src = _read_game()
-    if p is None:
-        return src
-
-    old = (
-        "def _logout() -> None:\n"
-        "    for k in (\"user_login\", \"active_character\", \"orchestrator\",\n"
-        "              \"tutorial_mode\", \"roll_card_variant\"):\n"
-        "        st.session_state.pop(k, None)\n"
-        "    st.session_state.screen = \"main_menu\"\n"
-        "    st.rerun()\n"
-    )
-    new = (
-        "def _back_to_menu() -> None:\n"
-        "    # Возврат в главное меню: login сохраняем, чистим только сессию игры.\n"
-        "    for k in (\"active_character\", \"_game_loading_pending\",\n"
-        "              \"_game_loading_ready\", \"_roll_dialog_state\",\n"
-        "              \"_attack_open\", \"_attack_weapon\", \"_attack_result\",\n"
-        "              \"_pending_chat\"):\n"
-        "        st.session_state.pop(k, None)\n"
-        "    st.session_state.screen = \"main_menu\"\n"
-        "    st.rerun()\n"
-        "\n"
-        "\n"
-        "def _logout() -> None:\n"
-        "    # Полный выход: удаляем логин, сбрасываем landing-флаг.\n"
-        "    for k in (\"user_login\", \"active_character\", \"orchestrator\",\n"
-        "              \"tutorial_mode\", \"roll_card_variant\",\n"
-        "              \"_post_login_landed_for\", \"_game_loading_pending\",\n"
-        "              \"_game_loading_ready\", \"_roll_dialog_state\",\n"
-        "              \"_attack_open\", \"_attack_weapon\", \"_attack_result\",\n"
-        "              \"_pending_chat\"):\n"
-        "        st.session_state.pop(k, None)\n"
-        "    st.session_state.screen = \"splash\"\n"
-        "    st.rerun()\n"
-    )
-
-    if old not in src:
-        if "def _back_to_menu()" in src:
-            return "skip (already patched)"
-        return "ERROR: _logout anchor not found"
-    src2 = src.replace(old, new, 1)
-    return _write_game(p, src2)
-
-
-# =====================================================================
-# 2. Заменить одну кнопку на две в сайдбаре
-# =====================================================================
-def step_sidebar_buttons():
-    p, src = _read_game()
-    if p is None:
-        return src
-
-    old = (
-        '        if st.button("Выйти в меню", use_container_width=True, key="game_exit"):\n'
-        '            _logout()\n'
-    )
-    new = (
-        '        if st.button("Главное меню", use_container_width=True,\n'
-        '                     key="game_to_menu"):\n'
-        '            _back_to_menu()\n'
-        '        if st.button("Выход", use_container_width=True, key="game_exit"):\n'
-        '            _logout()\n'
-    )
-
-    if old not in src:
-        if 'key="game_to_menu"' in src:
-            return "skip (already patched)"
-        return "ERROR: sidebar buttons anchor not found"
-    src2 = src.replace(old, new, 1)
-    return _write_game(p, src2)
-
-
-# =====================================================================
-# 3. Проверка
-# =====================================================================
-def final_check():
-    p, src = _read_game()
-    if p is None:
-        return False, "game.py not found"
-    try:
-        ast.parse(src)
-    except SyntaxError as e:
-        return False, "line " + str(e.lineno) + ": " + str(e.msg)
-
-    if "def _back_to_menu()" not in src:
-        return False, "_back_to_menu missing"
-    if 'st.session_state.screen = "splash"' not in src:
-        return False, "_logout doesn't go to splash"
-    if 'key="game_to_menu"' not in src:
-        return False, "menu button missing"
-    return True, "OK"
+def _has_line(lines, needle):
+    for ln in lines:
+        if ln.strip() == needle:
+            return True
+    return False
 
 
 def main():
     print("=" * 64)
-    print("PATCH " + TAG + " — Главное меню vs Выход")
+    print("PATCH " + TAG + " — gitignore: открыть data/ для лора")
     print("ROOT: " + str(ROOT))
     print("=" * 64)
 
-    any_error = False
+    if not GITIGNORE.exists():
+        print("  ERROR: .gitignore not found")
+        return 1
 
-    print("[1/3] Разделить _logout на _back_to_menu + _logout:")
-    status = step_logout_split()
-    if status.startswith("ERROR"):
-        any_error = True
-    print("      -> " + status)
+    try:
+        src = GITIGNORE.read_text(encoding="utf-8")
+    except Exception as e:
+        print("  ERROR read: " + type(e).__name__ + ": " + str(e))
+        return 1
 
-    print("[2/3] Заменить кнопку в сайдбаре:")
-    status = step_sidebar_buttons()
-    if status.startswith("ERROR"):
-        any_error = True
-    print("      -> " + status)
+    lines = src.splitlines()
 
-    print("[3/3] Финальная проверка:")
-    ok, msg = final_check()
-    print("      -> " + msg)
-    if not ok:
-        any_error = True
+    if not _has_line(lines, "data/"):
+        print("  skip (data/ already removed)")
+        # На всякий случай проверим, что защита есть
+        missing = [p for p in PROTECTED_MUST_EXIST if not _has_line(lines, p)]
+        if missing:
+            print("  WARNING: missing protected rules: " + ", ".join(missing))
+            print("  добавь их в .gitignore руками и повтори патч")
+            return 2
+        print("  защита data/users/, data/accounts/ на месте")
+        return 0
 
+    # Заменяем строку data/ на два комментария
+    out = []
+    removed = 0
+    for line in lines:
+        if line.strip() == "data/":
+            out.append("# data/ убрано в PATCH_16L — лор должен уходить на GitHub.")
+            out.append("# Приватные части data/ исключаются отдельными правилами ниже.")
+            removed += 1
+            continue
+        out.append(line)
+
+    # Добавляем data/_replacements/, если ещё нет
+    added_rep = False
+    if not _has_line(out, PROTECTED_ADD_IF_MISSING[0]):
+        out.append("")
+        out.append("# служебные материалы, публиковать не нужно")
+        out.append(PROTECTED_ADD_IF_MISSING[0])
+        added_rep = True
+
+    new_src = "\n".join(out)
+    if not new_src.endswith("\n"):
+        new_src += "\n"
+
+    # Проверка, что защита осталась
+    new_lines = new_src.splitlines()
+    missing = [p for p in PROTECTED_MUST_EXIST if not _has_line(new_lines, p)]
+
+    # Бэкап
+    bak = GITIGNORE.with_name(".gitignore.bak_pre_" + TAG)
+    try:
+        shutil.copy2(GITIGNORE, bak)
+    except Exception as e:
+        print("  ERROR backup: " + type(e).__name__ + ": " + str(e))
+        return 1
+
+    # Запись
+    try:
+        GITIGNORE.write_text(new_src, encoding="utf-8")
+    except Exception as e:
+        print("  ERROR write: " + type(e).__name__ + ": " + str(e))
+        return 1
+
+    print("  .gitignore -> backup + patched")
+    print("    строк data/ удалено:  " + str(removed))
+    print("    добавлено _replacements/:  " + ("да" if added_rep else "нет (уже было)"))
+    if missing:
+        print("  !!! WARNING: после правки не найдены: " + ", ".join(missing))
+        print("  !!! проверь .gitignore и добавь их вручную")
+    else:
+        print("  защита data/users/, data/accounts/ — на месте")
+
+    print()
     print("=" * 64)
-    print("DONE" + (" (with errors)" if any_error else " — ok"))
-    return 1 if any_error else 0
+    print("Дальше проверь руками, что data/ НЕ игнорируется, а users/ — игнорируется:")
+    print()
+    print("  git check-ignore -v data/general/general_rules.txt")
+    print("  git check-ignore -v data/users/Admin/settings.json")
+    print()
+    print("Ожидаемо:")
+    print("  1-я команда — ПУСТО (файл будет отслеживаться)")
+    print("  2-я команда — строка с правилом data/users/ (файл не уйдёт)")
+    print()
+    print("Если так — добавь лор в git:")
+    print()
+    print("  git add data/")
+    print("  git status --short data/")
+    print()
+    print("ВАЖНО: в выводе НЕ ДОЛЖНО быть data/users/ и data/accounts/.")
+    print("Если они там — откати командой:  git reset data/")
+    print()
+    print("Если чисто:")
+    print("  git commit -m \"lore: publish data/*.txt (rules, factions, glossary)\"")
+    print("  git push origin main")
+    print("  Streamlit Cloud -> Reboot app")
+    print("=" * 64)
+    return 0
 
 
 if __name__ == "__main__":
