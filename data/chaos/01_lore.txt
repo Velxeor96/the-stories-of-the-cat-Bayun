@@ -1,3 +1,10 @@
+FACTION: chaos
+TOPIC: Общий лор Хаоса
+SOURCE: lore.txt
+LANG: ru
+PURPOSE: Обзор Хаоса, боги, история, фракции, правила Black Crusade/Dark Heresy.
+---
+
 === СИЛЫ ХАОСА (CHAOS): ПОЛНАЯ БАЗА ЗНАНИЙ ===
 
 === РАЗДЕЛ I. ОБЩИЙ ОБЗОР ===

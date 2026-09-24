@@ -1,3 +1,10 @@
+FACTION: chaos
+TOPIC: Боги Хаоса
+SOURCE: chaos_gods.txt
+LANG: ru
+PURPOSE: Пантеон Хаоса, природа богов, малые боги, демоны.
+---
+
 ===
 Божества Хаоса
 ===

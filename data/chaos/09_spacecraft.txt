@@ -1,3 +1,10 @@
+FACTION: chaos
+TOPIC: Флоты Хаоса
+SOURCE: spacecraft.txt
+LANG: ru
+PURPOSE: Корабли и флоты Хаоса, Ересь Хоруса, космические сражения.
+---
+
 ===
 Chaos Warfleets
 ===
