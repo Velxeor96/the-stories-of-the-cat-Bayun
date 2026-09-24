@@ -1,139 +1,789 @@
-# scripts/patch.py
-# PATCH_16L — убрать data/ из .gitignore, чтобы лор ушёл на GitHub.
-# Оставляем защищёнными: data/users/, data/accounts/, data/_replacements/.
-# Запуск: python scripts\patch.py
+# =============================================================
+# PATCH_TUT_V2D - финальный: HP-реcет, правильный формат
+# сохранения, KeyError фикс, focus/tooltip, миграция
+# =============================================================
 from __future__ import annotations
 
+import ast
+import json
 import shutil
 import sys
 from pathlib import Path
 
-TAG = "PATCH_16L"
+TAG = "TUT_V2D"
 ROOT = Path(__file__).resolve().parent.parent
-GITIGNORE = ROOT / ".gitignore"
+if not (ROOT / "app.py").exists():
+    print("[ERROR] Не найден app.py.")
+    sys.exit(1)
 
-PROTECTED_MUST_EXIST = (
-    "data/users/",
-    "data/accounts/",
-)
-PROTECTED_ADD_IF_MISSING = (
-    "data/_replacements/",
-)
+FILES_FULL = {}
+
+FILES_FULL["ui/screens/tutorial.py"] = r"""# PATCH_TUT_V2D
+# ui/screens/tutorial.py - UI туториала: интро, выбор, сцены, бой, финал.
+from __future__ import annotations
+
+import streamlit as st
+
+from core.config import Config
+from services import tutorial_data as td
+from services.tutorial import TutorialEngine, TutorialError
+from ui.theme import current_theme_icon, render_theme_selector
 
 
-def _has_line(lines, needle):
-    for ln in lines:
-        if ln.strip() == needle:
-            return True
-    return False
+CSS = '''<style>
+.tut-hero { text-align: center; padding: 20px 0 8px 0; }
+.tut-hero .sigil { font-size: 64px; color: var(--accent);
+    text-shadow: 0 0 30px var(--accent-glow), 0 0 60px var(--accent-glow);
+    line-height: 1; }
+.tut-hero h1 { font-family: Georgia, serif; font-size: 42px; color: var(--fg);
+    margin: 6px 0 0 0; letter-spacing: 4px;
+    text-shadow: 0 0 24px var(--accent-glow); }
+.tut-hero .sub { color: var(--fg-dim); font-style: italic;
+    margin-top: 10px; font-size: 14px; letter-spacing: 1px; }
+.tut-card { border: 1px solid var(--border); border-radius: 16px;
+    padding: 24px; background: linear-gradient(180deg, var(--panel-hi) 0%, var(--bg) 100%);
+    box-shadow: 0 8px 28px var(--shadow); position: relative; overflow: hidden; }
+.tut-card::before { content: ''; position: absolute; top: 0; left: 0;
+    right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+    opacity: 0.5; }
+.tut-card h2 { font-family: Georgia, serif; color: var(--fg);
+    margin: 0 0 6px 0; font-size: 25px; letter-spacing: 1px; }
+.tut-card .tagline { color: var(--fg-dim); font-style: italic;
+    font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
+.tut-card .sec { font-size: 11px; letter-spacing: 3px; color: var(--accent);
+    text-transform: uppercase; margin: 18px 0 10px 0; }
+.tut-scene-header { font-family: Georgia, serif; font-size: 26px;
+    color: var(--fg); border-bottom: 1px solid var(--border);
+    padding-bottom: 10px; margin: 0 0 16px 0; letter-spacing: 1px; }
+.tut-scene-header .num { color: var(--accent); font-weight: bold; margin-right: 12px; }
+.tut-roll { border-left: 4px solid var(--border); padding: 12px 16px;
+    background: var(--panel); border-radius: 4px; margin: 8px 0;
+    font-family: Consolas, monospace;
+    box-shadow: 0 2px 10px var(--shadow); }
+.tut-roll .headline { font-weight: bold; font-size: 15px; letter-spacing: 1px; }
+.tut-roll .detail { color: var(--fg); font-size: 13px; margin-top: 6px; }
+.tut-scene-map { display: flex; gap: 6px; margin-top: 8px; }
+.tut-scene-map .dot { flex: 1; height: 6px; border-radius: 3px; background: var(--border); }
+.tut-scene-map .dot.done { background: #2E7D32; }
+.tut-scene-map .dot.active { background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow); }
+.tut-hint { background: var(--bg-alt); border-left: 3px solid var(--accent);
+    padding: 10px 14px; border-radius: 4px; color: var(--fg-dim);
+    font-size: 13px; margin: 10px 0; }
+.tut-actions-label { color: var(--accent); font-size: 11px;
+    letter-spacing: 3px; text-transform: uppercase; margin: 18px 0 8px 0; }
+.g91-card { background: var(--panel); border: 1px solid var(--border);
+    border-left: 4px solid var(--accent); border-radius: 10px;
+    padding: 18px 22px; margin: 12px 0;
+    box-shadow: 0 4px 18px var(--shadow); }
+.g91-card .head { font-size: 11px; letter-spacing: 3px;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
+.g91-card .body { color: var(--fg); font-size: 15px; line-height: 1.7; }
+.combat-box { background: var(--panel); border: 1px solid var(--border-hi);
+    border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+.combat-box .name { font-family: Georgia, serif; font-size: 17px;
+    color: var(--fg); margin-bottom: 6px; }
+.combat-box .hp-bar { height: 14px; border-radius: 7px;
+    background: var(--bg-alt); border: 1px solid var(--border);
+    overflow: hidden; margin-top: 6px; }
+.combat-box .hp-fill-enemy { height: 100%;
+    background: linear-gradient(90deg, #6A1B9A, #AB47BC); }
+.combat-box .hp-fill-pc { height: 100%;
+    background: linear-gradient(90deg, #B71C1C, #E53935); }
+div[data-baseweb="tooltip"], [role="tooltip"] { display: none !important; }
+.stButton > button:focus,
+.stButton > button:focus-visible,
+.stButton > button:active {
+    outline: none !important;
+    box-shadow: none !important; }
+</style>'''
+
+
+def _get_engine():
+    if "tutorial_engine" not in st.session_state:
+        st.session_state.tutorial_engine = TutorialEngine(Config.load())
+    return st.session_state.tutorial_engine
+
+
+def _ensure_state():
+    if "tutorial_state" not in st.session_state:
+        st.session_state.tutorial_state = None
+    if "tut_intro_page" not in st.session_state:
+        st.session_state.tut_intro_page = 0
+    if "tut_stat_dialog" not in st.session_state:
+        st.session_state.tut_stat_dialog = None
+
+
+@st.dialog("Справка")
+def _stat_dialog(key):
+    info = td.CHARACTERISTIC_HELP.get(key)
+    if not info:
+        st.write("Нет справки.")
+        return
+    st.markdown("### " + info["name"])
+    st.caption(info["short"])
+    st.markdown(info["body"])
+    if st.button("Закрыть", use_container_width=True, key="dlg_close"):
+        st.session_state.tut_stat_dialog = None
+        st.rerun()
+
+
+def _maybe_open_dialog():
+    k = st.session_state.get("tut_stat_dialog")
+    if k:
+        _stat_dialog(k)
+
+
+def _render_intro():
+    page = st.session_state.tut_intro_page or 0
+    pages = td.INTRO_PAGES
+    icon = current_theme_icon()
+    st.markdown(
+        "<div class='tut-hero'><div class='sigil'>" + str(icon) + "</div>"
+        "<h1>G-91</h1>"
+        "<div class='sub'>Дух Машины корабля «Погибель»</div></div>",
+        unsafe_allow_html=True)
+    cur = pages[page]
+    body_lines = cur["body"].split(chr(10))
+    body_html = "<br>".join(body_lines)
+    st.markdown(
+        "<div class='g91-card'><div class='head'>// " + cur["title"] +
+        " //</div><div class='body'>" + body_html + "</div></div>",
+        unsafe_allow_html=True)
+    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+    is_last = page >= len(pages) - 1
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("Назад", use_container_width=True, key="intro_back",
+                     disabled=(page == 0)):
+            st.session_state.tut_intro_page = page - 1
+            st.rerun()
+    with c2:
+        if is_last:
+            if st.button("Выбрать персонажа", use_container_width=True,
+                         type="primary", key="intro_done"):
+                st.session_state.tut_intro_page = None
+                st.rerun()
+        else:
+            if st.button("Далее", use_container_width=True, type="primary",
+                         key="intro_next"):
+                st.session_state.tut_intro_page = page + 1
+                st.rerun()
+    with c3:
+        if st.button("Пропустить", use_container_width=True, key="intro_skip"):
+            st.session_state.tut_intro_page = None
+            st.rerun()
+
+
+def _render_character_picker():
+    icon = current_theme_icon()
+    st.markdown(
+        "<div class='tut-hero'><div class='sigil'>" + str(icon) + "</div>"
+        "<h1>ПОТЕНТ</h1>"
+        "<div class='sub'>Обучение Вольного Торговца · шесть сцен · две судьбы</div></div>",
+        unsafe_allow_html=True)
+    st.markdown(
+        "<p style='text-align:center;color:var(--fg-dim);max-width:720px;"
+        "margin:12px auto 24px auto;font-style:italic;'>"
+        "Нажми на любую характеристику, чтобы получить справку. "
+        "Потом выбери персонажа и начни обучение.</p>",
+        unsafe_allow_html=True)
+    c1, c2 = st.columns(2, gap="large")
+    with c1:
+        _render_char_card("magnus", "Играть за Магнуса")
+    with c2:
+        _render_char_card("selena", "Играть за Селену")
+    st.markdown("<br>", unsafe_allow_html=True)
+    cc1, cc2, cc3 = st.columns([1, 2, 1])
+    with cc2:
+        if st.button("Пропустить обучение", use_container_width=True,
+                     key="btn_skip_tut"):
+            _finish("create")
+
+
+def _render_char_card(cid, btn_label):
+    char = td.CHARACTERS[cid]
+    tagline = char.get("background", "")
+    role_hint = char.get("tagline", "")
+    st.markdown(
+        "<div class='tut-card'><h2>" + char["name"] + "</h2>"
+        "<div class='tagline'>" + tagline + "</div>"
+        "<div class='sec'>Характеристики · нажми для справки</div>",
+        unsafe_allow_html=True)
+    order = ["WS", "BS", "S", "T", "Ag", "Int", "Per", "WP", "Fel"]
+    rows = [order[0:3], order[3:6], order[6:9]]
+    for row in rows:
+        cols = st.columns(3)
+        for i, key in enumerate(row):
+            v = char["characteristics"].get(key, "?")
+            with cols[i]:
+                if st.button(key + " · " + str(v), use_container_width=True,
+                             key="stat_" + cid + "_" + key):
+                    st.session_state.tut_stat_dialog = key
+                    st.rerun()
+    res_html = (
+        "<div class='sec'>Ресурсы</div>"
+        "<div style='display:flex;gap:8px;margin-bottom:10px;'>"
+        "<div style='flex:1;background:var(--bg-alt);border:1px solid var(--border);"
+        "border-radius:8px;padding:10px;text-align:center;color:var(--fg);'>"
+        "Раны <b>" + str(char["wounds_max"]) + "</b></div>"
+        "<div style='flex:1;background:var(--bg-alt);border:1px solid var(--border);"
+        "border-radius:8px;padding:10px;text-align:center;color:var(--fg);'>"
+        "Судьба <b>" + str(char["fate_points"]) + "</b></div></div>"
+        "<div style='background:var(--bg-alt);border-left:3px solid var(--accent);"
+        "border-radius:8px;padding:10px 12px;color:var(--fg-dim);"
+        "font-size:13px;font-style:italic;'>" + role_hint + "</div></div>"
+    )
+    st.markdown(res_html, unsafe_allow_html=True)
+    st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
+    if st.button(btn_label, use_container_width=True, type="primary",
+                 key="btn_" + cid):
+        _start(cid)
+
+
+def _start(character_id):
+    engine = _get_engine()
+    state = engine.initial_state(character_id)
+    st.session_state.tutorial_state = state
+    st.rerun()
+
+
+def _weapons_to_sheet(weapon_ids):
+    out = []
+    for wid in weapon_ids:
+        w = td.WEAPONS.get(wid)
+        if not w:
+            continue
+        if w["type"] == "melee":
+            stats = ("Ближний бой, " + w["dmg"] + ", Пробой " +
+                     str(w["pen"]))
+        elif w["type"] == "ranged":
+            stats = (str(w["range_m"]) + "м, " + str(w["rof"]) + ", " +
+                     w["dmg"] + ", Пробой " + str(w["pen"]))
+        else:
+            stats = w["dmg"]
+        out.append({
+            "name": w["name"],
+            "stats": stats,
+            "weight": "-",
+            "notes": w.get("special", ""),
+        })
+    return out
+
+
+def _finish(action):
+    login = st.session_state.get("user_login")
+    if login:
+        try:
+            from persistence.settings import set_setting
+            set_setting(login, "seen_tutorial", True)
+        except Exception as e:
+            print("[tutorial] set_setting: " + str(e))
+    if action == "continue":
+        state = st.session_state.get("tutorial_state")
+        if state and login:
+            try:
+                from persistence.characters import save_character
+                from services.character_creation import build_character
+                char_id = state["character_id"]
+                tpl = td.CHARACTERS[char_id]
+                data = build_character(
+                    name=tpl["name"],
+                    gender=tpl["gender"],
+                    age=str(tpl.get("age", 30)),
+                    appearance="",
+                    user_background=tpl.get("background", ""),
+                    faction_id="imperium",
+                    subfaction_id="rogue_trader",
+                    archetype_id=None,
+                    characteristics=dict(tpl["characteristics"]),
+                )
+                data["faction"] = "imperium"
+                data["faction_id"] = "imperium"
+                data["subfaction"] = "rogue_trader"
+                data["subfaction_id"] = "rogue_trader"
+                data["background"] = tpl.get("background", "")
+                data["wounds"] = {
+                    "current": state["wounds_max"],
+                    "max": state["wounds_max"],
+                }
+                data["fate_points"] = {
+                    "current": state["fate_max"],
+                    "max": state["fate_max"],
+                }
+                data["armour"] = dict(tpl.get("armour", {}))
+                data["weapons"] = _weapons_to_sheet(tpl.get("weapons", []))
+                data["xp"] = 300
+                data["psy_rating"] = 0
+                data["psychic_powers"] = []
+                save_character(login, data["name"], data)
+                try:
+                    from persistence.settings import set_setting
+                    set_setting(login, "last_character", data["name"])
+                except Exception as e:
+                    print("[tutorial] set_setting last_character: " + str(e))
+                st.session_state.active_character = data["name"]
+            except Exception as e:
+                print("[tutorial] save_character: " + str(e))
+                st.session_state.screen = "wizard"
+                st.rerun()
+                return
+    for k in ("tutorial_state", "tutorial_engine", "tut_intro_page"):
+        st.session_state.pop(k, None)
+    if action == "continue":
+        st.session_state.screen = "game"
+    else:
+        st.session_state.screen = "wizard"
+    st.rerun()
+
+
+def _render_roll_card(roll):
+    if not roll:
+        return
+    success = roll.get("success", False)
+    crit_s = roll.get("crit_success", False)
+    crit_f = roll.get("crit_fail", False)
+    color = "#2E7D32" if success else "#B71C1C"
+    label = "УСПЕХ" if success else "ПРОВАЛ"
+    if crit_s:
+        color = "#FFD700"
+        label = "КРИТИЧЕСКИЙ УСПЕХ"
+    elif crit_f:
+        color = "#8B0000"
+        label = "КРИТИЧЕСКИЙ ПРОВАЛ"
+    roll_v = roll.get("roll", "?")
+    target_v = roll.get("target", "?")
+    reason_v = roll.get("reason", "")
+    degrees_v = roll.get("degrees", 0)
+    st.markdown(
+        "<div class='tut-roll' style='border-left-color:" + color + ";'>"
+        "<div class='headline' style='color:" + color + ";'>" + label +
+        " &nbsp;·&nbsp; d100 = " + str(roll_v) + " / " + str(target_v) + "</div>"
+        "<div class='detail'>" + str(reason_v) + " · маржа " + str(degrees_v) +
+        "</div></div>",
+        unsafe_allow_html=True)
+
+
+def _scene_map(state):
+    cur = state["scene_idx"]
+    dots = ""
+    for i in range(len(td.SCENES)):
+        cls = "dot"
+        if i < cur:
+            cls += " done"
+        elif i == cur:
+            cls += " active"
+        dots += "<div class='" + cls + "'></div>"
+    return "<div class='tut-scene-map'>" + dots + "</div>"
+
+
+def _render_combat_log_entry(entry):
+    txt = entry.get("text")
+    if txt:
+        st.markdown(txt)
+        return
+    if "roll" in entry:
+        _render_roll_card(entry["roll"])
+
+
+def _render_combat_ui(state):
+    c = state.get("combat")
+    if not c:
+        return
+    enemy = c["enemy"]
+    st.markdown(
+        "<div class='combat-box'>"
+        "<div class='name'>" + enemy["name"] + " · Раунд " +
+        str(c["round"]) + "</div>"
+        "<div style='font-size:12px;color:var(--fg-dim);'>Раны: " +
+        str(enemy["wounds"]) + " / " + str(enemy["wounds_max"]) + "</div>"
+        "<div class='hp-bar'><div class='hp-fill-enemy' style='width:" +
+        str(int(100 * enemy["wounds"] / max(1, enemy["wounds_max"]))) +
+        "%;'></div></div></div>",
+        unsafe_allow_html=True)
+    pc = td.CHARACTERS[state["character_id"]]
+    st.markdown(
+        "<div class='combat-box'>"
+        "<div class='name'>" + pc["name"] + " · Ран " +
+        str(state["wounds"]) + " / " + str(state["wounds_max"]) + "</div>"
+        "<div class='hp-bar'><div class='hp-fill-pc' style='width:" +
+        str(int(100 * state["wounds"] / max(1, state["wounds_max"]))) +
+        "%;'></div></div></div>",
+        unsafe_allow_html=True)
+    if c["log"]:
+        with st.container(border=True):
+            for entry in c["log"][-14:]:
+                _render_combat_log_entry(entry)
+    if c["over"]:
+        if st.button("Продолжить", use_container_width=True, type="primary",
+                     key="cmb_resolve"):
+            engine = _get_engine()
+            engine.combat_resolve(state)
+            st.session_state.tutorial_state = state
+            st.rerun()
+        return
+    if c["turn"] == "enemy":
+        if st.button("Ход врага", use_container_width=True, type="primary",
+                     key="cmb_enemy"):
+            engine = _get_engine()
+            engine.combat_enemy_turn(state)
+            st.session_state.tutorial_state = state
+            st.rerun()
+        return
+    st.markdown("<div class='tut-actions-label'>Твой ход</div>",
+                unsafe_allow_html=True)
+    cols = st.columns(2)
+    char = td.CHARACTERS[state["character_id"]]
+    weapons = [td.WEAPONS[w] for w in char["weapons"] if w in td.WEAPONS]
+    with cols[0]:
+        for w in weapons:
+            if w["type"] == "ranged":
+                label = "Выстрел: " + w["name"] + " (" + w["dmg"] + ")"
+                if st.button(label, use_container_width=True,
+                             key="act_ranged_" + w["id"]):
+                    engine = _get_engine()
+                    engine.combat_player_action(
+                        state, {"kind": "attack_ranged", "weapon": w["id"]})
+                    st.session_state.tutorial_state = state
+                    st.rerun()
+        if "warp_bolt" in char.get("tutorial_abilities", []):
+            if st.button("Варп-выстрел (психосила, WP)",
+                         use_container_width=True, key="act_psy"):
+                engine = _get_engine()
+                engine.combat_player_action(state, {"kind": "psy_bolt"})
+                st.session_state.tutorial_state = state
+                st.rerun()
+    with cols[1]:
+        for w in weapons:
+            if w["type"] == "melee":
+                label = "Удар: " + w["name"] + " (" + w["dmg"] + ")"
+                if st.button(label, use_container_width=True,
+                             key="act_melee_" + w["id"]):
+                    engine = _get_engine()
+                    engine.combat_player_action(
+                        state, {"kind": "attack_melee", "weapon": w["id"]})
+                    st.session_state.tutorial_state = state
+                    st.rerun()
+        if st.button("Граната (2d10)",
+                     use_container_width=True, key="act_grenade"):
+            engine = _get_engine()
+            engine.combat_player_action(state, {"kind": "grenade"})
+            st.session_state.tutorial_state = state
+            st.rerun()
+        if st.button("Прицелиться (+20)",
+                     use_container_width=True, key="act_aim"):
+            engine = _get_engine()
+            engine.combat_player_action(state, {"kind": "aim"})
+            st.session_state.tutorial_state = state
+            st.rerun()
+
+
+def render():
+    st.markdown(CSS, unsafe_allow_html=True)
+    _ensure_state()
+    _maybe_open_dialog()
+    if st.session_state.tut_intro_page is not None:
+        _render_intro()
+        return
+    if st.session_state.tutorial_state is None:
+        _render_character_picker()
+        return
+    state = st.session_state.tutorial_state
+    if state.get("module_complete"):
+        _render_finish_screen(state)
+        return
+    char = td.CHARACTERS[state["character_id"]]
+    engine = _get_engine()
+    scene_idx = state["scene_idx"]
+    total = len(td.SCENES)
+    scene = td.SCENES[scene_idx]
+    scene_title = td.SCENE_TITLES.get(scene["id"], scene["id"])
+    with st.sidebar:
+        st.markdown(
+            "<div style='font-family:Georgia,serif;font-size:18px;"
+            "color:var(--fg);letter-spacing:1px;'>" + char["name"] + "</div>",
+            unsafe_allow_html=True)
+        gender_ru = "муж." if char["gender"] == "male" else "жен."
+        st.caption("Обучение · " + gender_ru)
+        st.markdown(
+            "<div style='font-size:11px;letter-spacing:3px;color:var(--accent);"
+            "margin:12px 0 4px 0;'>ПРОГРЕСС · " + str(scene_idx + 1) + "/" +
+            str(total) + "</div>",
+            unsafe_allow_html=True)
+        st.markdown(_scene_map(state), unsafe_allow_html=True)
+        st.markdown("<hr>", unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Раны", str(state["wounds"]) + "/" +
+                      str(state["wounds_max"]))
+        with col2:
+            st.metric("Судьба", state["fate_points"])
+        st.metric("Фактор Прибыли", state["profit_factor"])
+        st.markdown("<hr>", unsafe_allow_html=True)
+        try:
+            render_theme_selector(key_prefix="tut")
+        except Exception as e:
+            print("[tutorial] theme: " + str(e))
+        st.markdown("<hr>", unsafe_allow_html=True)
+        if st.button("Пропустить обучение", use_container_width=True,
+                     key="side_skip"):
+            _finish("create")
+    st.markdown(
+        "<div class='tut-scene-header'>"
+        "<span class='num'>" + str(scene_idx + 1) + "/" + str(total) +
+        "</span>" + scene_title + "</div>",
+        unsafe_allow_html=True)
+    for h in state["history"]:
+        role = "user" if h["role"] == "player" else "assistant"
+        with st.chat_message(role):
+            st.markdown(h["text"])
+    pending_roll = state.get("pending_roll")
+    pending_post = state.get("pending_post")
+    if pending_roll or pending_post:
+        if pending_roll:
+            _render_roll_card(pending_roll)
+        if pending_post:
+            with st.chat_message("assistant"):
+                st.markdown(pending_post)
+        adv_key = ("adv_" + str(scene_idx) + "_" + state["step_id"] + "_" +
+                   str(len(state["history"])))
+        if st.button("Далее", use_container_width=True, type="primary",
+                     key=adv_key):
+            engine.advance(state)
+            st.session_state.tutorial_state = state
+            st.rerun()
+        return
+    if state.get("combat"):
+        _render_combat_ui(state)
+        return
+    try:
+        step = engine.get_current_step(state)
+    except TutorialError as e:
+        st.error("Ошибка: " + str(e))
+        return
+    if step.get("hint"):
+        st.markdown("<div class='tut-hint'>" + step["hint"] + "</div>",
+                    unsafe_allow_html=True)
+    options = step.get("options", [])
+    if options:
+        st.markdown("<div class='tut-actions-label'>Варианты действий</div>",
+                    unsafe_allow_html=True)
+        for i, opt in enumerate(options):
+            key = ("opt_" + str(scene_idx) + "_" + state["step_id"] + "_" +
+                   str(i))
+            if st.button(opt["label"], use_container_width=True, key=key):
+                try:
+                    engine.choose_option(state, i)
+                except TutorialError as e:
+                    st.error("Ошибка: " + str(e))
+                    return
+                st.session_state.tutorial_state = state
+                st.rerun()
+
+
+def _render_finish_screen(state):
+    icon = current_theme_icon()
+    st.markdown(
+        "<div style='text-align:center;padding:60px 0 30px 0;'>"
+        "<div style='font-size:72px;color:var(--accent);"
+        "text-shadow:0 0 30px var(--accent-glow),0 0 60px var(--accent-glow);'>" +
+        str(icon) + "</div>"
+        "<div style='font-family:Georgia,serif;font-size:38px;color:var(--accent);"
+        "letter-spacing:3px;margin-top:16px;"
+        "text-shadow:0 0 20px var(--accent-glow);'>ОБУЧЕНИЕ ЗАВЕРШЕНО</div>"
+        "<div style='color:var(--fg-dim);margin-top:16px;font-style:italic;"
+        "font-size:15px;'>Ты готов продолжить путь Вольного Торговца.</div>"
+        "</div>",
+        unsafe_allow_html=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Продолжить этим персонажем", use_container_width=True,
+                     type="primary", key="finish_go_continue"):
+            _finish("continue")
+    with c2:
+        if st.button("Создать своего персонажа", use_container_width=True,
+                     key="finish_go_create"):
+            _finish("create")
+"""
+
+
+NEW_ADVANCE = '''    # PATCH_TUT_V2D
+    def advance(self, state):
+        post = state.get("pending_post")
+        if post:
+            state["history"].append({"role": "g91", "text": post})
+        goto = state.pop("_pending_goto", None)
+        state["pending_roll"] = None
+        state["pending_post"] = None
+        if goto == "__finish_with__":
+            state["finish_action"] = "continue"
+            state["module_complete"] = True
+            return state
+        if goto == "__finish_create__":
+            state["finish_action"] = "create"
+            state["module_complete"] = True
+            return state
+        if goto is None:
+            state["scene_idx"] += 1
+            if state["scene_idx"] >= len(self.scenes):
+                state["module_complete"] = True
+                return state
+            state["wounds"] = state["wounds_max"]
+            state["history"].append({
+                "role": "g91",
+                "text": ("**// СИСТЕМА: ЦЕЛОСТНОСТЬ ВОССТАНОВЛЕНА. "
+                         "РАНЫ: " + str(state["wounds"]) + "/" +
+                         str(state["wounds_max"]) + ". //**"),
+            })
+            ns = self.scenes[state["scene_idx"]]
+            state["step_id"] = ns["start"]
+            state["history"].append({
+                "role": "g91",
+                "text": ns["steps"][ns["start"]]["narration"],
+            })
+            if ns["steps"][ns["start"]].get("combat"):
+                self._start_combat(state,
+                                   ns["steps"][ns["start"]]["combat"])
+            return state
+        scene = self.scenes[state["scene_idx"]]
+        if goto not in scene["steps"]:
+            raise TutorialError("Шаг не найден: " + str(goto))
+        state["step_id"] = goto
+        new_step = scene["steps"][goto]
+        state["history"].append({"role": "g91", "text": new_step["narration"]})
+        if new_step.get("combat"):
+            self._start_combat(state, new_step["combat"])
+        return state
+
+
+'''
+
+
+def _backup(path):
+    if path.exists():
+        bak = path.with_suffix(path.suffix + ".bak_pre_" + TAG)
+        if not bak.exists():
+            try:
+                shutil.copy2(path, bak)
+            except Exception as e:
+                print("[WARN] backup " + str(path) + ": " + str(e))
+
+
+def _replace_between(text, start_marker, end_marker, new_body):
+    i = text.find(start_marker)
+    if i == -1:
+        return None
+    j = text.find(end_marker, i + len(start_marker))
+    if j == -1:
+        return None
+    return text[:i] + new_body + text[j:]
+
+
+def _patch_advance(report):
+    path = ROOT / "services" / "tutorial.py"
+    rel = str(path.relative_to(ROOT))
+    if not path.exists():
+        report["errors"].append(rel + ": не найден")
+        return
+    src = path.read_text(encoding="utf-8")
+    if "# PATCH_TUT_V2D" in src:
+        report["skipped"].append(rel + " (already patched)")
+        return
+    new_src = _replace_between(
+        src,
+        "    def advance(self, state):",
+        "    def _resolve_roll(self, spec, char, state):",
+        NEW_ADVANCE,
+    )
+    if new_src is None:
+        report["errors"].append(rel + ": маркер не найден")
+        return
+    try:
+        ast.parse(new_src)
+    except SyntaxError as e:
+        report["errors"].append(rel + ": SyntaxError " + str(e))
+        return
+    _backup(path)
+    path.write_text(new_src, encoding="utf-8")
+    report["modified"].append(rel)
+
+
+def _write_full(path, content, report):
+    rel = str(path.relative_to(ROOT))
+    if path.exists():
+        try:
+            old = path.read_text(encoding="utf-8")
+        except Exception:
+            old = None
+        if old == content:
+            report["skipped"].append(rel)
+            return
+        _backup(path)
+        path.write_text(content, encoding="utf-8")
+        report["modified"].append(rel)
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        report["created"].append(rel)
+
+
+def _cleanup_broken_characters(report):
+    users_dir = ROOT / "data" / "users"
+    if not users_dir.exists():
+        return
+    count = 0
+    for char_file in users_dir.glob("*/characters/*.json"):
+        try:
+            data = json.loads(char_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        w = data.get("wounds")
+        if isinstance(w, int):
+            bak = char_file.with_suffix(".json.broken_pre_" + TAG + ".bak")
+            try:
+                shutil.move(str(char_file), str(bak))
+                count += 1
+            except Exception as e:
+                report["errors"].append(
+                    "cleanup " + str(char_file) + ": " + str(e))
+    if count:
+        report["modified"].append(
+            "data/users/*/characters: вычищено " + str(count) + " битых")
 
 
 def main():
-    print("=" * 64)
-    print("PATCH " + TAG + " — gitignore: открыть data/ для лора")
-    print("ROOT: " + str(ROOT))
-    print("=" * 64)
+    report = {"created": [], "modified": [], "skipped": [], "errors": []}
 
-    if not GITIGNORE.exists():
-        print("  ERROR: .gitignore not found")
-        return 1
+    for rel_path, content in FILES_FULL.items():
+        if rel_path.endswith(".py"):
+            try:
+                ast.parse(content)
+            except SyntaxError as e:
+                report["errors"].append(
+                    rel_path + ": SyntaxError " + str(e))
+                print("[ERROR] " + rel_path + ": " + str(e))
+                continue
+        _write_full(ROOT / rel_path, content, report)
 
-    try:
-        src = GITIGNORE.read_text(encoding="utf-8")
-    except Exception as e:
-        print("  ERROR read: " + type(e).__name__ + ": " + str(e))
-        return 1
+    _patch_advance(report)
+    _cleanup_broken_characters(report)
 
-    lines = src.splitlines()
-
-    if not _has_line(lines, "data/"):
-        print("  skip (data/ already removed)")
-        # На всякий случай проверим, что защита есть
-        missing = [p for p in PROTECTED_MUST_EXIST if not _has_line(lines, p)]
-        if missing:
-            print("  WARNING: missing protected rules: " + ", ".join(missing))
-            print("  добавь их в .gitignore руками и повтори патч")
-            return 2
-        print("  защита data/users/, data/accounts/ на месте")
-        return 0
-
-    # Заменяем строку data/ на два комментария
-    out = []
-    removed = 0
-    for line in lines:
-        if line.strip() == "data/":
-            out.append("# data/ убрано в PATCH_16L — лор должен уходить на GitHub.")
-            out.append("# Приватные части data/ исключаются отдельными правилами ниже.")
-            removed += 1
-            continue
-        out.append(line)
-
-    # Добавляем data/_replacements/, если ещё нет
-    added_rep = False
-    if not _has_line(out, PROTECTED_ADD_IF_MISSING[0]):
-        out.append("")
-        out.append("# служебные материалы, публиковать не нужно")
-        out.append(PROTECTED_ADD_IF_MISSING[0])
-        added_rep = True
-
-    new_src = "\n".join(out)
-    if not new_src.endswith("\n"):
-        new_src += "\n"
-
-    # Проверка, что защита осталась
-    new_lines = new_src.splitlines()
-    missing = [p for p in PROTECTED_MUST_EXIST if not _has_line(new_lines, p)]
-
-    # Бэкап
-    bak = GITIGNORE.with_name(".gitignore.bak_pre_" + TAG)
-    try:
-        shutil.copy2(GITIGNORE, bak)
-    except Exception as e:
-        print("  ERROR backup: " + type(e).__name__ + ": " + str(e))
-        return 1
-
-    # Запись
-    try:
-        GITIGNORE.write_text(new_src, encoding="utf-8")
-    except Exception as e:
-        print("  ERROR write: " + type(e).__name__ + ": " + str(e))
-        return 1
-
-    print("  .gitignore -> backup + patched")
-    print("    строк data/ удалено:  " + str(removed))
-    print("    добавлено _replacements/:  " + ("да" if added_rep else "нет (уже было)"))
-    if missing:
-        print("  !!! WARNING: после правки не найдены: " + ", ".join(missing))
-        print("  !!! проверь .gitignore и добавь их вручную")
+    print("")
+    print("=== PATCH " + TAG + " REPORT ===")
+    for k in ("created", "modified", "skipped"):
+        for p in report[k]:
+            print("  [" + k.upper() + "] " + p)
+    for e in report["errors"]:
+        print("  [ERROR] " + e)
+    print("")
+    if report["errors"]:
+        print("DONE (with errors)")
     else:
-        print("  защита data/users/, data/accounts/ — на месте")
-
-    print()
-    print("=" * 64)
-    print("Дальше проверь руками, что data/ НЕ игнорируется, а users/ — игнорируется:")
-    print()
-    print("  git check-ignore -v data/general/general_rules.txt")
-    print("  git check-ignore -v data/users/Admin/settings.json")
-    print()
-    print("Ожидаемо:")
-    print("  1-я команда — ПУСТО (файл будет отслеживаться)")
-    print("  2-я команда — строка с правилом data/users/ (файл не уйдёт)")
-    print()
-    print("Если так — добавь лор в git:")
-    print()
-    print("  git add data/")
-    print("  git status --short data/")
-    print()
-    print("ВАЖНО: в выводе НЕ ДОЛЖНО быть data/users/ и data/accounts/.")
-    print("Если они там — откати командой:  git reset data/")
-    print()
-    print("Если чисто:")
-    print("  git commit -m \"lore: publish data/*.txt (rules, factions, glossary)\"")
-    print("  git push origin main")
-    print("  Streamlit Cloud -> Reboot app")
-    print("=" * 64)
-    return 0
+        print("DONE - ok")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
