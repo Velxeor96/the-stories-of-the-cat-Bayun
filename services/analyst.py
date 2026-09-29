@@ -1,4 +1,4 @@
-# PATCH_6B_7_V1
+# PATCH_18 — analyst с расширенными эвристиками
 """services/analyst.py — фраза игрока → строгий JSON (ParsedCommand)."""
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ from typing import Any, Optional
 from core.config import Config
 from core.llm_client import LLMClient
 from core.llm_factory import make_client
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 class AnalystError(Exception):
@@ -35,25 +37,40 @@ VALID_DIFFICULTIES = {
 
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
-# --- regex-эвристика ДО LLM (не жжёт токены на очевидных фразах) ---
-# порядок важен: ranged до melee, чтобы "стреляю" не ушло в WS
 _HEURISTIC_RULES: list[tuple[re.Pattern, dict]] = [
-    (re.compile(r"всматрива|вглядыва|оглядыва|осматрива|осмотр|прислушива|слуша|слыш|искать|ищу|ищешь|поиск|замеча|наблюда|высматрива", re.IGNORECASE),
-     {"action": "observe", "skill": "Per", "roll_needed": True, "difficulty": "Ordinary"}),
-    (re.compile(r"крадусь|скрыва|подкрадыва|прячусь|незаметно|бесшумно", re.IGNORECASE),
-     {"action": "stealth", "skill": "Ag", "roll_needed": True, "difficulty": "Challenging"}),
-    (re.compile(r"стреля|выстрел|палю|жму\s+курок|открываю\s+огонь", re.IGNORECASE),
-     {"action": "attack_ranged", "skill": "BS", "roll_needed": True, "difficulty": "Ordinary"}),
-    (re.compile(r"атакую|ударяю|бью|рублю|колю|режу|машу|замахива", re.IGNORECASE),
-     {"action": "attack_melee", "skill": "WS", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"пси|психич|варп[- ]маг|колдую|варп[- ]выстрел|психосил",
+                re.IGNORECASE),
+     {"action": "use_psychic", "skill": "WP", "roll_needed": True,
+      "difficulty": "Ordinary"}),
+    (re.compile(r"всматрива|вглядыва|оглядыва|осматрива|осмотр|прислушива|"
+                r"слуша|слыш|искать|ищу|ищешь|поиск|замеча|наблюда|высматрива",
+                re.IGNORECASE),
+     {"action": "observe", "skill": "Per", "roll_needed": True,
+      "difficulty": "Ordinary"}),
+    (re.compile(r"крадусь|скрыва|подкрадыва|прячусь|незаметно|бесшумно",
+                re.IGNORECASE),
+     {"action": "stealth", "skill": "Ag", "roll_needed": True,
+      "difficulty": "Challenging"}),
+    (re.compile(r"стреля|выстрел|палю|жму\s+курок|открываю\s+огонь",
+                re.IGNORECASE),
+     {"action": "attack_ranged", "skill": "BS", "roll_needed": True,
+      "difficulty": "Ordinary"}),
+    (re.compile(r"атакую|ударяю|бью|рублю|колю|режу|машу|замахива",
+                re.IGNORECASE),
+     {"action": "attack_melee", "skill": "WS", "roll_needed": True,
+      "difficulty": "Ordinary"}),
     (re.compile(r"защища|блокиру|париру|уворачива", re.IGNORECASE),
-     {"action": "defend", "skill": "WS", "roll_needed": True, "difficulty": "Ordinary"}),
+     {"action": "defend", "skill": "WS", "roll_needed": True,
+      "difficulty": "Ordinary"}),
     (re.compile(r"убежда|уговарива|договарива|склоня|прошу", re.IGNORECASE),
-     {"action": "persuade", "skill": "Fel", "roll_needed": True, "difficulty": "Ordinary"}),
+     {"action": "persuade", "skill": "Fel", "roll_needed": True,
+      "difficulty": "Ordinary"}),
     (re.compile(r"запугива|угрожа|пуга|страща", re.IGNORECASE),
-     {"action": "intimidate", "skill": "S", "roll_needed": True, "difficulty": "Ordinary"}),
-    (re.compile(r"обманыва|блефу|врать|вру|лгу|лгать|хитрю", re.IGNORECASE),
-     {"action": "deceive", "skill": "Fel", "roll_needed": True, "difficulty": "Ordinary"}),
+     {"action": "intimidate", "skill": "S", "roll_needed": True,
+      "difficulty": "Ordinary"}),
+    (re.compile(r"обманыва|блефу|вру|лгу|лгать|хитрю", re.IGNORECASE),
+     {"action": "deceive", "skill": "Fel", "roll_needed": True,
+      "difficulty": "Ordinary"}),
 ]
 
 
@@ -69,15 +86,15 @@ class ParsedCommand:
     def to_dict(self) -> dict:
         return asdict(self)
 
-    def is_valid(self) -> tuple[bool, str]:
+    def is_valid(self) -> tuple:
         if self.action not in VALID_ACTIONS:
-            return False, f"action: {self.action!r}"
+            return False, "action: " + repr(self.action)
         if self.difficulty not in VALID_DIFFICULTIES:
-            return False, f"difficulty: {self.difficulty!r}"
+            return False, "difficulty: " + repr(self.difficulty)
         if not isinstance(self.roll_needed, bool):
             return False, "roll_needed должен быть bool"
         if self.skill is not None and self.skill not in VALID_SKILLS:
-            return False, f"skill: {self.skill!r}"
+            return False, "skill: " + repr(self.skill)
         return True, ""
 
 
@@ -86,12 +103,11 @@ class Analyst:
                  prompt_path: Optional[Path] = None):
         self.config = config
         self.role = role
-
         if prompt_path is None:
             prompt_path = ROOT_DIR / "prompts" / "analyst.txt"
         self.prompt_path = Path(prompt_path)
         if not self.prompt_path.exists():
-            raise AnalystError(f"Нет промпта: {self.prompt_path}")
+            raise AnalystError("Нет промпта: " + str(self.prompt_path))
         self.system_prompt = self.prompt_path.read_text(encoding="utf-8")
 
         self.model = config.role_model(role)
@@ -110,17 +126,15 @@ class Analyst:
     def parse(self, player_input: str) -> ParsedCommand:
         if not player_input or not player_input.strip():
             raise AnalystError("Пустая фраза игрока")
-
         text = player_input.strip()
 
-        # 1) regex-эвристика — без обращения к LLM
         heuristic = self._heuristic_parse(text)
         if heuristic is not None:
-            print(f"[analyst] heuristic → action={heuristic.action} "
-                  f"skill={heuristic.skill} roll={heuristic.roll_needed}")
+            print("[analyst] heuristic -> action=" + heuristic.action
+                  + " skill=" + str(heuristic.skill)
+                  + " roll=" + str(heuristic.roll_needed))
             return heuristic
 
-        # 2) LLM
         try:
             response = self.llm.call(
                 system_prompt=self.system_prompt,
@@ -134,18 +148,17 @@ class Analyst:
             parsed = self._to_command(raw_json, original=player_input)
             valid, reason = parsed.is_valid()
             if not valid:
-                raise AnalystError(f"некорректный JSON: {reason}")
-            print(f"[analyst] llm → action={parsed.action} "
-                  f"skill={parsed.skill} roll={parsed.roll_needed}")
+                raise AnalystError("некорректный JSON: " + reason)
+            print("[analyst] llm -> action=" + parsed.action
+                  + " skill=" + str(parsed.skill)
+                  + " roll=" + str(parsed.roll_needed))
             return parsed
         except Exception as e:
-            print(f"[analyst] fallback (LLM): {type(e).__name__}: {e}")
+            print("[analyst] fallback (LLM): " + type(e).__name__ + ": " + str(e))
             return ParsedCommand(
                 action="other", target=None, skill=None,
                 roll_needed=False, difficulty="Ordinary", raw=player_input,
             )
-
-    # ---------- эвристика ----------
 
     @staticmethod
     def _heuristic_parse(text: str) -> Optional[ParsedCommand]:
@@ -160,8 +173,6 @@ class Analyst:
                     raw=text,
                 )
         return None
-
-    # ---------- LLM ----------
 
     def _do_request(self, *, system_prompt: str, user_message: str,
                     model: str, temperature: float, max_tokens: int) -> Any:
@@ -185,7 +196,7 @@ class Analyst:
         try:
             return response.choices[0].message.content or ""
         except (AttributeError, IndexError) as e:
-            raise AnalystError(f"формат ответа: {response!r}") from e
+            raise AnalystError("формат ответа: " + repr(response)) from e
 
     @staticmethod
     def _extract_json(text: str) -> dict:
@@ -197,11 +208,11 @@ class Analyst:
             text = text.strip()
         m = _JSON_RE.search(text)
         if not m:
-            raise AnalystError(f"не найден JSON: {text[:120]!r}")
+            raise AnalystError("не найден JSON: " + repr(text[:120]))
         try:
             return json.loads(m.group(0))
         except json.JSONDecodeError as e:
-            raise AnalystError(f"битый JSON: {e}") from e
+            raise AnalystError("битый JSON: " + str(e)) from e
 
     @staticmethod
     def _to_command(data: dict, original: str) -> ParsedCommand:
@@ -213,6 +224,3 @@ class Analyst:
             difficulty=str(data.get("difficulty", "Ordinary")),
             raw=original,
         )
-
-
-ROOT_DIR = Path(__file__).resolve().parents[1]

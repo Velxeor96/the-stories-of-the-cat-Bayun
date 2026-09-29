@@ -411,8 +411,183 @@ def render():
             unsafe_allow_html=True,
         )
 
-    # --- Кнопки ---
-    st.markdown("---")
+    # --- Заметки игрока ---
+    st.markdown(
+        "<div class='ch-wrap'><div class='ch-sec'>Заметки игрока</div></div>",
+        unsafe_allow_html=True,
+    )
+    try:
+        from services.notes import get_notes, add_note, remove_note
+        notes = get_notes(char)
+        if notes:
+            for i, n in enumerate(notes):
+                c1, c2 = st.columns([6, 1])
+                with c1:
+                    tag = n.get("tag") or ""
+                    ts = n.get("ts") or ""
+                    prefix = ("[" + tag + "] ") if tag else ""
+                    st.markdown("**" + prefix + str(n.get("text", "")) + "**")
+                    if ts:
+                        st.caption(ts)
+                with c2:
+                    if st.button("✕", key="ch_note_del_" + str(i)):
+                        remove_note(char, i)
+                        try:
+                            from persistence.characters import save_character
+                            save_character(
+                                st.session_state.user_login,
+                                st.session_state.active_character,
+                                char,
+                            )
+                        except Exception:
+                            pass
+                        st.rerun()
+        else:
+            st.caption("Заметок нет.")
+        with st.expander("Добавить заметку"):
+            new_text = st.text_area("Текст", key="ch_note_new")
+            new_tag = st.text_input("Метка (необязательно)",
+                                    key="ch_note_tag")
+            if st.button("Добавить", key="ch_note_add"):
+                if add_note(char, new_text, new_tag):
+                    try:
+                        from persistence.characters import save_character
+                        save_character(
+                            st.session_state.user_login,
+                            st.session_state.active_character,
+                            char,
+                        )
+                    except Exception:
+                        pass
+                    st.rerun()
+    except Exception as e:
+        st.caption("Ошибка заметок: " + type(e).__name__)
+
+    # --- Экспорт / Импорт ---
+    st.markdown(
+        "<div class='ch-wrap'><div class='ch-sec'>Экспорт / Импорт</div></div>",
+        unsafe_allow_html=True,
+    )
+    try:
+        from services.save_load import (
+            export_character_json, import_character_json,
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button(
+                "💾 Скачать .json",
+                data=export_character_json(char),
+                file_name=str(char.get("name", "hero")) + ".json",
+                mime="application/json",
+                use_container_width=True,
+                key="ch_dl",
+            )
+        with c2:
+            up = st.file_uploader(
+                "Загрузить .json", type=["json"],
+                key="ch_up", label_visibility="collapsed",
+            )
+            if up is not None:
+                new_char, err = import_character_json(up.getvalue())
+                if err:
+                    st.error(err)
+                elif new_char:
+                    try:
+                        from persistence.characters import save_character
+                        nm = str(new_char.get("name", "imported"))
+                        save_character(
+                            st.session_state.user_login, nm, new_char,
+                        )
+                        st.success("Импортирован: " + nm)
+                    except Exception as e:
+                        st.error("Ошибка сохранения: " + str(e))
+    except Exception as e:
+        st.caption("Ошибка save/load: " + type(e).__name__)
+
+    # --- Эффекты и травмы ---
+    try:
+        from services.effects import effects_summary
+        ins = int(char.get("insanity", 0) or 0)
+        cor = int(char.get("corruption", 0) or 0)
+        fear = int(char.get("fear_rating", 0) or 0)
+        inj = char.get("injuries") or []
+        if ins or cor or fear or inj:
+            st.markdown(
+                "<div class='ch-wrap'><div class='ch-sec'>"
+                "Эффекты и травмы</div></div>",
+                unsafe_allow_html=True,
+            )
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Безумие", ins)
+            c2.metric("Порча", cor)
+            c3.metric("Страх", fear)
+            if inj:
+                st.markdown("**Травмы:**")
+                for i, it in enumerate(inj):
+                    if not isinstance(it, dict):
+                        continue
+                    c1, c2 = st.columns([5, 1])
+                    with c1:
+                        st.markdown(
+                            "<div class='ch-card'>• " + str(it.get("name"))
+                            + " (" + str(it.get("stat")) + " "
+                            + str(it.get("penalty")) + ")</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with c2:
+                        if st.button("✕", key="inj_rm_" + str(i)):
+                            try:
+                                from services.effects import remove_injury
+                                remove_injury(char, i)
+                                from persistence.characters import save_character
+                                save_character(
+                                    st.session_state.user_login,
+                                    st.session_state.active_character, char)
+                                st.rerun()
+                            except Exception:
+                                pass
+    except Exception as _e:
+        print("[character] effects fail: " + type(_e).__name__)
+
+    # --- Инвентарь ---
+    try:
+        from services.inventory import (
+            get_inventory, CATEGORIES, CATEGORY_RU,
+        )
+        inv = get_inventory(char)
+        total = sum(len(inv[c]) for c in CATEGORIES)
+        st.markdown(
+            "<div class='ch-wrap'><div class='ch-sec'>Инвентарь ("
+            + str(total) + ")</div></div>",
+            unsafe_allow_html=True,
+        )
+        for cat in CATEGORIES:
+            items = inv.get(cat) or []
+            if not items:
+                continue
+            st.markdown("**" + CATEGORY_RU[cat] + "**")
+            for it in items:
+                nm = it.get("name") if isinstance(it, dict) else str(it)
+                qty = it.get("qty", 1) if isinstance(it, dict) else 1
+                c1, c2 = st.columns([5, 1])
+                with c1:
+                    st.caption(nm + (" ×" + str(qty) if int(qty) > 1 else ""))
+                with c2:
+                    if st.button("✕", key="inv_rm_" + cat + "_" + str(nm)[:20]):
+                        try:
+                            from services.inventory import remove_item
+                            remove_item(char, nm, 1)
+                            from persistence.characters import save_character
+                            save_character(
+                                st.session_state.user_login,
+                                st.session_state.active_character, char)
+                            st.rerun()
+                        except Exception:
+                            pass
+    except Exception as _e:
+        print("[character] inventory fail: " + type(_e).__name__)
+
+    # --- Кнопки ---    st.markdown("---")
     c1, c2, c3 = st.columns(3)
     with c1:
         if st.button("В игру", use_container_width=True,

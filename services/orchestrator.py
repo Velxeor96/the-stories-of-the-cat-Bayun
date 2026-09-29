@@ -1,4 +1,4 @@
-# PATCH_6B_7_V2
+# PATCH_18
 """services/orchestrator.py — полный цикл одного хода."""
 from __future__ import annotations
 
@@ -75,47 +75,49 @@ class Orchestrator:
             )
 
         command = self.analyst.parse(player_input)
-        print(f"[analyst] action={command.action} skill={command.skill} "
-              f"roll_needed={command.roll_needed} diff={command.difficulty}")
+        print("[analyst] action=" + command.action
+              + " skill=" + str(command.skill)
+              + " roll_needed=" + str(command.roll_needed)
+              + " diff=" + command.difficulty)
 
         roll = None
         if command.roll_needed:
             skill = command.skill
             if not skill:
-                print("[orchestrator] roll_needed=True без skill → fallback на Per")
+                print("[orchestrator] roll_needed=True без skill -> fallback на Per")
                 skill = "Per"
             base = self._lookup_skill(state, skill)
-            print(f"[orchestrator] base({skill})={base}")
+            print("[orchestrator] base(" + str(skill) + ")=" + str(base))
             roll = roll_check(base, difficulty=command.difficulty, reason=skill)
             try:
                 d = roll.to_dict()
                 verdict = "SUCCESS" if d.get("success") else "FAIL"
-                print(f"[orchestrator] roll: d100={d.get('roll')} vs "
-                      f"{d.get('target')} → {verdict} (deg {d.get('degrees')})")
+                print("[orchestrator] roll: d100=" + str(d.get("roll"))
+                      + " vs " + str(d.get("target")) + " -> " + verdict
+                      + " (deg " + str(d.get("degrees")) + ")")
             except Exception:
-                print(f"[orchestrator] roll: {roll!r}")
+                print("[orchestrator] roll: " + repr(roll))
 
         rag_ctx = ""
         rag_sources: list = []
         rag_n = 0
-        # PATCH_16I: faction filter for RAG
         faction = None
         if isinstance(state, dict):
             faction = state.get("faction_id") or None
         if self.kb is not None:
-            enriched = self._enrich_query(player_input, command)
+            enriched = self._enrich_query(player_input, command, state=state)
             try:
-                chunks = self.kb.search(enriched, top_k=4,
-                                        faction=faction) or []
+                chunks = self.kb.search(enriched, top_k=4, faction=faction) or []
                 rag_n = len(chunks)
                 if chunks:
                     rag_ctx = self.kb.format_context(
                         enriched, top_k=4, faction=faction,
                     )
                     rag_sources = self._extract_sources(chunks)
-                print(f"[orchestrator] RAG q={enriched[:70]!r} → {rag_n} chunks")
+                print("[orchestrator] RAG q=" + repr(enriched[:70])
+                      + " -> " + str(rag_n) + " chunks")
             except Exception as e:
-                print(f"[orchestrator] RAG ошибка: {e}")
+                print("[orchestrator] RAG ошибка: " + str(e))
                 rag_ctx = ""
 
         narrative = self.master.narrate(
@@ -131,7 +133,8 @@ class Orchestrator:
         )
 
     @staticmethod
-    def _enrich_query(player_input: str, command: ParsedCommand) -> str:
+    def _enrich_query(player_input: str, command: ParsedCommand,
+                      state: Any = None) -> str:
         parts: list[str] = [player_input]
         if command.target:
             parts.append(str(command.target))
@@ -139,11 +142,24 @@ class Orchestrator:
             parts.append(command.action.replace("_", " "))
         if command.skill:
             parts.append(command.skill)
+        if isinstance(state, dict):
+            for key in ("faction", "subfaction", "home_world_name",
+                        "career_name", "home_world_id", "career_id"):
+                v = state.get(key)
+                if v:
+                    parts.append(str(v))
+            loc = state.get("location")
+            if isinstance(loc, dict):
+                p = loc.get("place") or loc.get("world")
+                if p:
+                    parts.append(str(p))
+            elif loc:
+                parts.append(str(loc))
         return " ".join(p for p in parts if p).strip()
 
     @staticmethod
     def _extract_sources(chunks: list) -> list:
-        out: list[str] = []
+        out: list = []
         for c in chunks:
             if isinstance(c, dict):
                 src = c.get("source") or (c.get("metadata") or {}).get("source")
@@ -155,15 +171,14 @@ class Orchestrator:
 
     @staticmethod
     def _lookup_skill(state: Any, skill: str) -> int:
-        """Рекурсивный path-lookup: 'characteristics.Per' → state['characteristics']['Per']."""
         if not skill:
             return DEFAULT_SKILL_VALUE
 
         paths = [
-            f"characteristics.{skill}",
-            f"characteristics.{skill.upper()}",
-            f"characteristics.{skill.capitalize()}",
-            f"skills.{skill}",
+            "characteristics." + skill,
+            "characteristics." + skill.upper(),
+            "characteristics." + skill.capitalize(),
+            "skills." + skill,
         ]
         for path in paths:
             v = Orchestrator._get_by_path(state, path)
@@ -186,7 +201,6 @@ class Orchestrator:
 
     @staticmethod
     def _get_by_path(state: Any, path: str) -> Any:
-        """Универсальный обход: dict['a']['b'] или obj.a.b."""
         cur = state
         for part in path.split("."):
             if isinstance(cur, dict):

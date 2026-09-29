@@ -454,8 +454,27 @@ def _build_css():
 
 
 def apply_theme():
-    st.markdown("<style>" + _build_css() + "</style>",
-                unsafe_allow_html=True)
+    _html = "<style>" + _build_css() + "</style>"
+    _ok = False
+    try:
+        st.html(_html)
+        _ok = True
+    except Exception:
+        try:
+            st.markdown(_html, unsafe_allow_html=True)
+            _ok = True
+        except Exception:
+            pass
+    if not _ok:
+        print("[theme] apply_theme: both st.html and st.markdown failed")
+    # диагностика: если включено WH40K_DIAG, ставим красный фон
+    import os as _os
+    if _os.environ.get("WH40K_DIAG"):
+        try:
+            st.html("<style>.stApp { background:#600 !important; }</style>")
+        except Exception:
+            st.markdown("<style>.stApp { background:#600 !important; }</style>",
+                        unsafe_allow_html=True)
 
 
 def available_themes(login=""):
@@ -520,3 +539,33 @@ def render_theme_selector(key_prefix="theme", login=""):
 
 def current_theme_icon():
     return THEMES.get(_current(), THEMES[_DEFAULT])["icon"]
+
+
+# PATCH_31: вынесенный компонент панели тем.
+def render_theme_strip(key_prefix='__theme_strip', label='Тема'):
+    import streamlit as _st
+    login = _st.session_state.get('user_login') or ''
+    keys = available_themes(login)
+    if not keys:
+        return
+    cur = _current()
+    if cur not in keys:
+        _st.session_state.ui_theme = keys[0]
+        _st.rerun()
+        return
+    try:
+        idx = keys.index(cur)
+    except ValueError:
+        idx = 0
+    choice = _st.radio(
+        label,
+        options=keys,
+        index=idx,
+        format_func=lambda k: THEMES[k]['label'],
+        horizontal=True,
+        key=key_prefix + '_pick',
+        label_visibility='collapsed',
+    )
+    if choice != cur:
+        _st.session_state.ui_theme = choice
+        _st.rerun()

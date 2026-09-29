@@ -38,20 +38,25 @@ def _force_reset():
 
 _force_reset()
 
+# PATCH_33: применяем CSS-тему (свечения, градиенты, панели)
+try:
+    from ui.theme import apply_theme
+    apply_theme()
+    print('[app] apply_theme OK')
+except Exception as _te:
+    print('[app] apply_theme FAIL: '
+          + type(_te).__name__ + ': ' + str(_te))
+    import traceback
+    traceback.print_exc()
+
 from ui.screens import (  # noqa: E402
     splash, about, auth, onboarding, tutorial, wizard, game,
     kot_intro, tutorial_prompt, tutorial_help, loading,
     main_menu, loads, settings_screen, credits, progression,
-    character, chronicles,
+    character, chronicles, combat, ship, market, library,
+    game_settings, companions, achievements, journal,
+    rituals, dreams, skills,
 )
-
-try:
-    from ui.theme import apply_theme  # noqa: E402
-    apply_theme()
-except Exception as _e:
-    print("[app] apply_theme failed: " + type(_e).__name__ + ": " + str(_e))
-    import traceback
-    traceback.print_exc()
 
 SCREENS = {
     "splash": splash.render,
@@ -66,12 +71,18 @@ SCREENS = {
     "tutorial": tutorial.render,
     "wizard": wizard.render,
     "game": game.render,
-    "loads": loads.render,
-    "settings_screen": settings_screen.render,
-    "credits": credits.render,
+    "combat": combat.render,
+    "ship": ship.render,
     "progression": progression.render,
-    "character": character.render,
-    "chronicles": chronicles.render,
+    "skills": skills.render,
+    "market": market.render,
+    "library": library.render,
+    "game_settings": game_settings.render,
+    "companions": companions.render,
+    "achievements": achievements.render,
+    "journal": journal.render,
+    "rituals": rituals.render,
+    "dreams": dreams.render,
 }
 
 _PRELOGIN = {"splash", "auth"}

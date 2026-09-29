@@ -47,3 +47,33 @@ data/_replacements/
 # ΠΡ€ΠΎΡ‡ΠµΠµ
 _reference_from_old/
 .intro_reset_patch_*.flag
+reports/
+gigachat_key.txt 
+
+# === PATCH_30 ===
+.env
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+*.bak*
+data/users/*/
+data/users/*.json
+data/users/*/autosave/
+data/_index.json
+chroma_db/
+.DS_Store
+Thumbs.db
+gigachat_key.txt
+
+# PATCH_40: ¬γα®ΰ
+DUMP.txt
+_dump.py
+analyze.bat
+patch_17.py
+_chroma_structure.txt
+_data_structure.txt
+PROJECT_SNAPSHOT.md
+*.docx
+_reference_from_old/
+reports/
+logs/

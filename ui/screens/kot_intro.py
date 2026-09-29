@@ -106,7 +106,15 @@ KOT_HTML = '''<div class='kot-scroll'>
 
 
 def render() -> None:
-    st.markdown(KOT_CSS, unsafe_allow_html=True)
+    _css_ok = False
+    try:
+        st.html(KOT_CSS)
+        _css_ok = True
+    except Exception:
+        st.markdown(KOT_CSS, unsafe_allow_html=True)
+        _css_ok = True
+    if not _css_ok:
+        print("[kot_intro] css inject failed")
     theme = _current()
     sigil = sigil_svg(theme, size=80)
 

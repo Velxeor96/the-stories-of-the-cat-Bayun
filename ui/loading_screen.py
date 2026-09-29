@@ -432,3 +432,16 @@ def inline_html(theme, phrase=None, label="Когитатор Мастера о�
 
 def full_css():
     return _LOAD_CSS
+
+
+# PATCH_31: FULL-SCREEN overlay — перекрывает всё.
+def full_screen_html(theme, progress, phrase,
+                     subtitle='дух-машины пробуждается'):
+    inner = full_html(theme, progress, phrase, subtitle)
+    style = (
+        'position:fixed;inset:0;z-index:999999;'
+        'background:#0e0e10;'
+        'display:flex;align-items:center;justify-content:center;'
+        'flex-direction:column;padding:20px;'
+    )
+    return _LOAD_CSS + "<div style='" + style + "'>" + inner + "</div>"

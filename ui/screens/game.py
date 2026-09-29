@@ -554,6 +554,38 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
         with st.expander("Способности", expanded=False):
             _render_abilities(char)
         st.markdown("---")
+        if st.button("🏪 Рынок", use_container_width=True,
+                     key="game_market"):
+            st.session_state.screen = "market"
+            st.rerun()
+        if st.button("📚 Библиотека", use_container_width=True,
+                     key="game_library"):
+            st.session_state.screen = "library"
+            st.rerun()
+        if st.button("🚀 Корабль", use_container_width=True,
+                     key="game_ship"):
+            st.session_state.screen = "ship"
+            st.rerun()
+        if st.button("⚔️ Бой", use_container_width=True,
+                     key="game_combat"):
+            st.session_state.screen = "combat"
+            st.rerun()
+        if st.button("👥 Компаньоны", use_container_width=True,
+                     key="game_companions"):
+            st.session_state.screen = "companions"
+            st.rerun()
+        if st.button("📖 Дневник", use_container_width=True,
+                     key="game_journal"):
+            st.session_state.screen = "journal"
+            st.rerun()
+        if st.button("🏆 Ачивки", use_container_width=True,
+                     key="game_achievements"):
+            st.session_state.screen = "achievements"
+            st.rerun()
+        if st.button("⚙️ Настройки", use_container_width=True,
+                     key="game_settings"):
+            st.session_state.screen = "game_settings"
+            st.rerun()
         if st.button("Персонаж", use_container_width=True,
                      key="game_character"):
             st.session_state.screen = "character"
@@ -573,7 +605,120 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
         if st.button("Главное меню", use_container_width=True,
                      key="game_to_menu"):
             _back_to_menu()
+        with st.expander("📝 Заметки", expanded=False):
+            try:
+                from services.notes import get_notes, add_note, remove_note
+                from persistence.characters import save_character as _sc
+                _notes = get_notes(char)
+                for _i, _n in enumerate(_notes):
+                    _c1, _c2 = st.columns([5, 1])
+                    with _c1:
+                        _tag = _n.get("tag") or ""
+                        _prefix = ("[" + _tag + "] ") if _tag else ""
+                        st.caption(_prefix + str(_n.get("text", "")))
+                    with _c2:
+                        if st.button("✕", key="gnote_" + str(_i)):
+                            remove_note(char, _i)
+                            _sc(st.session_state.user_login,
+                                st.session_state.active_character, char)
+                            st.rerun()
+                _txt = st.text_area("Новая заметка", key="g_note_new",
+                                    height=60, label_visibility="collapsed")
+                if st.button("Добавить заметку", key="g_note_add"):
+                    if add_note(char, _txt, ""):
+                        _sc(st.session_state.user_login,
+                            st.session_state.active_character, char)
+                        st.rerun()
+            except Exception as _e:
+                st.caption("Ошибка заметок: " + type(_e).__name__)
+
+        with st.expander("💾 Экспорт персонажа", expanded=False):
+            try:
+                from services.save_load import (
+                    export_character_json, import_character_json,
+                )
+                from persistence.characters import save_character as _sc
+                st.download_button(
+                    "Скачать .json",
+                    data=export_character_json(char),
+                    file_name=str(char.get("name", "hero")) + ".json",
+                    mime="application/json",
+                    use_container_width=True,
+                    key="g_dl",
+                )
+                _up = st.file_uploader("Загрузить .json", type=["json"],
+                                       key="g_up",
+                                       label_visibility="collapsed")
+                if _up is not None:
+                    _new, _err = import_character_json(_up.getvalue())
+                    if _err:
+                        st.error(_err)
+                    elif _new:
+                        _nm = str(_new.get("name", "imported"))
+                        _sc(st.session_state.user_login, _nm, _new)
+                        st.success("Импорт: " + _nm)
+            except Exception as _e:
+                st.caption("Ошибка save/load: " + type(_e).__name__)
+
+        # Автосейв и откат
+        try:
+            from services.autosave import (
+                has_snapshot, load_snapshot, clear_snapshot,
+            )
+            if has_snapshot(st.session_state.user_login,
+                            st.session_state.active_character):
+                if st.button("↩ Откатить на ход назад",
+                             use_container_width=True,
+                             key="game_rollback"):
+                    snap = load_snapshot(
+                        st.session_state.user_login,
+                        st.session_state.active_character)
+                    if snap:
+                        from persistence.characters import save_character
+                        save_character(
+                            st.session_state.user_login,
+                            st.session_state.active_character, snap)
+                        clear_snapshot(
+                            st.session_state.user_login,
+                            st.session_state.active_character)
+                        st.rerun()
+        except Exception as _e:
+            print("[game] rollback fail: " + type(_e).__name__)
+
+        # Экспорт приключения в Markdown
+        try:
+            from persistence.chats import load_history
+            _hist = load_history(st.session_state.user_login,
+                                 st.session_state.active_character)
+            _md = ["# " + str(char.get("name", "Приключение")), ""]
+            _bg = char.get("user_background") or ""
+            if _bg:
+                _md.append("**Предыстория.** " + str(_bg))
+                _md.append("")
+            for h in _hist:
+                role = h.get("role")
+                text = h.get("text", "")
+                if role == "player":
+                    _md.append("### 🧑 Игрок")
+                else:
+                    _md.append("### 🤖 Мастер")
+                _md.append(str(text)[:4000])
+                _md.append("")
+            _md_text = "\n".join(_md)
+            st.download_button(
+                "📥 Скачать приключение (.md)",
+                data=_md_text.encode("utf-8"),
+                file_name=str(char.get("name", "hero")) + ".md",
+                mime="text/markdown",
+                use_container_width=True,
+                key="game_export_md",
+            )
+        except Exception as _e:
+            print("[game] export fail: " + type(_e).__name__)
+
         if st.button("Выход", use_container_width=True, key="game_exit"):
+            _logout()
+            _logout()
             _logout()
 
 
@@ -712,11 +857,18 @@ def _run_game_loading() -> None:
     pool = get_phrases(theme)
     import random as _rnd
     phrase = pool[0]
-    st.markdown(
-        full_html(theme, 100, phrase,
-                  subtitle="когитатор готовит сессию"),
-        unsafe_allow_html=True,
-    )
+    try:
+        from ui.loading_screen import full_screen_html as _fsh
+        _fs = _fsh(theme, 100, phrase, subtitle="когитатор готовит сессию")
+    except Exception as _e:
+        print('[game] full_screen_html fail: ' + type(_e).__name__)
+        _fs = full_html(theme, 100, phrase,
+                        subtitle="когитатор готовит сессию")
+    try:
+        st.html(_fs)
+    except Exception:
+        st.markdown(_fs, unsafe_allow_html=True)
+
     try:
         _get_orch()
     except Exception as e:
@@ -782,7 +934,16 @@ def render() -> None:
             st.markdown(render_spinner_html(), unsafe_allow_html=True)
         try:
             orch = _get_orch()
-            result = orch.process_turn("Начало приключения.", char, history=[])
+            _bg = str(char.get("user_background")
+                      or char.get("background") or "").strip()
+            _intro = "Начало приключения."
+            if _bg:
+                _intro = (
+                    "Начало приключения. Предыстория героя: " + _bg
+                    + " Начни первую сцену так, чтобы предыстория "
+                    "естественно вплелась в обстановку и NPC её знали."
+                )
+            result = orch.process_turn(_intro, char, history=[])
         finally:
             placeholder.empty()
         roll_dict = result.roll.to_dict() if result.roll else None
@@ -792,23 +953,80 @@ def render() -> None:
 
     _render_messages(history)
 
-    pending = st.session_state.pop("_pending_chat", None)
-    prompt = st.chat_input("Что делает твой персонаж?") or pending
+    # Панель тем
+    try:
+        from ui.theme import render_theme_strip
+        render_theme_strip(key_prefix="__game_theme")
+    except Exception as _e:
+        print("[game] theme_strip fail: " + type(_e).__name__)
+
+    # Быстрые кнопки — БЕЗ st.rerun(), устанавливаем _pending_chat
+    _qa = st.columns(4)
+    if _qa[0].button("\U0001F50D Осмотреться",
+                     key="qa_observe", use_container_width=True):
+        st.session_state["_pending_chat"] = "Я осматриваюсь"
+    if _qa[1].button("\U0001F4AC Говорить",
+                     key="qa_talk", use_container_width=True):
+        st.session_state["_pending_chat"] = \
+            "Я пытаюсь заговорить с ближайшим существом"
+    if _qa[2].button("\u2694\ufe0f Атака",
+                     key="qa_attack", use_container_width=True):
+        st.session_state["_pending_chat"] = "Я атакую ближайшего врага"
+    if _qa[3].button("\U0001F3B2 Иное",
+                     key="qa_other", use_container_width=True):
+        st.session_state["_pending_chat"] = \
+            "Я действую по обстоятельствам"
+
+    # Единая точка чтения
+    _typed = st.chat_input("Что делает твой персонаж?")
+    _pending = st.session_state.pop("_pending_chat", None)
+    if _typed and _typed.strip():
+        prompt = _typed.strip()
+    elif _pending:
+        prompt = _pending
+    else:
+        prompt = None
 
     if prompt:
+        try:
+            from services.autosave import save_snapshot
+            save_snapshot(
+                st.session_state.user_login,
+                st.session_state.active_character, char)
+        except Exception as _e:
+            print("[game] autosave fail: " + type(_e).__name__)
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-            placeholder = st.empty()
-            with placeholder:
-                st.markdown(render_spinner_html(), unsafe_allow_html=True)
-            try:
-                orch = _get_orch()
-                result = orch.process_turn(prompt, char, history=history)
-            finally:
-                placeholder.empty()
+            with st.status("⚙️ Дух-машины обрабатывают запрос...",
+                           expanded=True) as _status:
+                st.write("Анализ действия игрока...")
+                try:
+                    orch = _get_orch()
+                    result = orch.process_turn(prompt, char, history=history)
+                    _status.update(label="✔ Ответ получен",
+                                   state="complete", expanded=False)
+                except Exception as _e:
+                    _status.update(
+                        label="⚠ Ошибка: " + type(_e).__name__,
+                        state="error", expanded=True,
+                    )
+                    raise
 
-        clean_text, changes = parse_state(result.narrative or "")
+        _evt_text = ""
+        try:
+            from services.events import roll_event
+            from services.settings_game import event_chance_for
+            _ch = event_chance_for(st.session_state.get("user_login"))
+            _ev = roll_event(char, _ch)
+            if _ev.get("fired"):
+                _evt_text = str(_ev.get("text", ""))
+        except Exception as _e:
+            print("[game] event fail: " + type(_e).__name__)
+        _narr_full = result.narrative or ""
+        if _evt_text:
+            _narr_full = _narr_full + "\n\n> ⚡ **Событие:** " + _evt_text
+        clean_text, changes = parse_state(_narr_full)
         if changes:
             applied = apply_changes(char, changes)
             if applied:
@@ -837,4 +1055,28 @@ def render() -> None:
 
         st.markdown(clean_text)
         append_turn(login, char_name, prompt, clean_text)
+        try:
+            from services.journal import auto_log_turn
+            auto_log_turn(char, prompt, clean_text)
+        except Exception as _e:
+            print("[game] journal fail: " + type(_e).__name__)
+        try:
+            from services.achievements import check_all, describe
+            _hist_len = len(history) if history else 0
+            _new = check_all(char, extra={
+                "combat_win": "ПОБЕД" in (clean_text or "").upper(),
+                "total_rolls": _hist_len,
+            })
+            if _new:
+                for _k in _new:
+                    _n, _d = describe(_k)
+                    st.toast("🏆 Достижение: " + _n)
+        except Exception as _e:
+            print("[game] achi fail: " + type(_e).__name__)
+        try:
+            from persistence.characters import save_character as _sc
+            _sc(login, char_name, char)
+        except Exception as _e:
+            print("[game] save fail: " + type(_e).__name__)
+
         st.rerun()

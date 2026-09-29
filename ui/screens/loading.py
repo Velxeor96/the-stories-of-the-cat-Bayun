@@ -37,7 +37,10 @@ def _finish():
 
 
 def _run_animation():
-    st.markdown(full_css(), unsafe_allow_html=True)
+    try:
+        st.html(full_css())
+    except Exception:
+        st.markdown(full_css(), unsafe_allow_html=True)
     placeholder = st.empty()
     theme = _theme()
     pool = get_phrases(theme)

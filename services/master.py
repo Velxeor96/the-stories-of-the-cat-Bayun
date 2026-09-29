@@ -1,6 +1,6 @@
-"""services/master.py — Мастер (ГМ): сцена от LLM."""
+# PATCH_38
+"""services/master.py — Мастер с жёстким RACE LOCK."""
 from __future__ import annotations
-
 from pathlib import Path
 from typing import Any, Optional
 
@@ -12,7 +12,33 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 class MasterError(Exception):
-    """Ошибка Мастера."""
+    pass
+
+
+def _race_rule_for(faction_name: str) -> str:
+    f = (faction_name or "").strip().lower()
+    if "эльдар" in f or "eldar" in f:
+        return ("ВАЖНО: игрок — АЭЛЬДАРИ (ЭЛЬДАР). НИКОГДА не называй его "
+                "«моно-кеи», «человек», «гуманид». Если NPC-человек — он "
+                "НЕ может оскорблять игрока чужими эльдарскими словами.")
+    if "друкх" in f or "drukhari" in f:
+        return "ВАЖНО: игрок — ДРУХКАРИ (Тёмный эльдар)."
+    if "орк" in f or "ork" in f:
+        return ("ВАЖНО: игрок — ОРК. Не называй его «человек», «гуманид». "
+                "Он сам знает ВАААГХ.")
+    if "тау" in f or "tau" in f:
+        return "ВАЖНО: игрок — ТАУ. Люди для него — «гве'ла»."
+    if "некрон" in f or "necron" in f:
+        return "ВАЖНО: игрок — НЕКРОН. Древний. Машина. Без души."
+    if "тиранид" in f or "tyranid" in f:
+        return "ВАЖНО: игрок — биоморф ТИРАНИД. Речь через генокрада."
+    if "генокрад" in f or "genestealer" in f:
+        return "ВАЖНО: игрок — ГЕНОКРАД (гибрид Генокульта)."
+    if "хаос" in f or "chaos" in f:
+        return "ВАЖНО: игрок — последователь ХАОСА, а не обычный человек."
+    if "империум" in f or "imperium" in f:
+        return "Игрок — человек Империума."
+    return "Игрок — НЕ человек по умолчанию. Раса = фракция из блока ПЕРСОНАЖ."
 
 
 class Master:
@@ -21,23 +47,27 @@ class Master:
                  lore_prompt: Optional[Path] = None):
         self.config = config
         self.role = role
+        cp = core_prompt or (ROOT_DIR / "prompts" / "master_core.txt")
+        lp = lore_prompt or (ROOT_DIR / "prompts" / "lore_reference.txt")
+        vp = ROOT_DIR / "prompts" / "voice_lines.txt"
+        rp = ROOT_DIR / "prompts" / "race_lock.txt"
 
-        core_prompt = core_prompt or (ROOT_DIR / "prompts" / "master_core.txt")
-        lore_prompt = lore_prompt or (ROOT_DIR / "prompts" / "lore_reference.txt")
+        ct = Path(cp).read_text(encoding="utf-8") if Path(cp).exists() else ""
+        lt = Path(lp).read_text(encoding="utf-8") if Path(lp).exists() else ""
+        vt = Path(vp).read_text(encoding="utf-8") if Path(vp).exists() else ""
+        rt = Path(rp).read_text(encoding="utf-8") if Path(rp).exists() else ""
 
-        core_text = Path(core_prompt).read_text(encoding="utf-8") if Path(core_prompt).exists() else ""
-        lore_text = Path(lore_prompt).read_text(encoding="utf-8") if Path(lore_prompt).exists() else ""
+        # RACE_LOCK — в самом начале системного промпта
         self.system_prompt = (
-            core_text
-            + "\n\n=== СПРАВКА: ТЕРМИНОЛОГИЯ И ИМЕНА ===\n\n"
-            + lore_text
+            rt + "\n\n" + ct
+            + "\n\n=== ТЕРМИНОЛОГИЯ ===\n\n" + lt
+            + "\n\n=== ГОЛОСА ФРАКЦИЙ ===\n\n" + vt
         )
 
         self.model = config.role_model(role)
         self.provider = config.provider(self.model.provider)
         self.api_key = config.provider_key(self.model.provider)
         self.base_url = self.provider.base_url
-
         retries = config.retries()
         self.llm = LLMClient(
             self._do_request,
@@ -46,145 +76,168 @@ class Master:
             max_delay=retries.get("max_delay", 30.0),
         )
 
-    def narrate(self, state: Any, command: Any, *, roll: Any = None,
-                history: Optional[list] = None,
-                extra_context: str = "") -> str:
-        """Собрать сообщение и получить текст сцены."""
-        user_message = self._build_message(
-            state=state, command=command, roll=roll,
-            history=history or [], extra_context=extra_context,
-        )
+    def _get_max_tokens(self) -> int:
         try:
-            response = self.llm.call(
-                system_prompt=self.system_prompt,
-                user_message=user_message,
-                model=self.model.id,
-                temperature=0.85,
-                max_tokens=700,
-            )
-            return self._extract_text(response)
+            import streamlit as _st
+            lg = _st.session_state.get("user_login")
+            if lg:
+                from services.settings_game import max_tokens_for
+                return max_tokens_for(lg)
+        except Exception:
+            pass
+        return 700
+
+    def narrate(self, state, command, *, roll=None, history=None,
+                extra_context=""):
+        msg = self._build_message(state=state, command=command, roll=roll,
+                                  history=history or [],
+                                  extra_context=extra_context)
+        try:
+            r = self.llm.call(
+                system_prompt=self.system_prompt, user_message=msg,
+                model=self.model.id, temperature=0.85,
+                max_tokens=self._get_max_tokens())
+            return self._extract_text(r)
         except Exception as e:
-            print(f"[master] fallback: {type(e).__name__}: {e}")
-            return ("[fallback-мастер] Что-то пошло не так. "
-                    "Попробуй переформулировать ход.")
+            print("[master] fallback: " + type(e).__name__ + ": " + str(e))
+            return "[fallback-мастер] Попробуй переформулировать ход."
 
     @staticmethod
-    def _build_message(*, state: Any, command: Any, roll: Any,
-                       history: list, extra_context: str) -> str:
+    def _build_message(*, state, command, roll, history, extra_context):
         parts = []
 
-        # PATCH_16I: scene-lock по фракции персонажа
+        # === САМОЕ ПЕРВОЕ: жёсткий race-lock ===
         try:
             if isinstance(state, dict):
-                fid = str(state.get("faction_id") or "")
-                fname = str(state.get("faction") or fid)
-                loc = state.get("location") or {}
-                if isinstance(loc, dict):
-                    place = str(loc.get("place") or loc.get("world") or "")
-                else:
-                    place = str(loc)
+                fname = str(state.get("faction") or "")
+                sub = str(state.get("subfaction") or "")
+                cwn = str(state.get("home_world_name") or "")
+                crn = str(state.get("career_name") or "")
+                lock = ["=== RACE LOCK (НАРУШЕНИЕ = ПРОВАЛ) ===",
+                        _race_rule_for(fname)]
                 if fname:
-                    lock = (
-                        "=== ФРАКЦИЯ СЦЕНЫ ===\n"
-                        + "Персонаж принадлежит фракции: " + fname + ".\n"
-                    )
-                    if place:
-                        lock += "Текущее место: " + place + ".\n"
-                    lock += (
-                        "Используй только NPC, отсылки и реалии этой "
-                        "фракции. Не вводи в сцену орков, тиранид, "
-                        "эльдар, некронов, тау, космодесант и прочих, "
-                        "если они не упомянуты в листе персонажа или "
-                        "в предыдущих ходах."
-                    )
-                    parts.append(lock)
+                    lock.append("Фракция игрока: " + fname
+                                + (" / " + sub if sub else "") + ".")
+                if cwn:
+                    lock.append("Родной мир: " + cwn + ".")
+                if crn:
+                    lock.append("Карьера: " + crn + ".")
+                lock.append("Не вводи реалии других фракций без причины.")
+                lock.append("Не называй игрока чужой расой.")
+                parts.append("\n".join(lock))
         except Exception as _e:
-            print("[master] scene-lock fail: "
-                  + type(_e).__name__ + ": " + str(_e))
+            print("[master] race-lock fail: " + type(_e).__name__)
 
-        # Состояние персонажа
-        summary = ""
-        if hasattr(state, "get_summary"):
-            try:
-                summary = state.get_summary()
-            except Exception:
-                summary = ""
-        if summary:
-            parts.append(f"=== СОСТОЯНИЕ ПЕРСОНАЖА ===\n{summary}")
+        if isinstance(state, dict):
+            sp = []
+            for key, label in (("name", "Имя"), ("gender", "Пол"),
+                               ("age", "Возраст"), ("appearance", "Внешность"),
+                               ("faction", "Фракция"),
+                               ("subfaction", "Субфракция"),
+                               ("home_world_name", "Родной мир"),
+                               ("career_name", "Карьера"),
+                               ("user_background", "Предыстория")):
+                v = state.get(key)
+                if v:
+                    sp.append(label + ": " + str(v))
+            w = state.get("wounds") or {}
+            if w:
+                sp.append("Раны: " + str(w.get("current", 0))
+                          + "/" + str(w.get("max", 0)))
+            chars = state.get("characteristics") or {}
+            if chars:
+                sp.append("Характеристики: "
+                          + ", ".join(str(k) + "=" + str(v)
+                                      for k, v in chars.items()))
+            if sp:
+                parts.append("=== ПЕРСОНАЖ ===\n" + "\n".join(sp))
 
-        # История
+        try:
+            from services.effects import effects_summary
+            es = effects_summary(state)
+            if es and es != "—":
+                parts.append("=== ЭФФЕКТЫ ===\n" + es)
+        except Exception:
+            pass
+
+        try:
+            from services.ship import ship_summary
+            ss = ship_summary(state)
+            if ss:
+                parts.append("=== КОРАБЛЬ ===\n" + ss)
+        except Exception:
+            pass
+
+        try:
+            from services.environment import env_summary
+            es = env_summary(state)
+            if es:
+                parts.append("=== СРЕДА ===\n" + es)
+        except Exception:
+            pass
+
+        try:
+            from services.notes import render_notes_for_master
+            nb = render_notes_for_master(state)
+            if nb:
+                parts.append(nb)
+        except Exception:
+            pass
+
+        try:
+            cs = __import__("streamlit").session_state.get("_combat_state")
+            if cs and getattr(cs, "active", False):
+                from services.combat import state_to_master_text
+                parts.append(state_to_master_text(cs))
+        except Exception:
+            pass
+
         if history:
-            hist_lines = ["=== ПОСЛЕДНИЕ ХОДЫ ==="]
+            hl = ["=== ПОСЛЕДНИЕ ХОДЫ ==="]
             for t in history[-6:]:
                 if hasattr(t, "player_input"):
-                    hist_lines.append(f"> {t.player_input}")
+                    hl.append("> " + t.player_input)
                 if hasattr(t, "narrative") and t.narrative:
-                    hist_lines.append(t.narrative[:400])
-            parts.append("\n".join(hist_lines))
+                    hl.append(t.narrative[:400])
+            parts.append("\n".join(hl))
 
-        # Действие игрока
         action = getattr(command, "action", "?")
-        target = getattr(command, "target", None)
         raw = getattr(command, "raw", "")
-        parts.append(f"=== ДЕЙСТВИЕ ИГРОКА ===\nТип: {action}"
-                     + (f"\nЦель: {target}" if target else "")
-                     + f"\nФраза: {raw!r}")
+        parts.append("=== ДЕЙСТВИЕ ===\nТип: " + str(action)
+                     + "\nФраза: " + repr(raw))
 
-        # Результат броска
         if roll is not None:
             res = "УСПЕХ" if roll.success else "ПРОВАЛ"
-            crit = getattr(roll, "critical", None)
-            crit_str = ""
-            if crit == "success":
-                crit_str = " (критический успех!)"
-            elif crit == "fail":
-                crit_str = " (критический провал!)"
-            parts.append(
-                f"=== РЕЗУЛЬТАТ БРОСКА ===\n"
-                f"{res}{crit_str}\n"
-                f"Бросок: {roll.roll} против {roll.target} "
-                f"(сложность {roll.difficulty or '—'})"
-            )
+            parts.append("=== БРОСОК ===\n" + res
+                         + "\n" + str(roll.roll) + " vs " + str(roll.target))
         else:
             parts.append("=== БРОСОК ===\nНе требовался.")
 
-        # RAG-контекст
-        if extra_context:
-            parts.append(extra_context)
+        parts.append(extra_context if extra_context
+                     else "=== СПРАВКА ===\nНет данных.")
 
-        parts.append("=== ЗАДАЧА ===\nОпиши сцену и предложи 2–4 варианта действий.")
-        parts.append(
-            "=== ИНСТРУКЦИЯ ПО ОПЫТУ (XP) ===\n"
-            "Если игрок победил врага в бою (убил, обратил в бегство, "
-            "обезвредил), добавь в [STATE] строку:\n"
-            "  xp=+10  за мелкого врага\n"
-            "  xp=+25  за среднего\n"
-            "  xp=+35  за крупного\n"
-            "  xp=+50  за великого (демон, лорд Хаоса)\n"
-            "В остальных случаях XP НЕ выдавай."
-        )
+        parts.append("=== ЗАДАЧА ===\nОпиши сцену, 2–4 варианта действий. "
+                     "NPC говорят голосами своих фракций.")
+        parts.append("=== НАПОМИНАНИЕ ===\nИгрок — НЕ человек по умолчанию. "
+                     "Его раса — из блока ПЕРСОНАЖ. НЕ называй его чужой расой.")
         return "\n\n".join(parts)
 
-    def _do_request(self, *, system_prompt: str, user_message: str,
-                    model: str, temperature: float, max_tokens: int) -> Any:
-        client = make_client(
-            provider_key=self.model.provider,
-            api_key=self.api_key,
-            base_url=self.base_url,
-        )
+    def _do_request(self, *, system_prompt, user_message, model,
+                    temperature, max_tokens):
+        client = make_client(provider_key=self.model.provider,
+                             api_key=self.api_key, base_url=self.base_url)
         return client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message},
             ],
-            temperature=temperature,
-            max_tokens=max_tokens,
+            temperature=temperature, max_tokens=max_tokens,
         )
 
     @staticmethod
-    def _extract_text(response: Any) -> str:
+    def _extract_text(response):
         try:
             return response.choices[0].message.content or ""
         except (AttributeError, IndexError) as e:
-            raise MasterError(f"формат: {response!r}") from e
+            raise MasterError("формат: " + repr(response)) from e

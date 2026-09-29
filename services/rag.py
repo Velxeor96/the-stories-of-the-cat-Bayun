@@ -1,10 +1,10 @@
+# PATCH_17
 """services/rag.py — RAG-поиск по базе знаний WH40K.
 
-Два режима:
-  1. Векторный (ChromaDB + sentence-transformers) — если chroma_db/ собрана.
-  2. Fallback (word-overlap по data/**/*.txt) — если база недоступна.
-
-torch и sentence-transformers импортируются ЛЕНИВО (важно для Streamlit Cloud).
+Исправления PATCH_17:
+  - faction-фильтр через where (не перезаписывается внутри цикла);
+  - порог релевантности MAX_DIST для отсечения мусора;
+  - priority chunks грузятся только по разрешённым фракциям.
 """
 from __future__ import annotations
 
@@ -17,59 +17,42 @@ MODEL_NAME = "intfloat/multilingual-e5-small"
 CHROMA_DIR = str(_ROOT / "chroma_db")
 COLLECTION_NAME = "knowledge"
 
+MAX_DIST = 1.1
 
-
-
-# PATCH_16I — маппинг папок data/ в реальные фракции.
 FOLDER_TO_FACTION = {
-    'imperium': 'imperium',
-    'chaos': 'chaos',
-    'eldar': 'eldar',
-    'necrons': 'necrons',
-    'orks': 'orks',
-    'tau': 'tau',
-    'tyranids': 'tyranids',
-    'general': 'general',
-    'glossary': 'general',
+    "imperium": "imperium", "chaos": "chaos", "eldar": "eldar",
+    "necrons": "necrons", "orks": "orks", "tau": "tau",
+    "tyranids": "tyranids", "general": "general",
+    "glossary": "general",
 }
 
 FACTION_KEYWORDS = {
-    "eldar": [
-        "эльдар", "аэльдари", "асуриани", "друкхари", "арлекин", "экзодит",
-        "иннари", "крафтворлд", "сюрикен", "провидец", "костопевец", "баньши",
-        "скорпион", "аспект", "кхейн", "цегорах", "слаанеш",
-    ],
-    "imperium": [
-        "империум", "космодесантник", "астартес", "гвардия", "инквизиц",
-        "механикус", "сороритас", "экклезиарх", "комиссар", "терра",
-        "император", "болтер", "лазган", "адептус",
-    ],
-    "chaos": [
-        "хаос", "кхорн", "тзинч", "нургл", "слаанеш", "космодесант хаоса",
-        "демон", "варп", "ересь хоруса", "абаддон", "несущие слово",
-        "тысяча сынов", "гвардия смерти", "пожиратели миров",
-    ],
-    "orks": [
-        "орк", "орки", "ваагх", "гофф", "смертельный череп", "гретчин",
-        "мекбой", "чоппа", "шута", "слагга", "свободный орк", "клан",
-        "змеиные клыки", "багровые клыки", "кровавые топоры", "злые солнца",
-    ],
-    "tau": [
-        "тау", "каста огня", "каста воды", "каста земли", "каста воздуха",
-        "эфирн", "крут", "веспид", "импульсн", "боевой костюм", "септ",
-        "фарсайт", "воин огня",
-    ],
-    "necrons": [
-        "некрон", "некронтир", "гробниц", "династи", "к'тан", "гаусс",
-        "проклят", "сарек", "молчаливый", "имотех", "тразин", "некродермис",
-    ],
-    "tyranids": [
-        "тиранид", "генокрад", "флот-улей", "сверхразум", "биоморф",
-        "термигант", "хормагант", "карнифекс", "ликтор", "воин улья",
-        "тень в варпе",
-    ],
+    "eldar": ["эльдар", "аэльдари", "асуриани", "друкхари", "арлекин",
+              "экзодит", "иннари", "крафтворлд", "сюрикен", "провидец",
+              "костопевец", "баньши", "скорпион", "аспект", "кхейн",
+              "цегорах", "слаанеш"],
+    "imperium": ["империум", "космодесантник", "астартес", "гвардия",
+                 "инквизиц", "механикус", "сороритас", "экклезиарх",
+                 "комиссар", "терра", "император", "болтер", "лазган",
+                 "адептус"],
+    "chaos": ["хаос", "кхорн", "тзинч", "нургл", "слаанеш",
+              "космодесантник хаоса", "демон", "варп", "ересь хоруса",
+              "абаддон", "несущие слово", "тысяча сынов",
+              "гвардия смерти", "пожиратели миров"],
+    "orks": ["орк", "орки", "ваагх", "гофф", "смертельный череп",
+             "гретчин", "мекбой", "чоппа", "шута", "слагга",
+             "свободный орк", "клан", "змеиные клыки", "багровые клыки",
+             "кровавые топоры", "злые солнца"],
+    "tau": ["тау", "каста огня", "каста воды", "каста земли",
+            "каста воздуха", "эфирн", "крут", "веспид", "импульсн",
+            "боевой костюм", "септ", "фарсайт", "воин огня"],
+    "necrons": ["некрон", "некронт", "гробниц", "династи",
+                "к'тан", "гаусс", "проклят", "сарек", "молчаливый",
+                "имотех", "тразин", "некродермис"],
+    "tyranids": ["тиранид", "генокрад", "флот-улей", "сверхразум",
+                 "биоморф", "термигант", "хормагант", "карнифекс",
+                 "ликтор", "воин улья", "тень в варпе"],
 }
-
 
 QUERY_TO_FILE_HINTS = [
     (["клан", "кланы", "кланов", "клан "], ["clans", "klan"]),
@@ -97,12 +80,10 @@ def _query_file_hints(query_lower: str) -> list[str]:
 
 
 def _load_fallback_chunks() -> list[dict]:
-    """Читает data/**/*.txt и режет на чанки по ~600 символов."""
     chunks: list[dict] = []
     data_dir = _ROOT / "data"
     if not data_dir.is_dir():
         return chunks
-
     for faction_dir in sorted(data_dir.iterdir()):
         if not faction_dir.is_dir():
             continue
@@ -133,7 +114,6 @@ def _load_fallback_chunks() -> list[dict]:
 class _ChunkCount:
     def __init__(self, n: int):
         self._n = n
-
     def __len__(self) -> int:
         return self._n
 
@@ -145,9 +125,7 @@ class KnowledgeBase:
         self._model = None
         self._device = None
         self._fallback_chunks: list[dict] = []
-
         self._try_init_vector_mode()
-
         if not self._ready:
             self._fallback_chunks = _load_fallback_chunks()
 
@@ -155,19 +133,15 @@ class KnowledgeBase:
         try:
             if not os.path.isdir(CHROMA_DIR):
                 return
-
             import chromadb
             client = chromadb.PersistentClient(path=CHROMA_DIR)
             collection = client.get_collection(name=COLLECTION_NAME)
             if collection.count() == 0:
                 return
-
             import torch
             from sentence_transformers import SentenceTransformer
-
             device = "cuda" if torch.cuda.is_available() else "cpu"
             model = SentenceTransformer(MODEL_NAME, device=device)
-
             self._collection = collection
             self._model = model
             self._device = device
@@ -212,96 +186,96 @@ class KnowledgeBase:
 
     def _search_vector(self, query: str, top_k: int = 4,
                        faction: str | None = None) -> list[dict]:
+        # PATCH_17: без перезаписи faction, где-фильтр, порог дистанции
         query_lower = query.lower()
         query_factions = self._detect_factions(query)
         file_hints = _query_file_hints(query_lower)
 
+        if faction:
+            allowed_factions = {faction, "general"}
+        elif query_factions:
+            allowed_factions = set(query_factions) | {"general"}
+        else:
+            allowed_factions = None
+
         priority_chunks: list[dict] = []
-        if file_hints:
+        if file_hints and allowed_factions:
             try:
-                all_data = self._collection.get(include=["documents", "metadatas"])
-                for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
-                    source = (meta.get("source", "") or "").lower()
-                    faction = meta.get("faction", "general")
-                    source_match = any(h in source for h in file_hints)
-                    faction_ok = (not query_factions) or (faction in query_factions)
-                    if source_match and faction_ok:
+                where = {"faction": {"$in": list(allowed_factions)}}
+                subset = self._collection.get(
+                    where=where, include=["documents", "metadatas"],
+                )
+                for doc, meta in zip(subset["documents"], subset["metadatas"]):
+                    src = (meta.get("source", "") or "").lower()
+                    if any(h in src for h in file_hints):
                         priority_chunks.append({
                             "text": doc,
                             "source": meta.get("source", ""),
-                            "faction": faction,
+                            "faction": meta.get("faction", "general"),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                print("[rag] priority get fail: " + str(e))
 
         try:
             query_emb = self._model.encode(
                 [query], normalize_embeddings=True, device=self._device
             ).tolist()
             n_fetch = min(top_k * 8, max(self._collection.count(), top_k))
-            res = self._collection.query(
-                query_embeddings=query_emb,
-                n_results=n_fetch,
-            )
+            query_kwargs = {"query_embeddings": query_emb, "n_results": n_fetch}
+            if allowed_factions:
+                query_kwargs["where"] = {"faction": {"$in": list(allowed_factions)}}
+            res = self._collection.query(**query_kwargs)
             docs = res.get("documents", [[]])[0]
             metas = res.get("metadatas", [[]])[0]
-        except Exception:
-            return (priority_chunks[:top_k] if priority_chunks
-                    else self._search_fallback(query, top_k))
+            dists = res.get("distances", [[]])[0] if res.get("distances") else [None] * len(docs)
+        except Exception as e:
+            print("[rag] vector query fail: " + str(e))
+            return priority_chunks[:top_k]
 
         top_priority, mid_priority, low_priority = [], [], []
-        for doc, meta in zip(docs, metas):
+        for doc, meta, dist in zip(docs, metas, dists):
+            if dist is not None and dist > MAX_DIST:
+                continue
             item = {
                 "text": doc,
                 "source": meta.get("source", ""),
                 "faction": meta.get("faction", "general"),
             }
-            source_lower = item["source"].lower()
-            faction_match = bool(query_factions) and item["faction"] in query_factions
-            source_match = bool(file_hints) and any(h in source_lower for h in file_hints)
-
-            if faction_match and source_match:
+            src_low = item["source"].lower()
+            fac_match = bool(query_factions) and item["faction"] in query_factions
+            src_match = bool(file_hints) and any(h in src_low for h in file_hints)
+            if fac_match and src_match:
                 top_priority.append(item)
-            elif faction_match or source_match:
+            elif fac_match or src_match:
                 mid_priority.append(item)
             else:
                 low_priority.append(item)
 
         combined = priority_chunks + top_priority + mid_priority + low_priority
-
-        if faction:
-            allowed = {faction, 'general'}
-            combined = [c for c in combined
-                        if c.get('faction', 'general') in allowed]
-
         result: list[dict] = []
-        seen_texts: set[str] = set()
+        seen: set[str] = set()
         for c in combined:
-            key = c["text"][:100]
-            if key in seen_texts:
+            key = c["text"][:120]
+            if key in seen:
                 continue
-            seen_texts.add(key)
+            seen.add(key)
             result.append(c)
             if len(result) >= top_k:
                 break
-
         return result
 
     def _search_fallback(self, query: str, top_k: int = 4,
                          faction: str | None = None) -> list[dict]:
         if not self._fallback_chunks:
             return []
-
         q_words = set(
             w.lower().strip(".,!?;:()[]\"'")
             for w in query.split() if len(w) > 2
         )
         if not q_words:
             return []
-
         query_factions = self._detect_factions(query)
         file_hints = _query_file_hints(query.lower())
-
         scored: list[tuple[int, dict]] = []
         for chunk in self._fallback_chunks:
             text_words = set(
@@ -317,12 +291,10 @@ class KnowledgeBase:
             if file_hints and any(h in chunk["source"].lower() for h in file_hints):
                 score *= 3
             scored.append((score, chunk))
-
         if faction:
-            allowed = {faction, 'general'}
+            allowed = {faction, "general"}
             scored = [(s, c) for s, c in scored
-                      if c.get('faction', 'general') in allowed]
-
+                      if c.get("faction", "general") in allowed]
         scored.sort(key=lambda x: -x[0])
         return [c for _, c in scored[:top_k]]
 
@@ -333,17 +305,15 @@ class KnowledgeBase:
             return ""
         lines = ["=== СПРАВКА ИЗ БАЗЫ ЗНАНИЙ ==="]
         for c in chunks:
-            lines.append(f"\n[{c['source']}]\n{c['text']}")
+            lines.append("\n[" + c["source"] + "]\n" + c["text"])
         lines.append("\n=== КОНЕЦ СПРАВКИ ===")
         return "".join(lines)
 
 
-# ---------- модульный singleton для удобства ----------
 _INSTANCE: KnowledgeBase | None = None
 
 
 def get_kb() -> KnowledgeBase:
-    """Вернуть единственный экземпляр KnowledgeBase (ленивая инициализация)."""
     global _INSTANCE
     if _INSTANCE is None:
         _INSTANCE = KnowledgeBase()
