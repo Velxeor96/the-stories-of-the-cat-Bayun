@@ -137,30 +137,47 @@ def render() -> None:
         )
 
     st.markdown("#### 3. Родной мир")
-    hw_keys = home_worlds_for(faction_id)
+    _effective_id = subfaction_id if subfaction_id else faction_id
+    hw_keys = home_worlds_for(_effective_id)
     home_world_id = None
     if hw_keys:
         home_world_id = st.selectbox(
             "Родной мир", options=hw_keys,
-            format_func=lambda x: home_world_display_name(faction_id, x),
-            key="wz_home_" + faction_id,
+            format_func=lambda x: home_world_display_name(_effective_id, x),
+            key="wz_home_" + _effective_id,
         )
-        hw = home_world_data(faction_id, home_world_id)
+        hw = home_world_data(_effective_id, home_world_id)
         if hw.get("desc"):
             st.caption(hw["desc"])
     else:
         st.info("Нет данных о родных мирах.")
 
-    # === PATCH_41: архетипы для Некронов ===
+    # === PATCH_49: универсальный блок архетипов ===
+    # Карта: faction_id -> (модуль_сервиса, метка_секции)
+    # Чтобы добавить новую фракцию с архетипами — просто допиши строку сюда.
+    _ARCH_FACTIONS = {
+        "necrons":            ("services.necrons",         "Династия"),
+        "tyranids":           ("services.tyranids",        "Биоформа"),
+        "imperial_guard":     ("services.imperial_guard",  "Специальность"),
+        "Имперская Гвардия":  ("services.imperial_guard",  "Специальность"),
+        "mechanicus":           ("services.mechanicus", "Специальность"),
+        "inquisition":          ("services.inquisition", "Служение"),
+        "sororitas":            ("services.sororitas", "Сестринство"),
+        "space_marine":         ("services.space_marines", "Специализация"),
+        "arbites":              ("services.arbites", "Звание"),
+    }
+
     career_id = None
-    if faction_id == "necrons":
-        st.markdown("#### 4. Архетип (Династия)")
+    if _effective_id in _ARCH_FACTIONS:
+        _mod_name, _label = _ARCH_FACTIONS[_effective_id]
+        st.markdown("#### 4. Архетип (" + _label + ")")
         try:
-            from services.necrons import get_archetypes
-            arch_list = get_archetypes()
+            _mod = __import__(_mod_name, fromlist=["get_archetypes"])
+            arch_list = _mod.get_archetypes()
         except Exception as _e:
-            print("[wizard] necrons: " + type(_e).__name__)
+            print("[wizard] " + _effective_id + ": " + type(_e).__name__)
             arch_list = []
+
         if arch_list:
             arch_map = {a["id"]: a for a in arch_list}
             arch_ids = list(arch_map.keys())
@@ -168,7 +185,7 @@ def render() -> None:
                 "Архетип",
                 options=arch_ids,
                 format_func=lambda x: arch_map[x]["name"],
-                key="wz_career_" + faction_id,
+                key="wz_career_" + _effective_id,
             )
             arch = arch_map.get(career_id, {})
             if arch.get("description"):
@@ -183,17 +200,17 @@ def render() -> None:
                 st.markdown("**Стартовое оружие:** "
                             + ", ".join(str(w) for w in arch["starting_weapons"]))
         else:
-            st.info("Архетипы Некронов не загружены.")
+            st.info("Архетипы не загружены.")
     else:
         st.markdown("#### 4. Карьера")
-        career_keys = careers_for(faction_id)
+        career_keys = careers_for(_effective_id)
         if career_keys:
             career_id = st.selectbox(
                 "Карьера", options=career_keys,
-                format_func=lambda x: career_display_name(faction_id, x),
-                key="wz_career_" + faction_id,
+                format_func=lambda x: career_display_name(_effective_id, x),
+                key="wz_career_" + _effective_id,
             )
-            cr = career_data(faction_id, career_id)
+            cr = career_data(_effective_id, career_id)
             if cr.get("desc"):
                 st.caption(cr["desc"])
         else:

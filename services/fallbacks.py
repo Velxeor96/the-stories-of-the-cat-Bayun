@@ -258,7 +258,7 @@ FACTIONS = {
     "imperium": {"name": "Империум Человечества",
                  "subfactions": ["rogue_trader", "space_marine",
                                  "imperial_guard", "mechanicus",
-                                 "sororitas", "arbites"]},
+                                 "sororitas", "arbites", "inquisition"]},
     "chaos": {"name": "Силы Хаоса",
               "subfactions": ["chaos_marine", "dark_mechanicum", "cultist"]},
     "eldar": {"name": "Эльдары",
@@ -475,3 +475,22 @@ def apply_creation_bonuses(stats: dict, home_key: str, career_key: str) -> dict:
                     result[k] = result.get(k, 0) - v
                 break
     return result
+
+
+# PATCH_46: субфракция для тиранидов
+try:
+    if "tyranid" not in SUBFACTION_NAMES:
+        SUBFACTION_NAMES["tyranid"] = "Тиранид"
+except Exception:
+    pass
+
+
+# PATCH_47: фракция Тиранидов
+try:
+    if "tyranids" not in FACTIONS:
+        FACTIONS["tyranids"] = {
+            "name": "Тираниды",
+            "subfactions": ["tyranid"],
+        }
+except NameError:
+    pass

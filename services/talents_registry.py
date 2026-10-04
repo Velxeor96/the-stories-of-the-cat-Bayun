@@ -1,59 +1,59 @@
-# PATCH_41
-"""services/talents_registry.py — универсальный реестр талантов.
-
-Собирает таланты из разных источников (некроны, тираниды, общие).
-"""
+# PATCH_46
+"""services/talents_registry.py — универсальный реестр талантов."""
 from __future__ import annotations
 
 
-def _sources_for(faction_id: str) -> list:
-    """Возвращает список источников (модулей) для фракции."""
-    sources = []
-    if faction_id == "necrons":
-        try:
-            from services import necrons
-            sources.append(necrons)
-        except Exception as e:
-            print("[talents_registry] necrons: " + str(e))
-    # Тираниды — TODO
-    # if faction_id == "tyranids":
-    #     from services import tyranids
-    #     sources.append(tyranids)
-    return sources
+# PATCH_50: универсальный реестр источников талантов
+_TALENT_SOURCES = {
+    "necrons":        "services.necrons",
+    "tyranids":       "services.tyranids",
+    "imperial_guard": "services.imperial_guard",
+    "mechanicus":     "services.mechanicus",
+    "inquisition":    "services.inquisition",
+    "sororitas":      "services.sororitas",
+    "space_marine":   "services.space_marines",
+    "arbites":        "services.arbites",
+}
+
+
+def _source_for(faction_id: str):
+    """Возвращает модуль-источник талантов для фракции."""
+    mod_name = _TALENT_SOURCES.get(faction_id)
+    if not mod_name:
+        return None
+    try:
+        return __import__(mod_name, fromlist=["get_talents", "get_talent"])
+    except Exception as e:
+        print("[talents_registry] " + faction_id + ": " + str(e))
+        return None
 
 
 def get_talent(talent_id: str):
-    """Ищет талант во всех зарегистрированных источниках."""
-    try:
-        from services import necrons
-        t = necrons.get_talent(talent_id)
+    """Ищет талант по ID во всех источниках."""
+    for fid in _TALENT_SOURCES.keys():
+        src = _source_for(fid)
+        if not src:
+            continue
+        t = src.get_talent(talent_id)
         if t:
             return t
-    except Exception:
-        pass
     return None
 
 
 def list_talents_for_faction(faction_id: str) -> list:
-    """Все таланты, доступные фракции."""
-    out = []
-    for src in _sources_for(faction_id):
-        getter = getattr(src, "get_talents", None)
-        if callable(getter):
-            out.extend(getter())
-    return out
+    src = _source_for(faction_id)
+    if not src:
+        return []
+    return src.get_talents()
 
 
 def is_talent_owned(char: dict, talent_id: str) -> bool:
-    """Проверяет, куплен ли уже талант."""
     owned = char.get("talents", []) or []
     for t in owned:
-        if isinstance(t, dict):
-            if t.get("id") == talent_id:
-                return True
+        if isinstance(t, dict) and t.get("id") == talent_id:
+            return True
         elif str(t) == talent_id:
             return True
-    # Проверка по имени
     tal = get_talent(talent_id)
     if tal:
         name = tal.get("name", "")
@@ -66,37 +66,87 @@ def is_talent_owned(char: dict, talent_id: str) -> bool:
 
 
 def check_prerequisites(char: dict, talent_id: str) -> tuple:
-    """Проверка требований. Делегирует источнику, если он умеет."""
-    try:
-        from services import necrons
-        if necrons.get_talent(talent_id):
-            return necrons.check_talent_prerequisites(char, talent_id)
-    except Exception:
-        pass
+    prereqs = {}
+    tal = get_talent(talent_id)
+    if not tal:
+        return False, "Талант не найден."
+    prereqs = tal.get("prerequisites", {}) or {}
+
+    rank_min = prereqs.get("rank")
+    if rank_min is not None:
+        rank = int(char.get("rank", 1) or 1)
+        if rank < rank_min:
+            return False, "Требуется ранг " + str(rank_min) + "."
+
+    chars = char.get("characteristics", {}) or {}
+    for key, val in prereqs.items():
+        if key in ("rank", "talent"):
+            continue
+        if key in ("WS", "BS", "S", "T", "Ag", "Int", "Per", "WP", "Fel"):
+            current = int(chars.get(key, 0) or 0)
+            if current < int(val):
+                return False, key + " должен быть не менее " + str(val) + "."
+
+    req_talent = prereqs.get("talent")
+    if req_talent:
+        if not is_talent_owned(char, req_talent):
+            return False, "Требуется талант: " + str(req_talent)
+
+    for key, val in prereqs.items():
+        if key in ("rank", "talent"):
+            continue
+        if key in ("WS", "BS", "S", "T", "Ag", "Int", "Per", "WP", "Fel"):
+            continue
+        skills = char.get("skills", []) or []
+        skill_names = []
+        for s in skills:
+            if isinstance(s, dict):
+                skill_names.append(s.get("name", ""))
+            else:
+                skill_names.append(str(s))
+        if key not in skill_names:
+            return False, "Требуется навык: " + str(key)
+
     return True, ""
 
 
+def can_afford(char: dict, talent_id: str) -> tuple:
+    tal = get_talent(talent_id)
+    if not tal:
+        return False, 0, 0
+    cost = int(tal.get("cost", 0))
+    xp = int(char.get("xp", 0) or 0)
+    return xp >= cost, cost, xp
+
+
 def buy_talent(char: dict, talent_id: str) -> tuple:
-    """Универсальная покупка."""
-    try:
-        from services import necrons
-        if necrons.get_talent(talent_id):
-            return necrons.buy_talent(char, talent_id)
-    except Exception as e:
-        return False, "Ошибка: " + str(e)
-    return False, "Источник таланта не найден."
+    tal = get_talent(talent_id)
+    if not tal:
+        return False, "Талант не найден."
+
+    if is_talent_owned(char, talent_id):
+        return False, "Талант уже куплен."
+
+    ok, reason = check_prerequisites(char, talent_id)
+    if not ok:
+        return False, reason
+
+    ok, cost, xp = can_afford(char, talent_id)
+    if not ok:
+        return False, "Недостаточно XP. Нужно " + str(cost) + ", есть " + str(xp) + "."
+
+    char["xp"] = xp - cost
+    char["xp_spent"] = int(char.get("xp_spent", 0) or 0) + cost
+    talents = char.setdefault("talents", [])
+    talents.append({
+        "id": talent_id,
+        "name": tal.get("name", talent_id),
+        "effect": tal.get("effect", "")
+    })
+    return True, "Талант «" + str(tal.get("name")) + "» куплен за " + str(cost) + " XP."
 
 
 def list_available(char: dict) -> list:
-    """Возвращает список талантов с их статусом для UI.
-    
-    Каждый элемент:
-        {
-            "id": str, "name": str, "cost": int, "tier": int,
-            "category": str, "description": str, "effect": str,
-            "available": bool, "reason": str, "owned": bool,
-        }
-    """
     faction_id = str(char.get("faction_id", "") or "")
     out = []
     for t in list_talents_for_faction(faction_id):
@@ -134,22 +184,21 @@ def list_available(char: dict) -> list:
             "reason": reason if not ok else "",
             "owned": False,
         })
-    # Сортировка: доступные сверху, потом по tier, потом по имени
     out.sort(key=lambda x: (x["owned"], not x["available"], x["tier"], x["name"]))
     return out
 
 
 if __name__ == "__main__":
-    # Простая проверка
-    fake = {
-        "faction_id": "necrons",
-        "rank": 1,
-        "xp": 800,
-        "characteristics": {"WS": 40, "BS": 40, "T": 40, "WP": 40},
-        "talents": [],
-        "skills": [],
-    }
-    print("Талантов для некрона:", len(list_available(fake)))
-    for t in list_available(fake)[:5]:
-        status = "✓ доступен" if t["available"] else ("★ изучен" if t["owned"] else "✗ " + t["reason"])
-        print(f"  [{t['tier']}] {t['name']} — {t['cost']} XP — {status}")
+    for fid in ("necrons", "tyranids"):
+        fake = {
+            "faction_id": fid,
+            "rank": 1,
+            "xp": 800,
+            "characteristics": {"WS": 40, "BS": 40, "T": 40, "WP": 40},
+            "talents": [], "skills": [],
+        }
+        ts = list_available(fake)
+        print(fid + ": талантов " + str(len(ts)))
+        for t in ts[:3]:
+            status = "✓" if t["available"] else ("★" if t["owned"] else "✗")
+            print("  " + status + " [" + str(t['tier']) + "] " + t["name"] + " — " + str(t["cost"]) + " XP")

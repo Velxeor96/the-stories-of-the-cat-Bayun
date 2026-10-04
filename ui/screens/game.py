@@ -22,6 +22,20 @@ from ui.roll_card import (
 from ui.loading_screen import full_css, full_html, get_phrases
 from services.state_parser import parse_state
 from services.state_applier import apply_changes
+try:
+    from ui.roll_card import SKILL_NAMES_RU as _SKILL_RU
+except Exception:
+    _SKILL_RU = {}
+
+def _loc_name(x):
+    if isinstance(x, dict):
+        nm = x.get('name', '') or x.get('id', '')
+    else:
+        nm = str(x or '')
+    if not nm:
+        return ''
+    return _SKILL_RU.get(nm, nm)
+
 
 
 _ROLL_MARKER = "<!--ROLLCARD:"
@@ -480,13 +494,23 @@ def _skill_value(s, char: dict) -> str:
     return ""
 
 
+try:
+    from services.i18n import (
+        translate_skills as _ts,
+        translate_talents as _tt,
+    )
+except Exception:
+    def _ts(x): return x
+    def _tt(x): return x
+
+
 def _render_skills(char: dict, login: str, char_name: str) -> None:
-    skills = char.get("skills") or []
+    skills = _ts(char.get("skills")) or []
     if not skills:
         st.caption("Навыков нет.")
         return
     for i, s in enumerate(skills):
-        nm = _skill_name(s)
+        nm = _loc_name(s)
         v = _skill_value(s, char)
         st.markdown(
             "<div class='gx-skill'><span class='name'>" + nm + "</span>"
@@ -502,18 +526,18 @@ def _render_skills(char: dict, login: str, char_name: str) -> None:
 
 def _render_abilities(char: dict) -> None:
     psy = char.get("psychic_powers") or []
-    tal = char.get("talents") or []
+    tal = _tt(char.get("talents")) or []
     psy_rating = int(char.get("psy_rating", 0) or 0)
     if psy_rating > 0 and psy:
         st.markdown("<div class='gx-sec'>Психосилы (PSY "
                     + str(psy_rating) + ")</div>", unsafe_allow_html=True)
-        chips = "".join("<span class='gx-chip'>" + _skill_name(p) + "</span>"
+        chips = "".join("<span class='gx-chip'>" + _loc_name(p) + "</span>"
                         for p in psy)
         st.markdown(chips, unsafe_allow_html=True)
     if tal:
         st.markdown("<div class='gx-sec'>Способности</div>",
                     unsafe_allow_html=True)
-        chips = "".join("<span class='gx-chip'>" + _skill_name(t) + "</span>"
+        chips = "".join("<span class='gx-chip'>" + _loc_name(t) + "</span>"
                         for t in tal)
         st.markdown(chips, unsafe_allow_html=True)
     if not psy and not tal and psy_rating == 0:
@@ -562,7 +586,7 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
                      key="game_library"):
             st.session_state.screen = "library"
             st.rerun()
-        if st.button("🚀 Корабль", use_container_width=True,
+        if char.get("has_ship") and st.button("🚀 Корабль", use_container_width=True,
                      key="game_ship"):
             st.session_state.screen = "ship"
             st.rerun()

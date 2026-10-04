@@ -1,5 +1,5 @@
-# PATCH_44
-"""services/character_creation.py — генерация и сборка листа по фракции."""
+# PATCH_46
+"""services/character_creation.py — генерация листа по фракции."""
 from __future__ import annotations
 import random
 from datetime import datetime
@@ -50,6 +50,106 @@ def _safe_display(fn_name, faction_id, key):
     return key or ""
 
 
+def _build_alien_character(stats, faction_id, career_id):
+    """
+    Применяет архетип для некронов или тиранидов.
+    Возвращает dict с полями: skills, talents, weapons, armour,
+    money, currency, traits, archetype_name, wounds_bonus.
+    """
+    out = {
+        "skills": [], "talents": [], "weapons": [], "armour": {},
+        "money": 0, "currency": "Нет",
+        "traits": [], "archetype_name": career_id or "",
+        "wounds_bonus": 0,
+    }
+
+    src = None
+    if faction_id == "necrons":
+        try:
+            from services import necrons as src
+        except Exception as e:
+            print("[creation] necrons import: " + str(e))
+    elif faction_id == "tyranids":
+        try:
+            from services import tyranids as src
+        except Exception as e:
+            print("[creation] tyranids import: " + str(e))
+
+    if src is None:
+        return out
+
+    try:
+        arch = src.get_archetype(career_id or "")
+    except Exception:
+        arch = None
+
+    if not arch:
+        return out
+
+    out["archetype_name"] = arch.get("name", career_id or "")
+
+    # Бонусы к характеристикам
+    bonus = arch.get("bonus_characteristics", {}) or {}
+    for k, v in bonus.items():
+        if k in stats:
+            stats[k] = int(stats[k]) + int(v)
+
+    # Навыки
+    out["skills"] = list(arch.get("starting_skills", []))
+
+    # Таланты
+    for t_id in arch.get("starting_talents", []):
+        t_obj = None
+        try:
+            t_obj = src.get_talent(t_id)
+        except Exception:
+            pass
+        out["talents"].append({
+            "id": t_id,
+            "name": (t_obj or {}).get("name", t_id)
+        })
+
+    # Оружие
+    for w_id in arch.get("starting_weapons", []):
+        try:
+            w = src.get_weapon(w_id)
+        except Exception:
+            w = None
+        if w:
+            out["weapons"].append({
+                "id": w_id,
+                "name": w.get("name", w_id),
+                "stats": w.get("damage", "") + " · " + w.get("special", "")
+            })
+        else:
+            out["weapons"].append({"id": w_id, "name": w_id, "stats": ""})
+
+    # Броня
+    arm_id = arch.get("starting_armour", "")
+    if arm_id:
+        try:
+            arm = src.get_armour_item(arm_id)
+        except Exception:
+            arm = None
+        if arm:
+            ap = arm.get("all_ap", 8)
+            out["armour"] = {
+                "head": ap, "body": ap, "arms": ap, "legs": ap,
+                "notes": arm.get("name", "Карапас")
+            }
+
+    # Трейты
+    try:
+        out["traits"] = list(src.get_faction_traits().keys())
+    except Exception:
+        pass
+
+    # Wounds bonus
+    out["wounds_bonus"] = int(arch.get("wounds_bonus", 0) or 0)
+
+    return out
+
+
 def build_character(
     *, name, gender, age, appearance, user_background,
     faction_id, subfaction_id=None,
@@ -62,11 +162,11 @@ def build_character(
     # 1) Базовые характеристики
     base = characteristics or roll_characteristics()
 
-    # 2) Названия родного мира и карьеры
+    # 2) Названия
     hw_name = _safe_display("home_world_display_name", faction_id, home_world_id)
     cr_name = _safe_display("career_display_name", faction_id, career_id)
 
-    # 3) Бонусы от родного мира и карьеры (для не-некронов)
+    # 3) Бонусы от мира/карьеры (для не-ксенов)
     hw_b = get_home_world_bonuses(faction_id, hw_name)
     cr_b = get_career_bonuses(faction_id, cr_name)
     stats = _apply_bonuses(base, hw_b["bonus"], hw_b["penalty"])
@@ -80,66 +180,51 @@ def build_character(
     skills = []
     money = 100
     currency = "Троны"
+    wounds_bonus_extra = 0
+    faction_traits = []
 
-    if faction_id == "necrons":
-        try:
-            from services.necrons import get_archetype
-            arch = get_archetype(career_id or "")
-            if arch:
-                # Бонусы к характеристикам
-                bonus = arch.get("bonus_characteristics", {}) or {}
-                for k, v in bonus.items():
-                    if k in stats:
-                        stats[k] = int(stats[k]) + int(v)
-
-                # Навыки
-                skills = list(arch.get("starting_skills", []))
-
-                # Таланты (только names, ID через реестр)
-                for t_id in arch.get("starting_talents", []):
-                    talents.append({"id": t_id, "name": t_id})
-
-                # Оружие
-                for w_id in arch.get("starting_weapons", []):
-                    weapons.append({
-                        "id": w_id,
-                        "name": w_id,
-                        "stats": ""
-                    })
-
-                # Броня
-                arm_id = arch.get("starting_armour", "")
-                if arm_id:
-                    armour = {
-                        "head": 10, "body": 10, "arms": 10, "legs": 10,
-                        "notes": arm_id
-                    }
-
-                equipment = ["resurrection_orb"]
-                money = 0
-                currency = "Нет"
-
-            # Обогащаем именами из data/necrons.json
+    if faction_id in ("necrons", "tyranids"):
+        alien = _build_alien_character(dict(stats), faction_id, career_id)
+        # Переписываем stats на изменённые
+        for k in list(stats.keys()):
+            stats[k] = int(stats[k])
+        # Но _build_alien_character менял свою копию — поэтому применяем заново
+        stats = dict(base)
+        stats = _apply_bonuses(stats, hw_b["bonus"], hw_b["penalty"])
+        stats = _apply_bonuses(stats, cr_b["bonus"], cr_b["penalty"])
+        # Теперь с архетипом:
+        arch = None
+        if faction_id == "necrons":
             try:
-                from services.necrons import get_weapon, get_armour_item
-                for w in weapons:
-                    info = get_weapon(w.get("id"))
-                    if info:
-                        w["name"] = info.get("name", w["id"])
-                        w["stats"] = info.get("damage", "") + " · " + info.get("special", "")
-                if armour.get("notes"):
-                    arm_info = get_armour_item(armour["notes"])
-                    if arm_info:
-                        armour["notes"] = arm_info.get("name", armour["notes"])
-                        armour["head"] = arm_info.get("all_ap", 10)
-                        armour["body"] = arm_info.get("all_ap", 10)
-                        armour["arms"] = arm_info.get("all_ap", 10)
-                        armour["legs"] = arm_info.get("all_ap", 10)
-            except Exception as _e:
-                print("[creation] necron names: " + type(_e).__name__)
-        except Exception as e:
-            print("[creation] necron block fail: " + type(e).__name__ + ": " + str(e))
+                from services.necrons import get_archetype
+                arch = get_archetype(career_id or "")
+            except Exception:
+                pass
+        else:
+            try:
+                from services.tyranids import get_archetype
+                arch = get_archetype(career_id or "")
+            except Exception:
+                pass
+        if arch:
+            for k, v in (arch.get("bonus_characteristics", {}) or {}).items():
+                if k in stats:
+                    stats[k] = int(stats[k]) + int(v)
 
+        skills = alien["skills"]
+        talents = alien["talents"]
+        weapons = alien["weapons"]
+        armour = alien["armour"] or armour
+        faction_traits = alien["traits"]
+        wounds_bonus_extra = alien["wounds_bonus"]
+        if faction_id == "necrons":
+            money = 0
+            currency = "Нет"
+            equipment = ["resurrection_orb"]
+        else:
+            money = 0
+            currency = "Нет"
+            equipment = ["adrenal_gland"]
     else:
         kit = get_starting_kit(faction_id)
         weapons = [dict(w) for w in kit.get("weapons", [])]
@@ -152,10 +237,8 @@ def build_character(
 
     # 5) Раны и судьба
     tb = stats.get("T", 30) // 10
-    wounds_max = random.randint(1, 5) + 1 + 2 * tb
+    wounds_max = random.randint(1, 5) + 1 + 2 * tb + wounds_bonus_extra
     fate_max = 2 if random.randint(1, 10) >= 8 else 1
-    if faction_id == "necrons":
-        wounds_max += 3  # Некроны крепче
 
     # 6) Субфракция
     faction = FACTIONS[faction_id]
@@ -164,11 +247,14 @@ def build_character(
         sub_key = None
     sub_display = SUBFACTION_NAMES.get(sub_key, sub_key or "")
 
-    # 7) Архетип для некронов
-    archetype_id = career_id if faction_id == "necrons" else None
+    # 7) Архетип
+    archetype_id = career_id if faction_id in ("necrons", "tyranids") else None
     if archetype_id:
         try:
-            from services.necrons import get_archetype
+            if faction_id == "necrons":
+                from services.necrons import get_archetype
+            else:
+                from services.tyranids import get_archetype
             arch = get_archetype(archetype_id) or {}
             cr_name = arch.get("name", cr_name)
         except Exception:
@@ -176,15 +262,13 @@ def build_character(
 
     now = datetime.now().isoformat(timespec="microseconds")
 
-    necron_traits = []
-    if faction_id == "necrons":
-        try:
-            from services.necrons import get_faction_traits
-            necron_traits = list(get_faction_traits().keys())
-        except Exception:
-            pass
+    _has_ship = bool(
+        (faction_id == "imperium" and subfaction_id == "rogue_trader")
+        or subfaction_id == "rogue_trader"
+    )
 
-    return {
+    return {  # PATCH_59: has_ship
+        "has_ship": _has_ship,
         "name": name, "gender": gender, "age": age,
         "appearance": appearance,
         "user_background": user_background,
@@ -207,7 +291,7 @@ def build_character(
         "armour": armour,
         "wounds": {"current": wounds_max, "max": wounds_max},
         "fate_points": {"current": fate_max, "max": fate_max},
-        "psy_rating": 2 if faction_id == "eldar" and "Провидца" in cr_name else 0,
+        "psy_rating": 0,
         "psychic_powers": [],
         "corruption": 0, "insanity": 0,
         "money": money, "currency": currency,
@@ -223,5 +307,7 @@ def build_character(
         "reputation": {f: 0 for f in REPUTATION_FACTIONS},
         "generation_method": "roll+distribute",
         "xp": 300, "rank": 1, "created_at": now,
-        "necron_traits": necron_traits,
+        "alien_traits": faction_traits,
+        "necron_traits": faction_traits if faction_id == "necrons" else [],
+        "tyranid_traits": faction_traits if faction_id == "tyranids" else [],
     }

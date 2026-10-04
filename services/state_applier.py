@@ -281,4 +281,37 @@ def apply_changes(char, changes):
             char[ship_key] = str(changes[ship_key]).strip()
             applied.append(ship_key)
 
+    # PATCH_61: корабль и сюжетные флаги
+    if "ship_acquired" in changes:
+        char["has_ship"] = True
+        notes = _split_multi(changes["ship_acquired"])
+        ship = _ensure_dict(char, "ship")
+        if notes and not ship.get("name"):
+            ship["name"] = notes[0]
+            if len(notes) > 1:
+                ship["description"] = "; ".join(notes[1:])
+        applied.append("ship_acquired")
+    if "ship_lost" in changes:
+        char["has_ship"] = False
+        prev_ship = char.get("ship") or {}
+        if isinstance(prev_ship, dict):
+            prev_ship["status"] = "потерян: " + str(changes["ship_lost"]).strip()
+        else:
+            prev_ship = {"status": "потерян: " + str(changes["ship_lost"]).strip()}
+        char["ship"] = prev_ship
+        applied.append("ship_lost")
+
+    flags = _ensure_dict(char, "flags")
+    for key, value in list(changes.items()):
+        if key.startswith("flag_"):
+            name = key[len("flag_"):].strip()
+            sval = str(value).strip().lower()
+            flags[name] = sval in ("1", "true", "yes", "on", "да",
+                                    "истина", "y")
+            applied.append(key)
+        elif key.startswith("unflag_"):
+            name = key[len("unflag_"):].strip()
+            flags.pop(name, None)
+            applied.append(key)
+
     return applied
