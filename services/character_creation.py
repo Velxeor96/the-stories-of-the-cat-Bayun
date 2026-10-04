@@ -183,6 +183,30 @@ def build_character(
     wounds_bonus_extra = 0
     faction_traits = []
 
+    # PATCH_64: бонусы архетипа для всех субфракций с сервисом
+    _arch_service_map = {
+        "imperial_guard": "services.imperial_guard",
+        "mechanicus":     "services.mechanicus",
+        "inquisition":    "services.inquisition",
+        "sororitas":      "services.sororitas",
+        "space_marine":   "services.space_marines",
+        "arbites":        "services.arbites",
+    }
+    _kit_key = subfaction_id if subfaction_id else faction_id
+    _arch_key = _kit_key if _kit_key in _arch_service_map else None
+    if _arch_key:
+        try:
+            _mod = __import__(_arch_service_map[_arch_key],
+                              fromlist=["get_archetype"])
+            _arch = _mod.get_archetype(career_id or "")
+        except Exception as _e:
+            print("[build_character] archetype: " + type(_e).__name__)
+            _arch = None
+        if _arch:
+            for _k, _v in (_arch.get("bonus_characteristics", {}) or {}).items():
+                if _k in stats:
+                    stats[_k] = int(stats[_k]) + int(_v)
+
     if faction_id in ("necrons", "tyranids"):
         alien = _build_alien_character(dict(stats), faction_id, career_id)
         # Переписываем stats на изменённые
@@ -226,7 +250,7 @@ def build_character(
             currency = "Нет"
             equipment = ["adrenal_gland"]
     else:
-        kit = get_starting_kit(faction_id)
+        kit = get_starting_kit(_kit_key)
         weapons = [dict(w) for w in kit.get("weapons", [])]
         armour = dict(kit.get("armour", armour))
         equipment = list(kit.get("equipment", []))
