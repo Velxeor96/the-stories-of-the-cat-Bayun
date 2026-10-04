@@ -1,0 +1,547 @@
+{
+  "faction": "necrons",
+  "version": "1.0",
+  "lore": "Древняя раса металлических существ, чьи души были пожертвованы К'тан ради бессмертия. Спали 60 миллионов лет. Проснулись — и не нашли своего места в галактике. Не чувствуют боли, страха, сомнений. Не используют Варп. Их технологии — продукт эпохи, недосягаемой для Империума.",
+  "traits": {
+    "no_warp": "Некроны не имеют психоактивности. Иммунны к Варп-воздействиям, но не могут быть псайкерами.",
+    "living_metal": "Живой металл (некродермис) восстанавливает 1d5 ран в начале каждого хода, если персонаж не в критическом состоянии.",
+    "reanimation": "Протоколы Реанимации: при получении смертельного урона есть шанс восстановиться.",
+    "cold_logic": "Все социальные проверки на основе эмоций (Charm, Deceive) получают -10. Логика (Logic) и Запугивание (Intimidate) получают +10.",
+    "inhuman": "Игрок не может быть целью эффектов, влияющих на живую плоть (лечение, наркотики, биомансия)."
+  },
+  "archetypes": [
+    {
+      "id": "necron_lord",
+      "name": "Лорд Династии",
+      "description": "Командир армии, обладающий абсолютной властью над своими легионами. Его воля — закон, его гнев — смерть.",
+      "starting_skills": ["Command", "Logic", "Intimidate", "Awareness", "Dodge"],
+      "starting_talents": ["Iron Discipline", "Air of Authority", "Cold Fury"],
+      "bonus_characteristics": {"WS": 5, "WP": 5, "Fel": -10},
+      "wounds_bonus": 3,
+      "starting_weapons": ["staff_of_light", "hyperphase_sword"],
+      "starting_armour": "necrodermis_lord",
+      "rank_titles": ["Младший Лорд", "Лорд", "Старший Лорд", "Владыка", "Фаэрон"]
+    },
+    {
+      "id": "cryptek",
+      "name": "Криптек",
+      "description": "Учёный-техножрец Некронов, владеющий тайнами физики и техно-магии. Не псайкер, но его технологии граничат с чудом.",
+      "starting_skills": ["Tech-Use", "Logic", "Forbidden Lore (Xenos)", "Awareness", "Medicae"],
+      "starting_talents": ["Technical Knock", "Mechadendrite Use (Utility)", "Master Enginseer"],
+      "bonus_characteristics": {"Int": 10, "T": -5},
+      "wounds_bonus": 0,
+      "starting_weapons": ["staff_of_light", "gauss_flayer"],
+      "starting_armour": "necrodermis_cryptek",
+      "rank_titles": ["Ученик", "Криптек", "Мастер Криптек", "Верховный Криптек", "Хранитель Тайн"]
+    },
+    {
+      "id": "destroyer",
+      "name": "Дестроер",
+      "description": "Проклятый воин, отдавший себя разрушению. Его разум искажён, тело изменено, цель — уничтожение всего живого.",
+      "starting_skills": ["Dodge", "Awareness", "Intimidate", "Stealth", "Tracking"],
+      "starting_talents": ["Hatred (All Living)", "Berserk Charge", "Swift Attack"],
+      "bonus_characteristics": {"WS": 5, "Ag": 5, "Int": -15, "Fel": -15},
+      "wounds_bonus": 2,
+      "starting_weapons": ["gauss_cannon", "voidblade"],
+      "starting_armour": "necrodermis_destroyer",
+      "rank_titles": ["Дестроер", "Старший Дестроер", "Тяжёлый Дестроер", "Лорд Дестроеров"]
+    },
+    {
+      "id": "flayed_one",
+      "name": "Флайед",
+      "description": "Безумец, чей разум сломался 60 миллионов лет назад. Он помнит вкус плоти и жаждет вернуть его. Проклятый всеми, кроме своих.",
+      "starting_skills": ["Stealth", "Awareness", "Dodge", "Intimidate", "Survival"],
+      "starting_talents": ["Bloodlust", "Frenzy", "Hard Target"],
+      "bonus_characteristics": {"Ag": 10, "WS": 5, "Int": -20, "Fel": -20},
+      "wounds_bonus": 0,
+      "starting_weapons": ["flayer_claws"],
+      "starting_armour": "necrodermis_flayed",
+      "rank_titles": ["Флайед", "Стая Флайед", "Вожак стаи", "Древний Флайед"]
+    },
+    {
+      "id": "deathmark",
+      "name": "Дезмарк",
+      "description": "Элитный убийца, способный проходить сквозь измерения, чтобы устранить цель. Один выстрел — одна смерть.",
+      "starting_skills": ["Stealth", "Awareness", "Tracking", "Dodge", "Logic"],
+      "starting_talents": ["Marksman", "Crack Shot", "Deathwatch Training"],
+      "bonus_characteristics": {"BS": 10, "Per": 5, "Fel": -10},
+      "wounds_bonus": -1,
+      "starting_weapons": ["synaptic_disruptor", "voidblade"],
+      "starting_armour": "necrodermis_deathmark",
+      "rank_titles": ["Дезмарк", "Старший Дезмарк", "Мастер Дезмарк", "Тень Династии"]
+    }
+  ],
+  "talents": [
+    {
+      "id": "cold_fury",
+      "name": "Холодная ярость",
+      "category": "combat",
+      "cost": 400,
+      "tier": 1,
+      "prerequisites": {},
+      "description": "Ярость без эмоций. Ваша атака становится точнее, когда вы спокойны.",
+      "effect": "При использовании All-Out Attack вы получаете +10 вместо обычного штрафа. Стек с другими бонусами."
+    },
+    {
+      "id": "reanimation_protocols_1",
+      "name": "Протоколы Реанимации I",
+      "category": "defense",
+      "cost": 500,
+      "tier": 1,
+      "prerequisites": {"rank": 1},
+      "description": "Первая ступень протоколов. Ваш живой металл учится восстанавливать критические повреждения.",
+      "effect": "При получении смертельного урона бросьте 1d10. На 9-10 вы восстанавливаетесь с 1 раной и не считаетесь мертвым."
+    },
+    {
+      "id": "reanimation_protocols_2",
+      "name": "Протоколы Реанимации II",
+      "category": "defense",
+      "cost": 1000,
+      "tier": 2,
+      "prerequisites": {"rank": 3, "talent": "reanimation_protocols_1"},
+      "description": "Улучшенные протоколы. Реанимация срабатывает чаще и восстанавливает больше ран.",
+      "effect": "Срабатывает на 8-10. Восстанавливает 1d5+2 ран."
+    },
+    {
+      "id": "reanimation_protocols_3",
+      "name": "Протоколы Реанимации III",
+      "category": "defense",
+      "cost": 2000,
+      "tier": 3,
+      "prerequisites": {"rank": 5, "talent": "reanimation_protocols_2"},
+      "description": "Верховные протоколы. Смерть — лишь временное неудобство.",
+      "effect": "Срабатывает на 7-10. Восстанавливает 1d5+5 ран. Восстанавливает 1 Очко Судьбы (раз за сессию)."
+    },
+    {
+      "id": "phase_shift",
+      "name": "Фазовый сдвиг",
+      "category": "utility",
+      "cost": 750,
+      "tier": 2,
+      "prerequisites": {"rank": 3, "Ag": 40},
+      "description": "Вы становитесь неосязаемым, проходя сквозь материю и избегая атак.",
+      "effect": "Как Half Action: станьте Incorporeal на 1 раунд. Стоимость — 1 Очко Судьбы или 3 Раны."
+    },
+    {
+      "id": "dimensional_corridor",
+      "name": "Межпространственный коридор",
+      "category": "utility",
+      "cost": 1200,
+      "tier": 3,
+      "prerequisites": {"rank": 4, "WP": 50},
+      "description": "Вы можете открыть временный проход через измерение, чтобы переместиться или переместить союзника.",
+      "effect": "Раз в сессию: телепортируйтесь на расстояние до 50 м. Может взять с собой одного союзника."
+    },
+    {
+      "id": "mindshackle_scarabs",
+      "name": "Скарабеи-поработители",
+      "category": "social",
+      "cost": 800,
+      "tier": 2,
+      "prerequisites": {"rank": 3, "Int": 40},
+      "description": "Вы вживляете наноскарабеев в разум противника и контролируете его.",
+      "effect": "Против одного гуманоида: противоположный тест Int vs WP. При успехе цель подчиняется 1 сцену."
+    },
+    {
+      "id": "living_metal_mastery",
+      "name": "Мастерство живого металла",
+      "category": "defense",
+      "cost": 600,
+      "tier": 2,
+      "prerequisites": {"rank": 2, "T": 40},
+      "description": "Ваш некродермис затвердевает в момент удара, поглощая урон.",
+      "effect": "Раз за бой: уменьшите получаемый урон на 5. Не требует действия."
+    },
+    {
+      "id": "gauss_mastery",
+      "name": "Мастерство гаусс-оружия",
+      "category": "combat",
+      "cost": 500,
+      "tier": 1,
+      "prerequisites": {"BS": 40},
+      "description": "Вы понимаете гаусс-технологии на уровне интуиции.",
+      "effect": "+10 на все BS-броски с гаусс-оружием. При броске 6+ на урон — игнорирует 2 дополнительных единицы брони."
+    },
+    {
+      "id": "tesla_arc_mastery",
+      "name": "Мастерство тесла-дуг",
+      "category": "combat",
+      "cost": 550,
+      "tier": 1,
+      "prerequisites": {"BS": 35},
+      "description": "Вы контролируете тесла-разряды, заставляя их прыгать между целями.",
+      "effect": "При попадании тесла-оружием на 5+ урона дуга перескакивает на второго врага в 5 м."
+    },
+    {
+      "id": "undying_will",
+      "name": "Непреклонная воля",
+      "category": "defense",
+      "cost": 700,
+      "tier": 2,
+      "prerequisites": {"WP": 45},
+      "description": "Ваша воля не может быть сломлена. Вы не отступаете, не сдаётесь, не колеблетесь.",
+      "effect": "Иммунитет к эффектам Страха и Запугивания. Один раз за бой можете перебросить любой провальный тест WP."
+    },
+    {
+      "id": "arcane_engineer",
+      "name": "Тайный инженер",
+      "category": "technical",
+      "cost": 900,
+      "tier": 2,
+      "prerequisites": {"Int": 45, "Tech-Use": "trained"},
+      "description": "Вы ремонтируете и модифицируете некронскую технику на уровне, недоступном другим расам.",
+      "effect": "Ремонт некронской техники за половину времени. Модификации дают +5 к характеристикам (вместо +0 по умолчанию)."
+    },
+    {
+      "id": "cryptek_technomancy",
+      "name": "Техномантия Криптека",
+      "category": "technical",
+      "cost": 1500,
+      "tier": 3,
+      "prerequisites": {"rank": 4, "Int": 55, "Talent": "arcane_engineer"},
+      "description": "Вы овладели технологиями, которые не-некронам кажутся магией.",
+      "effect": "Три раза за сессию можете применить один из эффектов: дезинтеграция (2d10 урона по технике), реконструкция (восстановить сломанный объект), сдвиг реальности (-20 к тесту врага)."
+    },
+    {
+      "id": "harvest_of_souls",
+      "name": "Жатва душ",
+      "category": "combat",
+      "cost": 1300,
+      "tier": 3,
+      "prerequisites": {"rank": 4, "WS": 50},
+      "description": "Ваш клинок пьёт саму жизнь врагов, продлевая ваше существование.",
+      "effect": "При убийстве врага в ближнем бою восстановите 1d5 ран. При критическом убийстве — 2d5."
+    },
+    {
+      "id": "necron_overlord",
+      "name": "Верховный повелитель",
+      "category": "leadership",
+      "cost": 2500,
+      "tier": 4,
+      "prerequisites": {"rank": 6, "Fel": 30, "WP": 55},
+      "description": "Вы — Владыка династии. Ваше слово — приказ для миллионов.",
+      "effect": "Вы получаете +20 на все Command тесты. Ваши подчинённые-некроны получают +10 на все броски, пока видят вас. Один раз за сессию можете потребовать подкрепление — 1d5 некронских воинов."
+    }
+  ],
+  "weapons": [
+    {
+      "id": "gauss_flayer",
+      "name": "Гаусс-флаер",
+      "type": "ranged",
+      "class": "Basic",
+      "range": "100m",
+      "damage": "1d10+5 E",
+      "penetration": 4,
+      "rof": "S/2/-",
+      "clip": 30,
+      "reload": "Full",
+      "weight": "4 kg",
+      "special": "Gauss: на 6+ на броске урона игнорирует всю броню цели.",
+      "rarity": "Common"
+    },
+    {
+      "id": "gauss_blaster",
+      "name": "Гаусс-бластер",
+      "type": "ranged",
+      "class": "Basic",
+      "range": "80m",
+      "damage": "1d10+7 E",
+      "penetration": 5,
+      "rof": "S/3/-",
+      "clip": 20,
+      "reload": "Full",
+      "weight": "6 kg",
+      "special": "Gauss. Требует силу 40+.",
+      "rarity": "Scarce"
+    },
+    {
+      "id": "gauss_cannon",
+      "name": "Гаусс-пушка",
+      "type": "ranged",
+      "class": "Heavy",
+      "range": "150m",
+      "damage": "2d10+8 E",
+      "penetration": 8,
+      "rof": "S/-/-",
+      "clip": 10,
+      "reload": "2 Full",
+      "weight": "12 kg",
+      "special": "Gauss. Требует силу 50+.",
+      "rarity": "Rare"
+    },
+    {
+      "id": "tesla_carbine",
+      "name": "Тесла-карбин",
+      "type": "ranged",
+      "class": "Basic",
+      "range": "60m",
+      "damage": "1d10+4 E",
+      "penetration": 2,
+      "rof": "S/2/4",
+      "clip": 40,
+      "reload": "Full",
+      "weight": "3 kg",
+      "special": "Tesla: на 6+ на броске урона атака поражает второго врага в 5 м.",
+      "rarity": "Common"
+    },
+    {
+      "id": "particle_whip",
+      "name": "Партикл-хлыст",
+      "type": "melee",
+      "class": "Melee",
+      "range": "-",
+      "damage": "1d10+6 E",
+      "penetration": 6,
+      "rof": "-",
+      "weight": "5 kg",
+      "special": "Reach. При броске 10 на урон — автоматический крит.",
+      "rarity": "Scarce"
+    },
+    {
+      "id": "staff_of_light",
+      "name": "Посох Света",
+      "type": "hybrid",
+      "class": "Melee/Ranged",
+      "range": "30m (ranged)",
+      "damage": "1d10+5 E (melee), 1d10+4 E (ranged)",
+      "penetration": 4,
+      "rof": "S/-/-",
+      "weight": "4 kg",
+      "special": "Может использоваться как в ближнем, так и в дальнем бою. Даёт +10 к Intimidate, пока экипирован.",
+      "rarity": "Rare"
+    },
+    {
+      "id": "hyperphase_sword",
+      "name": "Гиперфазовый меч",
+      "type": "melee",
+      "class": "Melee",
+      "range": "-",
+      "damage": "1d10+7 E",
+      "penetration": 8,
+      "rof": "-",
+      "weight": "3 kg",
+      "special": "Balanced. Phase: игнорирует нематериальные защиты (щиты, силовые поля).",
+      "rarity": "Rare"
+    },
+    {
+      "id": "voidblade",
+      "name": "Пустотный клинок",
+      "type": "melee",
+      "class": "Melee",
+      "range": "-",
+      "damage": "1d10+8 E",
+      "penetration": 10,
+      "rof": "-",
+      "weight": "5 kg",
+      "special": "При крите цель должна пройти Hard (-20) WP-тест или получить 1 Очко Порчи.",
+      "rarity": "Very Rare"
+    },
+    {
+      "id": "synaptic_disruptor",
+      "name": "Синаптический разрушитель",
+      "type": "ranged",
+      "class": "Basic",
+      "range": "200m",
+      "damage": "2d10+6 E",
+      "penetration": 10,
+      "rof": "S/-/-",
+      "clip": 6,
+      "reload": "2 Full",
+      "weight": "7 kg",
+      "special": "Дезмарк-оружие. При попадании цель должна пройти Very Hard (-30) T-тест или потерять 1d5 ран дополнительно.",
+      "rarity": "Very Rare"
+    },
+    {
+      "id": "flayer_claws",
+      "name": "Когти Флайеда",
+      "type": "melee",
+      "class": "Melee",
+      "range": "-",
+      "damage": "1d10+6 R",
+      "penetration": 5,
+      "rof": "-",
+      "weight": "2 kg",
+      "special": "При убийстве восстанавливает 1d5 ран владельцу.",
+      "rarity": "Scarce"
+    }
+  ],
+  "armour": [
+    {
+      "id": "necrodermis_lord",
+      "name": "Некродермис Лорда",
+      "all_ap": 12,
+      "weight": "8 kg",
+      "special": "Living Metal: восстанавливает 1 AP в начале каждого раунда, если повреждён.",
+      "rarity": "Very Rare"
+    },
+    {
+      "id": "necrodermis_cryptek",
+      "name": "Некродермис Криптека",
+      "all_ap": 10,
+      "weight": "6 kg",
+      "special": "Living Metal. +10 к Tech-Use тестам.",
+      "rarity": "Rare"
+    },
+    {
+      "id": "necrodermis_destroyer",
+      "name": "Некродермис Дестроера",
+      "all_ap": 11,
+      "weight": "7 kg",
+      "special": "Living Metal. +2 к урону в ближнем бою.",
+      "rarity": "Rare"
+    },
+    {
+      "id": "necrodermis_flayed",
+      "name": "Кожа Флайеда",
+      "all_ap": 8,
+      "weight": "4 kg",
+      "special": "+10 к Stealth. Не мешает движению.",
+      "rarity": "Scarce"
+    },
+    {
+      "id": "necrodermis_deathmark",
+      "name": "Некродермис Дезмарка",
+      "all_ap": 10,
+      "weight": "5 kg",
+      "special": "Living Metal. +10 к Stealth и Awareness.",
+      "rarity": "Very Rare"
+    }
+  ],
+  "equipment": [
+    {
+      "id": "resurrection_orb",
+      "name": "Сфера Воскрешения",
+      "type": "artefact",
+      "effect": "Один раз за бой: все союзники-некроны в радиусе 10 м проходят Reanimation Protocol (бросок 1d10, на 7+ восстанавливают 1d5 ран).",
+      "rarity": "Very Rare"
+    },
+    {
+      "id": "phase_shifter",
+      "name": "Фазовый Сдвигатель",
+      "type": "artefact",
+      "effect": "Один раз за бой: становятся Incorporeal на 1 раунд.",
+      "rarity": "Rare"
+    },
+    {
+      "id": "shadowloom",
+      "name": "Теневая Мантия",
+      "type": "artefact",
+      "effect": "+20 к Stealth в темноте. Один раз за сессию даёт полную невидимость на 1 минуту.",
+      "rarity": "Rare"
+    },
+    {
+      "id": "mindshackle_scarabs_item",
+      "name": "Скарабеи-поработители (набор)",
+      "type": "consumable",
+      "effect": "Расходуемый: контролировать одного гуманоида 1 сцену (Int vs WP).",
+      "rarity": "Scarce"
+    },
+    {
+      "id": "gauss_generator",
+      "name": "Гаусс-генератор",
+      "type": "utility",
+      "effect": "Перезаряжает гаусс-оружие за 1 Round (вместо Full/2 Full).",
+      "rarity": "Rare"
+    }
+  ],
+  "ships": [
+    {
+      "id": "jackal_raider",
+      "name": "Джекэл-класс Рейдер",
+      "type": "Escort",
+      "hull": 30,
+      "armour": 5,
+      "speed": 10,
+      "maneuver": 45,
+      "shields": 1,
+      "weapons": ["gauss_arc_battery"],
+      "special": "Живой корпус: восстанавливает 1d5 корпуса за ход вне боя.",
+      "crew": 100
+    },
+    {
+      "id": "dirge_raider",
+      "name": "Дирдж-класс Рейдер",
+      "type": "Escort",
+      "hull": 28,
+      "armour": 5,
+      "speed": 12,
+      "maneuver": 60,
+      "shields": 1,
+      "weapons": ["tesla_destructor"],
+      "special": "Тесла-сеть: может атаковать 2 цели одновременно, если они в 10 м друг от друга.",
+      "crew": 80
+    },
+    {
+      "id": "scythe_harvester",
+      "name": "Сайт-класс Харвестер",
+      "type": "Cruiser",
+      "hull": 65,
+      "armour": 6,
+      "speed": 8,
+      "maneuver": 30,
+      "shields": 2,
+      "weapons": ["particle_whip_battery", "gauss_arc_battery"],
+      "special": "Жатва: при уничтожении вражеского корабля восстанавливает 5 корпуса.",
+      "crew": 500
+    },
+    {
+      "id": "shroud_light_cruiser",
+      "name": "Шрауд-класс Лёгкий Крейсер",
+      "type": "Light Cruiser",
+      "hull": 55,
+      "armour": 5,
+      "speed": 9,
+      "maneuver": 40,
+      "shields": 3,
+      "weapons": ["lightning_arc", "gauss_arc_battery"],
+      "special": "Маскировка: -30 к обнаружению врагом.",
+      "crew": 300
+    },
+    {
+      "id": "tomblord_cruiser",
+      "name": "Томблорд-класс Крейсер",
+      "type": "Cruiser",
+      "hull": 70,
+      "armour": 7,
+      "speed": 7,
+      "maneuver": 25,
+      "shields": 3,
+      "weapons": ["gauss_arc_battery", "particle_whip_battery", "tesla_destructor"],
+      "special": "Корабль-гробница: на борту 500 некронских воинов, готовых к абордажу.",
+      "crew": 800
+    },
+    {
+      "id": "cairn_tombship",
+      "name": "Каирн-класс Гробница-Корабль",
+      "type": "Battleship",
+      "hull": 120,
+      "armour": 8,
+      "speed": 6,
+      "maneuver": 15,
+      "shields": 5,
+      "weapons": ["gauss_arc_battery", "particle_whip_battery", "lightning_arc", "sepulchre_cannon"],
+      "special": "Легендарный корабль. +20 к Intimidate для всей команды. Может нести 5000 воинов.",
+      "crew": 2000
+    }
+  ],
+  "mechanics": [
+    {
+      "id": "reanimation_protocol",
+      "name": "Протоколы Реанимации",
+      "description": "В начале каждого хода, если персонаж получил критические раны в прошлом ходу, он может пройти бросок Реанимации.",
+      "default": "Бросок 1d10 на 9-10 — восстановиться с 1 раной."
+    },
+    {
+      "id": "living_metal",
+      "name": "Живой металл",
+      "description": "Регенерация некродермиса.",
+      "default": "Восстанавливает 1d5 ран в начале каждого хода, если не в критическом состоянии."
+    },
+    {
+      "id": "phase_shift",
+      "name": "Фазовый сдвиг",
+      "description": "Способность становиться неосязаемым.",
+      "default": "Half Action + 1 Fate Point или 3 Wounds → Incorporeal на 1 раунд."
+    }
+  ]
+}

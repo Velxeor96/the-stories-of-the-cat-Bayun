@@ -151,20 +151,53 @@ def render() -> None:
     else:
         st.info("Нет данных о родных мирах.")
 
-    st.markdown("#### 4. Карьера")
-    career_keys = careers_for(faction_id)
+    # === PATCH_41: архетипы для Некронов ===
     career_id = None
-    if career_keys:
-        career_id = st.selectbox(
-            "Карьера", options=career_keys,
-            format_func=lambda x: career_display_name(faction_id, x),
-            key="wz_career_" + faction_id,
-        )
-        cr = career_data(faction_id, career_id)
-        if cr.get("desc"):
-            st.caption(cr["desc"])
+    if faction_id == "necrons":
+        st.markdown("#### 4. Архетип (Династия)")
+        try:
+            from services.necrons import get_archetypes
+            arch_list = get_archetypes()
+        except Exception as _e:
+            print("[wizard] necrons: " + type(_e).__name__)
+            arch_list = []
+        if arch_list:
+            arch_map = {a["id"]: a for a in arch_list}
+            arch_ids = list(arch_map.keys())
+            career_id = st.selectbox(
+                "Архетип",
+                options=arch_ids,
+                format_func=lambda x: arch_map[x]["name"],
+                key="wz_career_" + faction_id,
+            )
+            arch = arch_map.get(career_id, {})
+            if arch.get("description"):
+                st.caption(arch["description"])
+            bonus = arch.get("bonus_characteristics", {}) or {}
+            if bonus:
+                items = []
+                for k, v in bonus.items():
+                    items.append(k + (" +" if v >= 0 else " ") + str(v))
+                st.markdown("**Бонусы:** " + ", ".join(items))
+            if arch.get("starting_weapons"):
+                st.markdown("**Стартовое оружие:** "
+                            + ", ".join(str(w) for w in arch["starting_weapons"]))
+        else:
+            st.info("Архетипы Некронов не загружены.")
     else:
-        st.info("Нет данных о карьерах.")
+        st.markdown("#### 4. Карьера")
+        career_keys = careers_for(faction_id)
+        if career_keys:
+            career_id = st.selectbox(
+                "Карьера", options=career_keys,
+                format_func=lambda x: career_display_name(faction_id, x),
+                key="wz_career_" + faction_id,
+            )
+            cr = career_data(faction_id, career_id)
+            if cr.get("desc"):
+                st.caption(cr["desc"])
+        else:
+            st.info("Нет данных о карьерах.")
 
     st.markdown("#### 5. Характеристики")
     mode = st.radio(

@@ -1,4 +1,4 @@
-# PATCH_36
+# PATCH_44
 """services/character_creation.py — генерация и сборка листа по фракции."""
 from __future__ import annotations
 import random
@@ -66,35 +66,123 @@ def build_character(
     hw_name = _safe_display("home_world_display_name", faction_id, home_world_id)
     cr_name = _safe_display("career_display_name", faction_id, career_id)
 
-    # 3) Бонусы от родного мира и карьеры
+    # 3) Бонусы от родного мира и карьеры (для не-некронов)
     hw_b = get_home_world_bonuses(faction_id, hw_name)
     cr_b = get_career_bonuses(faction_id, cr_name)
     stats = _apply_bonuses(base, hw_b["bonus"], hw_b["penalty"])
     stats = _apply_bonuses(stats, cr_b["bonus"], cr_b["penalty"])
 
     # 4) Стартовый набор
-    kit = get_starting_kit(faction_id)
-    weapons = [dict(w) for w in kit.get("weapons", [])]
-    armour = dict(kit.get("armour", {"head": 4, "body": 4,
-                                      "arms": 4, "legs": 4,
-                                      "notes": "Стандарт"}))
-    equipment = list(kit.get("equipment", []))
-    talents = list(kit.get("talents", []))
-    skills = list(kit.get("skills", []))
+    weapons = []
+    armour = {"head": 4, "body": 4, "arms": 4, "legs": 4, "notes": "Стандарт"}
+    equipment = []
+    talents = []
+    skills = []
+    money = 100
+    currency = "Троны"
+
+    if faction_id == "necrons":
+        try:
+            from services.necrons import get_archetype
+            arch = get_archetype(career_id or "")
+            if arch:
+                # Бонусы к характеристикам
+                bonus = arch.get("bonus_characteristics", {}) or {}
+                for k, v in bonus.items():
+                    if k in stats:
+                        stats[k] = int(stats[k]) + int(v)
+
+                # Навыки
+                skills = list(arch.get("starting_skills", []))
+
+                # Таланты (только names, ID через реестр)
+                for t_id in arch.get("starting_talents", []):
+                    talents.append({"id": t_id, "name": t_id})
+
+                # Оружие
+                for w_id in arch.get("starting_weapons", []):
+                    weapons.append({
+                        "id": w_id,
+                        "name": w_id,
+                        "stats": ""
+                    })
+
+                # Броня
+                arm_id = arch.get("starting_armour", "")
+                if arm_id:
+                    armour = {
+                        "head": 10, "body": 10, "arms": 10, "legs": 10,
+                        "notes": arm_id
+                    }
+
+                equipment = ["resurrection_orb"]
+                money = 0
+                currency = "Нет"
+
+            # Обогащаем именами из data/necrons.json
+            try:
+                from services.necrons import get_weapon, get_armour_item
+                for w in weapons:
+                    info = get_weapon(w.get("id"))
+                    if info:
+                        w["name"] = info.get("name", w["id"])
+                        w["stats"] = info.get("damage", "") + " · " + info.get("special", "")
+                if armour.get("notes"):
+                    arm_info = get_armour_item(armour["notes"])
+                    if arm_info:
+                        armour["notes"] = arm_info.get("name", armour["notes"])
+                        armour["head"] = arm_info.get("all_ap", 10)
+                        armour["body"] = arm_info.get("all_ap", 10)
+                        armour["arms"] = arm_info.get("all_ap", 10)
+                        armour["legs"] = arm_info.get("all_ap", 10)
+            except Exception as _e:
+                print("[creation] necron names: " + type(_e).__name__)
+        except Exception as e:
+            print("[creation] necron block fail: " + type(e).__name__ + ": " + str(e))
+
+    else:
+        kit = get_starting_kit(faction_id)
+        weapons = [dict(w) for w in kit.get("weapons", [])]
+        armour = dict(kit.get("armour", armour))
+        equipment = list(kit.get("equipment", []))
+        talents = [{"id": t, "name": t} for t in kit.get("talents", [])]
+        skills = list(kit.get("skills", []))
+        money = int(kit.get("money", 100) or 100)
+        currency = kit.get("currency", "Троны")
 
     # 5) Раны и судьба
     tb = stats.get("T", 30) // 10
     wounds_max = random.randint(1, 5) + 1 + 2 * tb
     fate_max = 2 if random.randint(1, 10) >= 8 else 1
+    if faction_id == "necrons":
+        wounds_max += 3  # Некроны крепче
 
     # 6) Субфракция
     faction = FACTIONS[faction_id]
-    sub_key = subfaction_id or (faction.get("subfactions") or [None])[0]
+    sub_key = subfaction_id
     if sub_key and sub_key not in faction.get("subfactions", []):
         sub_key = None
     sub_display = SUBFACTION_NAMES.get(sub_key, sub_key or "")
 
+    # 7) Архетип для некронов
+    archetype_id = career_id if faction_id == "necrons" else None
+    if archetype_id:
+        try:
+            from services.necrons import get_archetype
+            arch = get_archetype(archetype_id) or {}
+            cr_name = arch.get("name", cr_name)
+        except Exception:
+            pass
+
     now = datetime.now().isoformat(timespec="microseconds")
+
+    necron_traits = []
+    if faction_id == "necrons":
+        try:
+            from services.necrons import get_faction_traits
+            necron_traits = list(get_faction_traits().keys())
+        except Exception:
+            pass
 
     return {
         "name": name, "gender": gender, "age": age,
@@ -107,8 +195,8 @@ def build_character(
         "home_world_name": hw_name,
         "career_id": career_id or "",
         "career_name": cr_name,
-        "archetype": career_id or "",
-        "archetype_id": career_id or "",
+        "archetype": archetype_id or "",
+        "archetype_id": archetype_id or "",
         "extra_choices": {},
         "characteristics": stats,
         "bonuses": {k: 0 for k in CHARACTERISTIC_KEYS},
@@ -122,8 +210,7 @@ def build_character(
         "psy_rating": 2 if faction_id == "eldar" and "Провидца" in cr_name else 0,
         "psychic_powers": [],
         "corruption": 0, "insanity": 0,
-        "money": int(kit.get("money", 100) or 100),
-        "currency": kit.get("currency", "Троны"),
+        "money": money, "currency": currency,
         "special_resources": {},
         "extra_currencies": {},
         "ship": {"name": "", "class": "", "type": "", "description": "",
@@ -136,4 +223,5 @@ def build_character(
         "reputation": {f: 0 for f in REPUTATION_FACTIONS},
         "generation_method": "roll+distribute",
         "xp": 300, "rank": 1, "created_at": now,
+        "necron_traits": necron_traits,
     }
