@@ -86,3 +86,27 @@ GITHUB_SETUP.txt
 collect_migration.bat
 scripts/collect_migration.ps1
 *_frozen.txt
+# Диагностические дампы скриптов
+scripts/_d_*.txt
+scripts/_diag_*.txt
+scripts/*.bak_pre_*
+scripts/setup_*.py
+
+# Дубликаты конфигов (старые пути)
+data/imperium/*.json
+
+# Бэкапы патчей
+*.bak_pre_*
+*.bak
+# Диагностические дампы скриптов (PATCH_60+)
+scripts/_d_*.txt
+scripts/_diag_*.txt
+scripts/setup_*.py
+scripts/*.bak_pre_*
+
+# Старые дубликаты JSON (актуальный — data/imperial_guard.json)
+data/imperium/imperial_guard.json
+
+# Бэкапы патчей
+*.bak_pre_*
+*.bak
