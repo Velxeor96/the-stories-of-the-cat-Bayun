@@ -7,44 +7,44 @@ __pycache__/
 htmlcov/
 .coverage
 
-# Бэкапы
+# ÐÑÐºÐ°Ð¿Ñ
 *.bak
 *.bak[0-9]
 *.bak[0-9][0-9]
 *.bak_pre_*
 
-# Секреты — НИКОГДА не коммитить
+# Ð¡ÐµÐºÑÐµÑÑ â ÐÐÐÐÐÐÐ Ð½Ðµ ÐºÐ¾Ð¼Ð¼Ð¸ÑÐ¸ÑÑ
 .streamlit/secrets.toml
 secrets.toml
-*ключ*.txt
+*ÐºÐ»ÑÑ*.txt
 *secret*.txt
 *key*.txt
 *.env
 .env
 
-# Локальные данные
+# ÐÐ¾ÐºÐ°Ð»ÑÐ½ÑÐµ Ð´Ð°Ð½Ð½ÑÐµ
 logs/
 *.log
 venv/
 .venv/
 
-# Тяжёлые бинарники / пересобираемое
+# Ð¢ÑÐ¶ÑÐ»ÑÐµ Ð±Ð¸Ð½Ð°ÑÐ½Ð¸ÐºÐ¸ / Ð¿ÐµÑÐµÑÐ¾Ð±Ð¸ÑÐ°ÐµÐ¼Ð¾Ðµ
 chroma_db/
-# data/ убрано в PATCH_16L — лор должен уходить на GitHub.
-# Приватные части data/ исключаются отдельными правилами ниже.
+# data/ ÑÐ±ÑÐ°Ð½Ð¾ Ð² PATCH_16L â Ð»Ð¾Ñ Ð´Ð¾Ð»Ð¶ÐµÐ½ ÑÑÐ¾Ð´Ð¸ÑÑ Ð½Ð° GitHub.
+# ÐÑÐ¸Ð²Ð°ÑÐ½ÑÐµ ÑÐ°ÑÑÐ¸ data/ Ð¸ÑÐºÐ»ÑÑÐ°ÑÑÑÑ Ð¾ÑÐ´ÐµÐ»ÑÐ½ÑÐ¼Ð¸ Ð¿ÑÐ°Ð²Ð¸Ð»Ð°Ð¼Ð¸ Ð½Ð¸Ð¶Ðµ.
 legacy/
 docs/screenshots/
 
-# Старые отчёты тестов (не нужны в репо)
+# Ð¡ÑÐ°ÑÑÐµ Ð¾ÑÑÑÑÑ ÑÐµÑÑÐ¾Ð² (Ð½Ðµ Ð½ÑÐ¶Ð½Ñ Ð² ÑÐµÐ¿Ð¾)
 tests/report_*.txt
 tests/results_*.json
 
-# Приватные части data/ (не уходят в git)
+# ÐÑÐ¸Ð²Ð°ÑÐ½ÑÐµ ÑÐ°ÑÑÐ¸ data/ (Ð½Ðµ ÑÑÐ¾Ð´ÑÑ Ð² git)
 data/accounts/
 data/users/
 data/_replacements/
 
-# Прочее
+# ÐÑÐ¾ÑÐµÐµ
 _reference_from_old/
 .intro_reset_patch_*.flag
 reports/
@@ -65,7 +65,7 @@ chroma_db/
 Thumbs.db
 gigachat_key.txt
 
-# PATCH_40: ����
+# PATCH_40: ¬ãá®à
 DUMP.txt
 _dump.py
 analyze.bat
@@ -78,7 +78,7 @@ _reference_from_old/
 reports/
 logs/
 
-# === ������� � �������� - ������� �� ������ ===
+# ===    -    ===
 token.txt
 Wh40K_migration.zip
 Wh40K_migration_*.zip
@@ -86,30 +86,34 @@ GITHUB_SETUP.txt
 collect_migration.bat
 scripts/collect_migration.ps1
 *_frozen.txt
-# ��������������� ����� ��������
+# Äèàãíîñòè÷åñêèå äàìïû ñêðèïòîâ
 scripts/_d_*.txt
 scripts/_diag_*.txt
 scripts/*.bak_pre_*
 scripts/setup_*.py
 
-# ��������� �������� (������ ����)
+# Äóáëèêàòû êîíôèãîâ (ñòàðûå ïóòè)
 data/imperium/*.json
 
-# ������ ������
+# Áýêàïû ïàò÷åé
 *.bak_pre_*
 *.bak
-# ��������������� ����� �������� (PATCH_60+)
+# Äèàãíîñòè÷åñêèå äàìïû ñêðèïòîâ (PATCH_60+)
 scripts/_d_*.txt
 scripts/_diag_*.txt
 scripts/setup_*.py
 scripts/*.bak_pre_*
 
-# ������ ��������� JSON (���������� � data/imperial_guard.json)
+# Ñòàðûå äóáëèêàòû JSON (àêòóàëüíûé  data/imperial_guard.json)
 data/imperium/imperial_guard.json
 
-# ������ ������
+# Áýêàïû ïàò÷åé
 *.bak_pre_*
 *.bak
-# HF cache (�� ����� ���� ������� zip, ������ �����)
+# HF cache (íå ïóøèì îäèí áîëüøîé zip, òîëüêî ÷àñòè)
 hf_cache_full.zip
 _hf_cache_assembled.zip
+
+# PATCH_75b: дампы патчей
+scripts/_d*.txt
+scripts/_diag*.txt
