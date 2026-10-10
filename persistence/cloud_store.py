@@ -88,31 +88,49 @@ def _load_gist() -> dict:
         return _CACHE["data"] or {}
 
 
-def _save_gist(data: dict) -> bool:
-    try:
-        payload = {
-            "files": {
-                "wh40k_saves.json": {
-                    "content": json.dumps(data, ensure_ascii=False, indent=2),
-                }
+def _save_gist(data: dict, retries: int = 3) -> bool:
+    # PATCH_77: retry с backoff
+    payload = {
+        "files": {
+            "wh40k_saves.json": {
+                "content": json.dumps(data, ensure_ascii=False, indent=2),
             }
         }
-        r = requests.patch(
-            "https://api.github.com/gists/" + _GIST_ID,
-            headers=_headers(),
-            json=payload,
-            timeout=15,
-        )
-        if r.status_code not in (200, 201):
+    }
+    last_err = None
+    for attempt in range(retries):
+        try:
+            r = requests.patch(
+                "https://api.github.com/gists/" + _GIST_ID,
+                headers=_headers(),
+                json=payload,
+                timeout=15,
+            )
+            if r.status_code in (200, 201):
+                _CACHE["data"] = data
+                _CACHE["ts"] = time.time()
+                return True
+
+            # 5xx — retry, 4xx — нет
+            if r.status_code >= 500:
+                last_err = "HTTP " + str(r.status_code)
+                print("[cloud_store] save attempt " + str(attempt + 1)
+                      + " failed: " + last_err)
+                time.sleep(1.0 * (attempt + 1))
+                continue
+
             print("[cloud_store] PATCH fail: HTTP " + str(r.status_code)
                   + " " + r.text[:200])
             return False
-        _CACHE["data"] = data
-        _CACHE["ts"] = time.time()
-        return True
-    except Exception as e:
-        print("[cloud_store] save error: " + type(e).__name__ + ": " + str(e))
-        return False
+        except requests.RequestException as e:
+            last_err = type(e).__name__
+            print("[cloud_store] save attempt " + str(attempt + 1)
+                  + " exception: " + last_err)
+            time.sleep(1.0 * (attempt + 1))
+
+    print("[cloud_store] save failed after " + str(retries)
+          + " attempts: " + str(last_err))
+    return False
 
 
 def hset_json(namespace: str, key: str, value) -> bool:
