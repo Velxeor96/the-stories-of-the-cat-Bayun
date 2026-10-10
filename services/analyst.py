@@ -2,6 +2,25 @@
 """services/analyst.py — фраза игрока → строгий JSON (ParsedCommand)."""
 from __future__ import annotations
 
+# PATCH_70: refusal detect (analyst)
+def _analyst_is_refusal(text: str) -> bool:
+    """True, если GigaChat вернул отписку вместо JSON."""
+    if not text:
+        return False
+    low = str(text).lower()
+    for m in (
+        "не обладает собственным мнением",
+        "не транслирует мнение",
+        "как и любая языковая модель",
+        "иногда генеративные языковые модели",
+        "generative language model",
+        "обобщением информации",
+    ):
+        if m.lower() in low:
+            return True
+    return False
+# /PATCH_70
+
 import json
 import re
 from dataclasses import asdict, dataclass
@@ -208,6 +227,8 @@ class Analyst:
             text = text.strip()
         m = _JSON_RE.search(text)
         if not m:
+            if _analyst_is_refusal(text):
+                raise AnalystError("GigaChat refused")
             raise AnalystError("не найден JSON: " + repr(text[:120]))
         try:
             return json.loads(m.group(0))

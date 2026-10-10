@@ -11,6 +11,40 @@ from core.llm_factory import make_client
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
+
+
+# PATCH_69: refusal detect
+_REFUSAL_MARKERS = (
+    "не обладает собственным мнением",
+    "не транслирует мнение",
+    "Ответ сгенерирован нейросетевой моделью",
+    "как и любая языковая модель",
+    "иногда генеративные языковые модели",
+    "во избежание неправильного толкования",
+    "обобщением информации",
+    "generative language model",
+)
+
+
+def _is_gigachat_refusal(text: str) -> bool:
+    if not text:
+        return False
+    low = str(text).lower()
+    return any(m.lower() in low for m in _REFUSAL_MARKERS)
+
+
+def _master_refusal_fallback() -> str:
+    return (
+        "Мастер задумывается, но сцена не развивается. "
+        "Возможно, формулировка хода требует уточнения. "
+        "\n\nВарианты действий:\n\n"
+        "1. **Попробовать иначе.** Опиши действие другой формулировкой.\n"
+        "2. **Осмотреться.** Оглядеться вокруг.\n"
+        "3. **Отступить.** Вернуться к предыдущему состоянию.\n\n"
+        "Иное: опиши."
+    )
+# /PATCH_69
+
 class MasterError(Exception):
     pass
 
@@ -92,12 +126,17 @@ class Master:
         msg = self._build_message(state=state, command=command, roll=roll,
                                   history=history or [],
                                   extra_context=extra_context)
+        # PATCH_69: refusal detect
         try:
             r = self.llm.call(
                 system_prompt=self.system_prompt, user_message=msg,
                 model=self.model.id, temperature=0.85,
                 max_tokens=self._get_max_tokens())
-            return self._extract_text(r)
+            text = self._extract_text(r)
+            if _is_gigachat_refusal(text):
+                print("[master] GigaChat refused — fallback")
+                return _master_refusal_fallback()
+            return text
         except Exception as e:
             print("[master] fallback: " + type(e).__name__ + ": " + str(e))
             return "[fallback-мастер] Попробуй переформулировать ход."

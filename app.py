@@ -1,5 +1,15 @@
 # PATCH_15Y_HARD_ROUTER
 # app.py — точка входа и маршрутизация (HARD ROUTER + LANDING GUARD).
+# PATCH_66: offline-режим HuggingFace
+# Не даём sentence-transformers / huggingface_hub ходить в сеть за моделью.
+# Модель intfloat/multilingual-e5-small должна быть в локальном кэше
+# (или подгружена рядом с chroma_db).
+import os as _os
+_os.environ.setdefault("HF_HUB_OFFLINE", "1")
+_os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+# /PATCH_66
+
+
 import streamlit as st
 
 st.set_page_config(
@@ -7,6 +17,38 @@ st.set_page_config(
     page_icon="XB",
     layout="wide",
 )
+
+# PATCH_65: автораспаковка chroma_db.zip
+# Если папки chroma_db/ нет, но есть chroma_db.zip (для Streamlit Cloud),
+# распаковываем её при старте приложения.
+def _ensure_chroma_db() -> None:
+    import os
+    import zipfile
+    root = os.path.dirname(os.path.abspath(__file__))
+    db_dir = os.path.join(root, "chroma_db")
+    zip_path = os.path.join(root, "chroma_db.zip")
+    if os.path.isdir(db_dir) and os.listdir(db_dir):
+        return  # база на месте
+    if not os.path.isfile(zip_path):
+        print("[app] chroma_db/ нет, chroma_db.zip нет -> RAG отключён")
+        return
+    try:
+        size_mb = os.path.getsize(zip_path) / (1024 * 1024)
+        print("[app] chroma_db.zip найден ({:.1f} МБ), распаковываю...".format(size_mb))
+        os.makedirs(db_dir, exist_ok=True)
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(db_dir)
+        n = sum(len(f) for _, _, f in os.walk(db_dir))
+        print("[app] chroma_db/ распакован: {} файлов".format(n))
+    except Exception as e:
+        print("[app] распаковка chroma_db.zip упала: "
+              + type(e).__name__ + ": " + str(e))
+
+
+_ensure_chroma_db()
+# /PATCH_65
+
+
 
 if "screen" not in st.session_state:
     st.session_state.screen = "splash"
