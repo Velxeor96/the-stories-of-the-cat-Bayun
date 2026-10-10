@@ -31,7 +31,7 @@ def render() -> None:
     with c1:
         st.markdown("**Троны:** " + str(int(char.get("money", 0) or 0)))
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 
@@ -47,7 +47,7 @@ def render() -> None:
             st.markdown("Цена: " + str(price) + " тронов")
         with c3:
             if st.button("Купить", key="buy_" + str(i),
-                         use_container_width=True):
+                         width="stretch"):
                 res = try_buy(char, item, fel)
                 if not res.get("ok"):
                     st.error(res.get("reason", "ошибка"))
@@ -72,7 +72,7 @@ def render() -> None:
                     st.caption(CATEGORY_RU.get(cat, cat))
                 with c3:
                     if st.button("Продать", key="sell_" + cat + "_"
-                                 + str(nm)[:20], use_container_width=True):
+                                 + str(nm)[:20], width="stretch"):
                         res = sell_item(char, nm, fel)
                         if not res.get("ok"):
                             st.error(res.get("reason", "ошибка"))

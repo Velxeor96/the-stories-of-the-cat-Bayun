@@ -72,16 +72,16 @@ def render() -> None:
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("ДА", use_container_width=True,
+        if st.button("ДА", width="stretch",
                      type="primary", key="tp_yes"):
             st.session_state.screen = "tutorial"
             st.rerun()
     with c2:
-        if st.button("НЕТ", use_container_width=True, key="tp_no"):
+        if st.button("НЕТ", width="stretch", key="tp_no"):
             _mark_tutorial_done()
             st.session_state.screen = "wizard"
             st.rerun()
     with c3:
-        if st.button("НЕ ЗНАЮ", use_container_width=True, key="tp_dunno"):
+        if st.button("НЕ ЗНАЮ", width="stretch", key="tp_dunno"):
             st.session_state.screen = "tutorial_help"
             st.rerun()

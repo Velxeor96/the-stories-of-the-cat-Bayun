@@ -108,7 +108,7 @@ def render() -> None:
         st.caption("Раунд " + str(cs.round)
                    + " · Ход: " + str(cs.current() or "—"))
     with c2:
-        if st.button("← Выйти", use_container_width=True):
+        if st.button("← Выйти", width="stretch"):
             st.session_state.pop("_combat_state", None)
             _goto("game")
             st.rerun()
@@ -135,7 +135,7 @@ def render() -> None:
         else:
             st.error("💀 Поражение.")
         if st.button("Вернуться в игру", type="primary",
-                     use_container_width=True):
+                     width="stretch"):
             events = _finalize(char, login, char_name, cs)
             st.session_state.pop("_combat_state", None)
             tail = (" [" + "; ".join(events) + "]") if events else ""
@@ -152,7 +152,7 @@ def render() -> None:
 
     if not is_player:
         st.info("Ход противника...")
-        if st.button("Продолжить", use_container_width=True):
+        if st.button("Продолжить", width="stretch"):
             pcs = [n for n, p in cs.participants.items()
                    if p["side"] == "player" and p["hp"] > 0]
             if cur and pcs:
@@ -164,7 +164,7 @@ def render() -> None:
     st.markdown("**Твой ход.**")
     b1, b2, b3, b4 = st.columns(4)
     with b1:
-        if st.button("⚔️ Атака", type="primary", use_container_width=True):
+        if st.button("⚔️ Атака", type="primary", width="stretch"):
             en = cs.alive_enemies("player")
             if en:
                 stats = char.get("characteristics") or {}
@@ -173,16 +173,16 @@ def render() -> None:
                 cs.next_turn()
                 st.rerun()
     with b2:
-        if st.button("➡️ Ближе", use_container_width=True):
+        if st.button("➡️ Ближе", width="stretch"):
             cs.move(cur, "closer")
             st.rerun()
     with b3:
-        if st.button("🛡 Защита", use_container_width=True):
+        if st.button("🛡 Защита", width="stretch"):
             cs.defend(cur)
             cs.next_turn()
             st.rerun()
     with b4:
-        if st.button("⏭ Пропустить", use_container_width=True):
+        if st.button("⏭ Пропустить", width="stretch"):
             cs.next_turn()
             st.rerun()
 
@@ -199,7 +199,7 @@ def render() -> None:
                 with pc[i]:
                     label = p.get("name", pkey) + " (" + str(p.get("cost", 2)) + ")"
                     if st.button(label, key="psy_" + pkey,
-                                 use_container_width=True):
+                                 width="stretch"):
                         res = cast(char, pkey)
                         if not res.get("ok"):
                             st.error(res.get("reason", "ошибка"))

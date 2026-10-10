@@ -1,0 +1,275 @@
+# scripts/setup_ig.py — создаёт data/imperial_guard.json и services/imperial_guard.py
+from __future__ import annotations
+import json, sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if not (ROOT / "app.py").exists():
+    print("[ERROR] app.py не найден. Запусти из корня Wh40K.")
+    sys.exit(1)
+
+# === 1. data/imperial_guard.json ===
+IG_DATA = {
+  "faction_id": "imperial_guard",
+  "name": "Имперская Гвардия",
+  "full_name": "Астра Милитариум",
+  "source": ["Only War v1.05", "Rogue Trader v1.23", "Warhammer40k.fandom.com"],
+  "motto": "Молот Императора. Мы — его ярость. Мы — его гнев. Мы — его воля.",
+  "description": "Колоссальная армия обычных людей, призванных из бесчисленных миров Империума. Основная боевая сила человечества: количество, дисциплина и тяжёлое вооружение против ужасов галактики.",
+  "history": "Ведёт историю от Имперской Армии Великого Крестового Похода. После Ереси Хоруса Робаут Жиллиман разделил её на Имперскую Гвардию (наземные силы) и Имперский Флот.",
+  "archetypes": [
+    {"id":"driver","name":"Водитель","subtitle":"Driver","type":"основная",
+     "description":"Управляет боевой техникой и корабельными орудиями.",
+     "starting_skills":["Обыденное знание (Техника)","Пользование техники","Управление (Наземная техника)"],
+     "starting_talents":["Владение оружием (Лазерное или Стабберы)","Владение оружием (Низкотехнологичное)","Ритуал освобождения"],
+     "starting_weapons":[],"starting_armour":[],
+     "starting_gear":["ауспик или сканер","блок мыслеуправления (ср.)","комбиниструмент","инфопланшет","лазерный резак"],
+     "wounds_base":6},
+    {"id":"medic","name":"Военный врач","subtitle":"Medic","type":"основная",
+     "description":"Медицинская поддержка отделения в полевых условиях.",
+     "starting_skills":["Медика","Проницательность или Ремесло (Химик)","Учёное знание (Спагирия)"],
+     "starting_talents":["Владение оружием (Лазерное или Стабберы)","Владение оружием (Низкотехнологичное)","Ледяное сердце или Всё видавший"],
+     "starting_weapons":[],"starting_armour":[],
+     "starting_gear":["диагностор","инъектор","медицинская сумка"],
+     "wounds_base":8},
+    {"id":"sergeant","name":"Сержант","subtitle":"Sergeant","type":"основная",
+     "description":"Командует отделением через приказы.",
+     "starting_skills":["Командование","Навигация (Планетарная) или Учёное знание (Тактика Империалис)"],
+     "starting_talents":["Аура власти или Железная дисциплина","Владение оружием (Лазерное или Стабберы)","Владение оружием (Низкотехнологичное)","Владение оружием (Цепное)"],
+     "starting_weapons":["лазпистолет (ср.)","цепной меч (ср.)"],
+     "starting_armour":[],"starting_gear":[],
+     "special":["Приказы (Only War, стр. 261-263)"],
+     "wounds_base":10},
+    {"id":"heavy_gunner","name":"Специалист по тяжёлому вооружению","subtitle":"Heavy Gunner","type":"основная",
+     "description":"Огневая поддержка отделения тяжёлым оружием.",
+     "starting_skills":["Атлетика или Выживание","Затуливание","Обыденное знание (Война, Имперская Гвардия)"],
+     "starting_talents":["Владение оружием (Лазерное или Стабберы)","Владение оружием (Низкотехнологичное)","Владение оружием (Тяжёлое)","Железная челюсть"],
+     "starting_weapons":["ракетная установка (ср.) + 5 фраг-ракет"],
+     "starting_armour":[],"starting_gear":[],
+     "wounds_base":10},
+    {"id":"rifleman","name":"Стрелок","subtitle":"Rifleman","type":"основная",
+     "description":"Основная боевая единица Имперской Гвардии.",
+     "starting_skills":["Атлетика или Выживание","Навигация (Планетарная)","Обыденное знание (Война, Имперская Гвардия)"],
+     "starting_talents":["Владение оружием (любые три, кроме Тяжёлого и Экзотического)","Шквал лазогня или Быстрая перезарядка"],
+     "starting_weapons":["лазган (хор.)"],
+     "starting_armour":[],
+     "starting_gear":["4 фраг-гранаты или 4 крак-гранаты"],
+     "wounds_base":8},
+    {"id":"commissar","name":"Комиссар","subtitle":"Commissar","type":"приписанный",
+     "description":"Политический офицер, блюститель дисциплины. Имеет право казнить на месте.",
+     "starting_skills":["Командование или Запугивание","Обыденное знание (Имперская Гвардия)","Учёное знание (Тактика Империалис)"],
+     "starting_talents":["Аура власти","Владение оружием (Болтерное)","Владение оружием (Лазерное или Стабберы)","Владение оружием (Цепное)","Ледяное сердце или Непоколебимая вера"],
+     "starting_weapons":["цепной меч (хор.)","болт-пистолет (хор.)"],
+     "starting_armour":[],"starting_gear":["комиссарская униформа"],
+     "special":["Устрашающее присутствие","Нет товарища"],
+     "wounds_base":10},
+    {"id":"ogryn","name":"Огрин","subtitle":"Ogryn","type":"приписанный","is_abhuman":True,
+     "description":"Огромный недочеловек. Верен, силён, туповат. Ударная сила и телохранитель.",
+     "bonus_characteristics":{"S":10,"T":10,"Int":-10,"Fel":-5},
+     "starting_skills":["Атлетика","Запугивание","Обыденное знание (Имперская Гвардия)","Выживание"],
+     "starting_talents":["Владение оружием (Тяжёлое)","Владение оружием (Низкотехнологичное)","Железная челюсть","Неистовство"],
+     "starting_weapons":["рипперган (хор.) или тяжёлый стаббер (ср.)"],
+     "starting_armour":[],"starting_gear":[],
+     "special":["Размер (Крупный)","Нечеловеческая Сила (×2)","Нечеловеческая Выносливость (×2)","Клаустрофобия","Неуклюжесть"],
+     "wounds_base":15},
+    {"id":"ratling","name":"Ратлинг","subtitle":"Ratling","type":"приписанный","is_abhuman":True,
+     "description":"Мелкий недочеловек-снайпер, разведчик и вор.",
+     "bonus_characteristics":{"Ag":5,"Per":5,"S":-10,"T":-5},
+     "starting_skills":["Бдительность или Скрытность","Обман","Ремесло (Повар)"],
+     "starting_talents":["Владение оружием (Лазерное, Стабберы)","Орлиный глаз","Обострённые чувства (Зрение / Обоняние / Вкус) или Чуткий сон"],
+     "starting_weapons":["длиннолаз (хор.) или снайперская винтовка (хор.) + опт. прицел"],
+     "starting_armour":[],"starting_gear":["хамелеолиновый плащ"],
+     "special":["Размер (Небольшой)"],
+     "wounds_base":5},
+    {"id":"sanctioned_psyker","name":"Санкционированный псайкер","subtitle":"Sanctioned Psyker","type":"приписанный",
+     "description":"Псайкер, прошедший Санкцию. Опасен, но бесценен.",
+     "starting_skills":["Психическое чутьё","Запретное знание (Псайкеры)","Учёное знание (Криптология)"],
+     "starting_talents":["Владение оружием (Лазерное или Стабберы)","Владение оружием (Низкотехнологичное)","Обострённые чувства (Слух)","Психосилы на 400 ОО"],
+     "starting_weapons":["посох (высш.)"],
+     "starting_armour":[],"starting_gear":["инфопланшет","психофокус"],
+     "special":["Псайкер"],
+     "wounds_base":8},
+    {"id":"ministorum_priest","name":"Священник Министорума","subtitle":"Ministorum Priest","type":"приписанный",
+     "description":"Укрепляет веру гвардейцев, ведёт в бой с огнемётом.",
+     "starting_skills":["Запретное знание (Ересь)","Обаяние или Сбор информации","Обыденное знание (Экклезиархия)","Учёное знание (Имперская вера)"],
+     "starting_talents":["Владение оружием (Зажигательное, Низкотехнологичное)","Владение оружием (Лазерное или Стабберы)","Владение оружием (Цепное)","Ненависть (любая)","Непоколебимая вера"],
+     "starting_weapons":["огнемёт (ср.)","цепной меч (ср.)"],
+     "starting_armour":[],"starting_gear":["ряса","священные писания"],
+     "wounds_base":9},
+    {"id":"enginseer","name":"Техножрец-машиновед","subtitle":"Tech-priest Enginseer","type":"приписанный",
+     "description":"Служитель Омниссии, поддерживает технику полка.",
+     "starting_skills":["Запретное знание (Адептус Механикус)","Запретное знание (Археотех) или Логика","Обыденное знание (Адептус Механикус, Техника)","Пользование техники"],
+     "starting_talents":["Владение оружием (Лазерное или Стабберы)","Владение оружием (Силовое)","Ледяное сердце или Ритуал освобождения","Механодендрит (Вспомогательный, Оружейный)"],
+     "starting_weapons":[],"starting_armour":[],
+     "starting_gear":["священные масла","инфопланшет","комбиниструмент","1 механодендрит"],
+     "special":["Имплантаты Механикус"],
+     "wounds_base":8},
+    {"id":"storm_trooper","name":"Штурмовик","subtitle":"Storm Trooper","type":"приписанный",
+     "description":"Элитный боец, специалист по зачистке.",
+     "starting_skills":["Бдительность","Запугивание или Безопасность","Уклонение или Парирование","Учёное знание (Тактика Империалис)","Скрытность"],
+     "starting_talents":["Быстрое выхватывание или Быстрая перезарядка","Владение оружием (Лазерное или Стабберы)","Владение оружием (Низкотехнологичное)","Нокдаун"],
+     "starting_weapons":["пробивной лазган (хор.)"],
+     "starting_armour":["панцирный доспех штурмовика"],
+     "starting_gear":[],
+     "special":["Нет товарища"],
+     "wounds_base":12}
+  ],
+  "home_worlds": [
+    {"id":"aristocracy","name":"Аристократия / Высокородный","cost":3,"chars":{"Fel":3,"Int":3},"skills":["Обыденное знание (Администратум)","Сбор информации","Языкознание (Высокий готический)"],"talents":["Аура власти или Связи (Аристократия)"],"wounds_mod":-1},
+    {"id":"imperial_world","name":"Имперский мир","cost":1,"chars":{"WP":3},"skills":["Обыденное знание (Империум, Имперская вера)","Языкознание (Низкий готический)"],"talents":["Ненависть (Мутанты)"],"wounds_mod":0},
+    {"id":"penitent","name":"Кающиеся грешники","cost":3,"chars":{"T":3,"WP":3},"skills":["Запугивание","Обыденное знание (Имперская вера, Экклезиархия)","Языкознание (Низкий готический)"],"talents":["Стальные нервы","Ортопраксия или Непоколебимая вера"],"wounds_mod":2},
+    {"id":"death_world","name":"Мир смерти","cost":3,"chars":{"S":3,"Ag":3},"skills":["Выживание (+10)"],"talents":["Чуткий сон","Молниеносные рефлексы или Сопротивляемость (Токсины)"],"wounds_mod":2,"special":["Неграмотные"]},
+    {"id":"fortress_world","name":"Мир-крепость","cost":3,"chars":{"BS":3,"WP":3},"skills":["Обыденное знание (Война, Империум, Имперская Гвардия)","Языкознание (Низкий готический)"],"talents":["Стальные нервы или Спринт"],"wounds_mod":0},
+    {"id":"hive_world","name":"Мир-улей","cost":3,"chars":{"Ag":3,"Per":3},"skills":["Обман","Обыденное знание (Империум)","Языкознание (Низкий готический)"],"talents":["Обострённые чувства (Слух)","Паранойя или Непримечательный"],"wounds_mod":-1},
+    {"id":"schola","name":"Схола Прогениум","cost":3,"chars":{"WP":3,"WS":3},"skills":["Обыденное знание (Война, Империум, Имперская Гвардия)","Языкознание (Высокий готический, Низкий готический) +10"],"talents":["Аура власти или Непоколебимая вера"],"wounds_mod":1},
+    {"id":"penal_colony","name":"Штрафная колония / Колония-тюрьма","cost":2,"chars":{"S":3,"T":3},"skills":["Запугивание","Языкознание (Низкий готический)"],"talents":["Связи (Преступный мир) или Уличный боец"],"wounds_mod":1,"special":["Преступник"]}
+  ],
+  "regiment": {
+    "commanders":[
+      {"id":"fixed","name":"Фиксированный","cost":1,"bonus":"Командование"},
+      {"id":"maverick","name":"Маверик","cost":2,"bonus":"Сопротивление (Страх)"},
+      {"id":"ruthless","name":"Беспощадный","cost":2,"bonus":"Запугивание"},
+      {"id":"charismatic","name":"Харизматичный","cost":2,"bonus":"Убеждение"},
+      {"id":"sly","name":"Хитрый","cost":2,"bonus":"Обман"}
+    ],
+    "types":[
+      {"id":"line_infantry","name":"Линейная пехота","cost":2},
+      {"id":"siege_infantry","name":"Осадная пехота","cost":3},
+      {"id":"light_infantry","name":"Лёгкая пехота","cost":2},
+      {"id":"recon","name":"Разведывательный полк","cost":3},
+      {"id":"drop_troops","name":"Десантный полк","cost":3},
+      {"id":"armoured","name":"Танковый полк","cost":4},
+      {"id":"artillery","name":"Артиллерийский полк","cost":3},
+      {"id":"mechanised","name":"Механизированный полк","cost":3},
+      {"id":"rough_riders","name":"Полк всадников","cost":2},
+      {"id":"super_heavy","name":"Сверхтяжёлый полк","cost":5}
+    ],
+    "training_doctrines":[
+      {"id":"close_order_drill","name":"Строй","cost":2,"bonus":"+10 к Ближнему бою в строю"},
+      {"id":"hardened_fighters","name":"Закалённые бойцы","cost":2,"bonus":"Ближний бой (Универсальное)"},
+      {"id":"snipers","name":"Снайперы","cost":2,"bonus":"Точный выстрел"},
+      {"id":"defenders_of_faith","name":"Защитники веры","cost":2,"bonus":"Сопротивление (Страх)"},
+      {"id":"die_hard","name":"Живучие","cost":2,"bonus":"Крепкое телосложение"},
+      {"id":"favored_foe","name":"Излюбленный враг","cost":2,"bonus":"+10 против типа врага"}
+    ],
+    "equipment_doctrines":[
+      {"id":"carapace_armour","name":"Карапасная броня","cost":3},
+      {"id":"hellguns","name":"Хеллганы","cost":3},
+      {"id":"plasma_guns","name":"Плазмаганы","cost":3},
+      {"id":"melta_guns","name":"Мелтаганы","cost":3},
+      {"id":"flamers","name":"Огнемёты","cost":2},
+      {"id":"vox_caster","name":"Вокс-сеть","cost":2}
+    ],
+    "drawbacks":[
+      {"id":"disgraced","name":"Дискредитированный","effect":"Штраф к репутации"},
+      {"id":"understrength","name":"Недоукомплектованный","effect":"Неполный состав"},
+      {"id":"poorly_supplied","name":"Плохо снабжаемый","effect":"Меньше боеприпасов"},
+      {"id":"hostile","name":"Враждебный","effect":"Враги среди подразделений"},
+      {"id":"cursed","name":"Проклятый","effect":"Штраф к морали"}
+    ]
+  },
+  "famous_regiments":[
+    {"id":"cadian","name":"Кадианский Ударный Корпус","home_world":"Кадия (уничтожена)","type":"Линейная пехота","commander":"Фиксированный","description":"Образец для подражания. Дисциплина и стойкость."},
+    {"id":"catachan","name":"Катачанские Джунглевые Бойцы","home_world":"Катачан","type":"Лёгкая пехота","commander":"Маверик","description":"Мастера партизанской войны."},
+    {"id":"krieg","name":"Смертный Корпус Крига","home_world":"Криг","type":"Осадная пехота","commander":"Беспощадный","description":"Фанатичная самоотверженность."},
+    {"id":"tallarn","name":"Талларнские Пустынные Рейдеры","home_world":"Талларн","type":"Разведывательный","commander":"Хитрый","description":"Манёвренная война в пустыне."},
+    {"id":"valhallan","name":"Валгалланские Ледяные Воины","home_world":"Валгалла","type":"Линейная пехота","commander":"Упрямец","description":"Стойкость в экстремальном холоде."},
+    {"id":"mordian","name":"Мордианская Железная Гвардия","home_world":"Мордиан","type":"Линейная пехота","commander":"Фиксированный","description":"Безупречная выправка, точная стрельба."},
+    {"id":"armageddon","name":"Армагеддонский Стальной Легион","home_world":"Армагеддон","type":"Механизированный","commander":"Беспощадный","description":"Механизированные пехотинцы на «Химерах»."},
+    {"id":"vostroyan","name":"Востроянские Перворождённые","home_world":"Востроя","type":"Линейная пехота","commander":"Фиксированный","description":"Элита, лучшее оружие, древние традиции."},
+    {"id":"tanith","name":"Таннитский 1-й и Единственный","home_world":"Танит (уничтожен)","type":"Лёгкая пехота","commander":"Харизматичный","description":"Полк-призрак. Скрытность и меткость."}
+  ],
+  "named_npcs":[
+    {"id":"tigo_anders","name":"Полковник Тиго Андерс","regiment":"18-й Катачанский лёгкий пехотный","rank":"Полковник","source":"imperial_guard_extra.txt",
+     "characteristics":{"WS":70,"BS":60,"S":50,"T":60,"Ag":40,"Int":50,"Per":50,"WP":60,"Fel":40},
+     "wounds":20,"armour_ap":{"head":4,"body":5,"arms":3,"legs":3},"fate_points":2,
+     "talents":["Тактика","Боевая командировка","Железная воля","Непоколебимый","Опасный боец"],
+     "gear":["Бионические конечности","штурмовая винтовка","силовая броня"],
+     "description":"Ветеран старше 60 лет. Недоверчив к вышестоящим. Прозвище «Железная рука»."},
+    {"id":"al_rahem","name":"Капитан Аль-Рахем","regiment":"3-й Талларнский пустынный («Тигры пустыни»)","rank":"Капитан","source":"imperial_guard_extra.txt",
+     "characteristics":{"WS":50,"BS":50,"S":40,"T":40,"Ag":50,"Int":50,"Per":50,"WP":60,"Fel":40},
+     "wounds":10,"armour_ap":{"head":3,"body":3,"arms":2,"legs":2},"fate_points":1,
+     "talents":["Тактик","Холодный расчёт","Стратегическое мышление","Хладнокровие"],
+     "gear":["Штурмовая винтовка","тактический шлем","полевой планшет"],
+     "description":"Хладнокровный тактик. Ведёт подразделения в тщательно спланированных атаках."},
+    {"id":"ibram_gaunt","name":"Комиссар Ибрам Гаунт","regiment":"Танитский 1-й («Первый и единственный»)","rank":"Полковник-комиссар","source":"imperial_guard_extra.txt",
+     "characteristics":{"WS":60,"BS":50,"S":40,"T":50,"Ag":50,"Int":60,"Per":60,"WP":70,"Fel":50},
+     "wounds":15,"armour_ap":{"head":3,"body":4,"arms":2,"legs":2},"fate_points":3,
+     "talents":["Военная стратегия","Комиссарская решимость","Лидерство","Интуиция","Выживание"],
+     "gear":["Болтер","силовой кулак комиссара","значок комиссара","боевая броня"],
+     "description":"Один из немногих комиссаров, официально возглавивших полк. Полк «Гаунтов-призраков»."}
+  ],
+  "relations":{
+    "allies":["Адептус Механикус","Адептус Министорум","Адептус Астра Телепатика","Имперский Флот"],
+    "watchers":["Инквизиция"],
+    "enemies":["Орки","Тёмные эльдары","Хаос","Тираниды","Тау","Северов доминат"]
+  },
+  "locations":["Каликсида (сектор)","Внешний фронт","Порт-Странствие","Поступь","Култ","Ганф Магна","Циск","Синофия","Циклопея","Кальф","Авитохол"]
+}
+
+# === 2. services/imperial_guard.py ===
+IG_SERVICE = '''"""services/imperial_guard.py — сервис фракции Имперская Гвардия."""
+from __future__ import annotations
+import json
+from pathlib import Path
+
+_DATA = None
+
+def _load() -> dict:
+    global _DATA
+    if _DATA is None:
+        p = Path(__file__).resolve().parent.parent / "data" / "imperial_guard.json"
+        _DATA = json.loads(p.read_text(encoding="utf-8"))
+    return _DATA
+
+
+def get_archetypes() -> list:
+    return _load().get("archetypes", [])
+
+def get_archetypes_by_type(t: str) -> list:
+    return [a for a in get_archetypes() if a.get("type") == t]
+
+def get_home_worlds() -> list:
+    return _load().get("home_worlds", [])
+
+def get_regiment_options() -> dict:
+    return _load().get("regiment", {})
+
+def get_famous_regiments() -> list:
+    return _load().get("famous_regiments", [])
+
+def get_named_npcs() -> list:
+    return _load().get("named_npcs", [])
+
+def get_archetype(arch_id: str):
+    for a in get_archetypes():
+        if a["id"] == arch_id:
+            return a
+    return None
+
+def get_faction_meta() -> dict:
+    d = _load()
+    return {
+        "id": d["faction_id"],
+        "name": d["name"],
+        "full_name": d.get("full_name", d["name"]),
+        "description": d.get("description", ""),
+        "motto": d.get("motto", ""),
+    }
+'''
+
+# === Создание ===
+created = []
+data_path = ROOT / "data" / "imperial_guard.json"
+svc_path = ROOT / "services" / "imperial_guard.py"
+
+data_path.write_text(json.dumps(IG_DATA, ensure_ascii=False, indent=2), encoding="utf-8")
+created.append(str(data_path.relative_to(ROOT)))
+
+svc_path.write_text(IG_SERVICE, encoding="utf-8")
+created.append(str(svc_path.relative_to(ROOT)))
+
+print("=== SETUP IMPERIAL GUARD ===")
+for c in created:
+    print("  [CREATED] " + c)
+print("DONE")

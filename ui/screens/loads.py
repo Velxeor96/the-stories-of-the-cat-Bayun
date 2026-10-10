@@ -83,11 +83,11 @@ def render() -> None:
         c1, c2, c3 = st.columns([2, 1, 1])
         with c2:
             if st.button("Играть", key="loads_play_" + str(name),
-                         use_container_width=True):
+                         width="stretch"):
                 _play(login, name)
         with c3:
             if st.button("Удалить", key="loads_del_" + str(name),
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state["_pending_del"] = str(name)
                 st.rerun()
 
@@ -140,7 +140,7 @@ def _dialog_delete(login, name):
     st.write("Удалить персонажа «" + str(name) + "»? Действие необратимо.")
     c1, c2 = st.columns(2)
     if c1.button("Удалить", type="primary", key="dlg_del_yes",
-                 use_container_width=True):
+                 width="stretch"):
         try:
             from persistence.characters import delete_character
             delete_character(login, name)
@@ -151,6 +151,6 @@ def _dialog_delete(login, name):
             st.session_state.pop("active_character", None)
         st.session_state.pop("_pending_del", None)
         st.rerun()
-    if c2.button("Отмена", key="dlg_del_no", use_container_width=True):
+    if c2.button("Отмена", key="dlg_del_no", width="stretch"):
         st.session_state.pop("_pending_del", None)
         st.rerun()

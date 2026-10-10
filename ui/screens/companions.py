@@ -31,7 +31,7 @@ def render() -> None:
                 unsafe_allow_html=True)
     c1, c2 = st.columns([3, 1])
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 
@@ -76,7 +76,7 @@ def render() -> None:
                             + " · " + p["weapon"])
             with c2:
                 if st.button("Взять", key="cmp_add_" + p["name"],
-                             use_container_width=True):
+                             width="stretch"):
                     add_companion(char, p["name"], p["role"],
                                   p["hp"], p["weapon"])
                     save_character(login, char_name, char)

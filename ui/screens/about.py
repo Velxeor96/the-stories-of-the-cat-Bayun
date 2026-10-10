@@ -97,6 +97,6 @@ def render() -> None:
     st.markdown("<br>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        if st.button("←  Назад", use_container_width=True, key="about_back"):
+        if st.button("←  Назад", width="stretch", key="about_back"):
             st.session_state.screen = "splash"
             st.rerun()

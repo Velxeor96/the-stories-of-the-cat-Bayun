@@ -182,7 +182,7 @@ def render():
                                  placeholder=" ")
         st.markdown("<div class='auth-divider'>❦ ❦ ❦</div>",
                     unsafe_allow_html=True)
-        if st.button("▶  Войти", use_container_width=True,
+        if st.button("▶  Войти", width="stretch",
                      type="primary", key="btn_do_login"):
             _do_login(login_name, password)
 
@@ -194,7 +194,7 @@ def render():
                                   placeholder=" ")
         st.markdown("<div class='auth-divider'>❦ ❦ ❦</div>",
                     unsafe_allow_html=True)
-        if st.button("✎  Создать аккаунт", use_container_width=True,
+        if st.button("✎  Создать аккаунт", width="stretch",
                      type="primary", key="btn_do_register"):
             _do_register(login_name, password, password2)
 

@@ -287,12 +287,12 @@ def render():
     st.markdown("---")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("Персонаж", use_container_width=True,
+        if st.button("Персонаж", width="stretch",
                      key="cn_to_char"):
             st.session_state.screen = "character"
             st.rerun()
     with c2:
-        if st.button("В игру", use_container_width=True,
+        if st.button("В игру", width="stretch",
                      type="primary", key="cn_to_game"):
             st.session_state.screen = "game"
             st.rerun()

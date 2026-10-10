@@ -1,273 +1,178 @@
-# 📋 HANDOFF: WARHAMMER 40K RPG PLATFORM
+# 📋 HANDOFF — WH40K RPG Project (v3)
 
-**Дата:** 2026-09-20 (утро, после ночной сессии)
-**Версия:** 1.4
-**Статус:** Спринт 1 закрыт 7/8. Баг иконок локализован, фикс в работе.
-
----
-
-## 🎯 ВИДЕНИЕ
-
-**Что строим:** Платформа для текстовых RPG с мульти-ИИ Мастером.
-**Пилот:** Warhammer 40,000 Rogue Trader.
-**Принцип:** максимум логики на Python, нейронка — только Мастер.
+**Дата:** 2026-10-11
+**Версия:** 2.0.0
+**Последний коммит:** `682ff40` (локально; push — по решению)
+**GitHub:** https://github.com/Velxeor96/the-stories-of-the-cat-Bayun.git
+**Путь:** `C:\Users\79109\Desktop\Wh40K`
 
 ---
 
-## 🏗️ АРХИТЕКТУРА
+## 🎯 ТЕКУЩЕЕ СОСТОЯНИЕ
 
-**Главный принцип:** состояние, правила, броски, эффекты — в Python.
-LLM только парсит фразу (Analyst), пишет нарратив (Master),
-и проверяет спорные случаи модерации.
+**Проект прошёл первый большой аудит.** PATCH_88 → PATCH_91 закрыли
+критичные баги, пополнили данные субфракций, починили тесты,
+вычистили ключи из кода.
 
-**Схема хода:**
-Игрок → Moderator.check() → [regex ALLOW/RESHAPE/REJECT]
-↓ (если ALLOW)
-Analyst.parse() → ParsedCommand (JSON)
-↓
-roll_engine.check() → RollResult (Python, не LLM)
-↓
-trigger_engine.fire() → эффекты
-↓
-Master.narrate() → текст (единственный LLM-вызов)
-↓
-apply_turn_effects() → автоначисление XP/ран/репутации
-↓
-ensure_action_variants() → гарантированные варианты
+**Тесты:** `pytest tests/` → **45 passed**.
+
+---
+
+## 🚦 ЧТО СДЕЛАНО (аудит v1)
+
+### PATCH_88 — P0-баги + субфракции
+
+- `ui/screens/psy.py` — обёртка `render_entry()` вместо падавшего `render()`
+- `state_applier.apply_changes()` — убран двойной подсчёт xp/wounds/fate
+- `build_character()` — принимает `archetype_id` (алиас `career_id`)
+- `services/necrons.py` — убран дубль функций, добавлен `get_components`
+- **Киты 11 субфракций**: асуряни, арлекин, экзодит, chaos_marine,
+  dark_mechanicum, cultist, freebooter, fire_warrior, kabalite,
+  necron_lord, magus
+- `services/faction_starting.py` — fallback бонусов через сервис субфракции
+- Тесты перенесены из `_reference_from_old/tests/`
+
+### PATCH_89 — чистка тестов
+
+- `classify_exception()` — fatal ошибки больше не переклассифицируются
+- `LLMClient.__init__` — валидация параметров
+- Удалены 6 устаревших тестов (`core.death`, `core.session`,
+  `core.state`, `core.trigger_engine` — модулей давно нет)
+- Удалён `test_function_calling.py` (был hardcoded ключ)
+- Оставлены 4 рабочих тест-файла + `fakes.py`
+
+### PATCH_90 — scraper без ключа + mass cleanup
+
+- `scripts/scraper.py` — убран hardcoded GigaChat ключ
+- `use_container_width=True` → `width="stretch"` (30 файлов)
+- `_reference_from_old/` → `_trash_pre_PATCH_90/` (в `.gitignore`)
+- `.gitignore` + `dump_*.txt`, `_trash_*/`, `hf_cache_part*.zip`
+
+### PATCH_91 — финал аудита
+
+- `scripts/patch.py` — вычищен ключ из финальной версии
+- `VERSION` → 2.0.0
+- `CHANGELOG.md` — новая шапка 2.0.0 с описанием PATCH_88-91
+- `scripts/archive/` — одноразовые скрипты в архив
+- HANDOFF → v3
+
+---
+
+## 📊 АУДИТ: СТАТУС ПРОХОДОВ
+
+- ✅ **Проход 0** (инвентаризация) — завершён
+- ✅ **Проход 1** (анализ кода) — завершён
+- ⏳ **Проход 2** (баги, костыли) — не начат
+- ⏳ **Проход 3** (унификация, PEP 8) — не начат
+- ⏳ **Проход 4** (доп. патчи) — не начат
+
+---
+
+## 🚩 ЧТО ОСТАЛОСЬ (по приоритетам)
+
+### P1 — логика
+
+1. **`ui/screens/psy.py::_fire`** пишет в `st.session_state["chat_pending"]`,
+   а `game.py` читает `_pending_chat`. Пси-силы применяются, но Мастеру
+   сообщение не уходит. Имена ключей разошлись.
+2. **`services/master_actions.py`** — старая ветка API, несовместима с
+   `state_applier`. Мёртвый код.
+3. **`services/character_creation.py`** — мертвая ветка для некронов/тиранидов.
+
+### P2 — стиль и предупреждения
+
+4. **`services/progression.py`** vs **`services/talents_registry.py`** —
+   дублируют `buy_talent`.
+5. **`services/master.py` / `analyst.py` / `moderator.py`** — три почти
+   одинаковых класса с `_do_request`, `_extract_text`, `LLMClient`.
+6. **`print()` вместо `logging`** — по всему коду.
+7. **`services/psychic_*.py`** — данные в коде (6 файлов по 200-500 строк),
+   кандидаты на вынос в `data/psychic/*.json`.
+8. **`_safe_display` в character_creation** глушит все ошибки — если
+   data_loader сломан, никто не заметит.
+9. **`scripts/dump_full.py`** — мусорные `any()` в фильтрах.
+
+### P3 — косметика
+
+10. **`services/tutorial_data.py`** (994 строки) — `chr(10)` вместо `\n`.
+11. **`ui/theme.py`** — два похожих API (`render_theme_selector` и
+    `render_theme_strip`).
+12. **`services/combat.py`** — `import re` внутри метода `attack`.
+
+---
+
+## 📁 СТРУКТУРА ПРОЕКТА
+Wh40K/
+├── app.py — HARD ROUTER, SCREENS
+├── config.yaml — провайдеры и роли
+├── VERSION — 2.0.0
+├── CHANGELOG.md — история
+├── HANDOFF.md — этот файл (v3)
+├── core/ — конфиг, LLM, errors, roll_engine
+├── services/ — вся игровая логика (~50 файлов)
+├── ui/
+│ ├── screens/ — 30+ экранов
+│ ├── theme.py — 16 тем
+│ ├── roll_card.py — карточка броска
+│ ├── assets.py — сигилы фракций
+│ └── loading_screen.py — INITIATIO
+├── persistence/ — аккаунты, персонажи, чаты, Gist
+├── prompts/ — master_core, analyst, moderator
+├── data/ — RAG-лор фракций + users/
+├── rules/ — wh40k_triggers.json
+├── tests/ — 4 рабочих файла (45 passed)
+├── scripts/ — patch.py + утилиты
+│ └── archive/ — одноразовые скрипты
+├── static/ — сертификаты GigaChat + сигилы
+├── _trash_pre_PATCH_90/ — legacy (в .gitignore, удалить)
+└── .streamlit/secrets.toml — секреты (не коммитить)
 
 text
 
-**Мультимодельность (КРИТИЧНО для миграции):**
-- В `config.yaml` роли: `analyst`, `master`, `moderator`, `rag`.
-- `core/config.py` → `config.role_model("master")` отдаёт `.provider` и `.id`.
-- `core/llm_client.py` — универсальный, работает с любым OpenAI-совместимым API.
-- Смена провайдера = одна строка в `config.yaml`.
+---
 
-**Что уже переведено на Python (не LLM):**
-- Все броски (`roll_engine.check`)
-- Триггеры и эффекты (`trigger_engine`)
-- Смерть, статусы (`death`)
-- Модерация regex-слоем (до LLM)
-- Варианты действий (`variants.ensure_action_variants`)
-- Профиль персонажа в контекст (`orchestrator`)
-- RAG-контекст ChromaDB
+## 🛠 КАК ЗАПУСКАТЬ ПАТЧИ
 
-**Что на LLM (минимизировано):**
-- Analyst: фраза → JSON
-- Master: нарратив
-- Moderator LLM-слой: только спорные случаи
+1. `notepad scripts\patch.py`
+2. Ctrl+A, Ctrl+V — новый код патча
+3. Ctrl+S, закрыть
+4. `python scripts\patch.py`
+5. Проверить `[INFO]` строки, запустить проверки
+6. `git add -A && git commit -m "PATCH_XX: ..."`
+7. `git log --oneline -3`
+8. Push — по решению пользователя
+
+**BACKUP:** каждый файл бэкапится как `<file>.bak_pre_PATCH_XX`.
+Откат: `copy file.py.bak_pre_PATCH_XX file.py`.
 
 ---
 
-## 🖥️ СТЕК
+## 🔑 БЕЗОПАСНОСТЬ
 
-- Python 3.13, Streamlit 1.63
-- ChromaDB (4624 чанка), sentence-transformers (multilingual-e5-small)
-- openai SDK, torch 2.6+cu124 (GTX 1660)
-
-**Путь:** `C:\Users\79109\Desktop\my_game\`
-**GitHub:** https://github.com/Velxeor96/the-stories-of-the-cat-Bayun
-**Streamlit:** https://the-stories-of-the-cat-bayun-rpg.streamlit.app
-
-**Провайдер сейчас:** KodikRouter / deepseek-v4-flash-latest
-**Провайдер для миграции:** GigaChat-2-Pro (ключ уже есть в `.streamlit/secrets.toml`)
+- **GigaChat ключ** — только в `.streamlit/secrets.toml` + env.
+  В `scripts/scraper.py` hardcoded ключ **убран** в PATCH_90.
+- **Файл `test_function_calling.py`** удалён — содержал ключ.
+- **`_trash_pre_PATCH_90/`** — в `.gitignore`, удалить руками.
+- **`.streamlit/secrets.toml`** — в `.gitignore`.
+- **Gist ID:** `372b7a659c7ec79df1ea85a7e56f5d17`.
+- **Токен GitHub PAT** — `token.txt` в корне (в `.gitignore`).
+  Проверить: `git log --all --oneline -- token.txt` → должно быть пусто.
 
 ---
 
-## 📁 СТРУКТУРА
-my_game/
-├── core/
-│ ├── state.py, roll_engine.py, trigger_engine.py, death.py
-│ ├── errors.py, llm_client.py, config.py
-│ ├── auth.py (регистрация/вход)
-│ ├── analyst.py, master.py (max_tokens=700), moderator.py
-│ ├── orchestrator.py (принимает extra_context)
-│ ├── variants.py, session.py
-├── ui_themes.py (22 темы, шрифты = Georgia/Consolas)
-├── ui_render.py (CSS, _inject_ghost_kill отключён патчем 44)
-├── ui_state.py (StateAdapter + эффекты)
-├── app.py (166378 символов, восстановлен из .bak38)
-├── rules/wh40k_triggers.json
-├── prompts/master_core.txt, moderator.txt, analyst.txt
-├── scripts/dev.py, scripts/patch.py
-├── tests/ (44 passed)
-├── characters/Костопевец.json
-├── data/accounts/, data/users/
-├── config.yaml
-├── .streamlit/secrets.toml (KODIK_API_KEY, GIGACHAT_API_KEY)
-├── HANDOFF.md ← ЭТОТ ФАЙЛ
+## 🚦 С ЧЕГО НАЧАТЬ НОВЫЙ ЧАТ
 
-text
+**Мы прошли первый аудит (PATCH_88-91).**
+
+> Продолжаем WH40K RPG.
+>
+> **Статус:** аудит v1 завершён, 45 passed, VERSION 2.0.0.
+> **Дальше:** Проход 2 (поиск костылей) или точечные P1-фиксы (см. HANDOFF v3).
+>
+> **Прикладываю:** этот HANDOFF.
+
+**Первый P1-патч:** `ui/screens/psy.py` → `chat_pending` vs `_pending_chat`.
 
 ---
 
-## ✅ ЧТО РАБОТАЕТ
-
-- Ядро (state, броски, триггеры, смерть, LLM-клиент, ошибки).
-- Analyst / Master / Moderator / Orchestrator / Session.
-- Auth (регистрация, вход, изоляция данных).
-- Splash + Onboarding (тексты читаемы).
-- Wizard персонажа, пол строго 2 варианта.
-- 22 темы, DEFAULT_THEME = inquisition (чёрно-красная).
-- PRO-эффекты: XP, порча, деньги, повышение ранга.
-- RAG (ChromaDB) + профиль персонажа в extra_context.
-- Карточки предметов «ПОЛУЧЕНО В ИНВЕНТАРЬ».
-- Fallback мастера (logs/errors.log).
-- 44 pytest-тестов, 0 warnings.
-- Баланс KodikRouter: 498,79 ₽ (потрачено ~1,21 ₽).
-
----
-
-## 🔴 ГЛАВНЫЙ БАГ — ИКОНКИ EXPANDER
-
-**Симптом:** Заголовки expander выглядят как «arrИво ...» поверх текста.
-Например: `arrИво exactly` вместо `Что такое НРИ?`.
-
-**ПРИЧИНА НАЙДЕНА:** патч 38 удалил **все** `@import url("https://fonts.googleapis.com/...")`
-из `ui_render.py`. Вместе с ними убрался `@import` для **Material Symbols**,
-которые Streamlit использует для иконок expander.
-
-Streamlit рендерит иконку expander как `<span class="material-symbols-rounded">keyboard_arrow_right</span>`.
-Если шрифт Material Symbols не загружен, браузер показывает **буквы лигатуры**:
-«keyboard_arrow_right» → «arrИво».
-
-**ФИКС (готов к применению):**
-
-В `ui_render.py` в функции `render_theme()` **вернуть** `@import` **только** для Material Symbols:
-
-```python
-def render_theme(theme_key: str) -> None:
-    # ВЕРНУТЬ ИКОНКИ Streamlit (Material Symbols)
-    st.markdown(
-        '<style>@import url("https://fonts.googleapis.com/css2?'
-        'family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");'
-        '</style>',
-        unsafe_allow_html=True,
-    )
-    # ... остальной код
-Если Google Fonts блокируется из РФ — скачать woff2 локально:
-
-text
-static/fonts/MaterialSymbolsRounded.woff2
-и подложить через @font-face:
-
-css
-@font-face {
-    font-family: 'Material Symbols Rounded';
-    src: url('/app/static/fonts/MaterialSymbolsRounded.woff2') format('woff2');
-}
-Или в крайнем случае: заменить все st.expander в app.py на st.container(border=True)
-с обычным <h4> — иконки не нужны, ghost исчезнет как класс.
-
-Что уже сделано в попытках:
-
-Патчи 39-42 — CSS override, не помогло.
-
-Патч 44 — отключён наш _inject_ghost_kill(), стало видно чистую причину.
-
-Патч 43 — упал (не записался), но диагностика сработала.
-
-Все бэкапы целы.
-
-Проверить в начале новой сессии:
-
-findstr /N "material-symbols" ui_render.py — есть ли в CSS.
-
-findstr /N "@import" ui_render.py — есть ли хоть один @import.
-
-findstr /N "fonts.googleapis" ui_render.py — есть ли упоминания.
-
-🎯 ПЛАН РАБОТЫ (в порядке приоритета)
-1. Фикс иконок (30 минут)
-Вернуть @import Material Symbols в ui_render.py. Прогнать dev.py run, Ctrl+F5, скрин.
-
-Если не сработает — заменить st.expander на st.container(border=True) в:
-
-render_onboarding (app.py)
-
-_render_auth_gate (app.py, уже сделано патчем 40)
-
-render_character_sidebar (там expander'ы ПРОВЕРКИ / ДЕЙСТВИЯ / ПОМОЩЬ)
-
-2. Миграция на GigaChat (20 минут)
-Один патч:
-
-config.yaml: у ролей analyst, master, moderator → provider: gigachat, model: GigaChat-2-Pro.
-
-core/config.py: убедиться, что провайдер gigachat есть.
-
-API-ключ уже в .streamlit/secrets.toml → GIGACHAT_API_KEY.
-
-Для будущей миграции обратно: сделать в config.yaml параметр default_provider,
-чтобы переключаться одной строкой.
-
-3. Тестовый модуль (1-2 часа)
-core/tutorial.py + prompts/tutorial.txt.
-
-Сценарий:
-
-Игрок просыпается на корабле, осматривается.
-
-Мастер говорит: «Брось проверку Внимания» (проверяет броски).
-
-Игрок находит предмет, берёт его (проверяет карточку ПОЛУЧЕНО).
-
-Разговор с NPC (проверяет talk).
-
-Переход в другую локацию (проверяет location=).
-
-Финальный экран: «Ты прошёл обучение».
-
-В конце session.tutorial_mode = False, обычная игра.
-
-4. Механики — что допиливать?
-Пользователь должен уточнить. Кандидаты:
-
-Начисление урона/порчи в разных бросках.
-
-Трата денег (пока не работает).
-
-Расход предметов (стимулянт, аптечка уже частично).
-
-Обновление корабля.
-
-Изменение репутации.
-
-5. Картинки (когда механики стабильны)
-Stable Diffusion локально (GTX 1660 / 6GB — SD 1.5, SDXL Turbo).
-
-Или Kandinsky 3.1 (Сбер).
-
-📝 ФОРМАТ РАБОТЫ
-Правила:
-
-Новый файл или правка → только через scripts/patch.py.
-
-notepad scripts\patch.py, Ctrl+A, Ctrl+V, Ctrl+S, закрыть.
-
-python scripts\patch.py
-
-python scripts\dev.py check — должно быть 44 passed.
-
-Не переходить дальше, пока не подтверждено.
-
-Push — только по команде «пушим».
-
-Счётчик чата в конце каждой реплики.
-
-Не вставлять ключи в чат.
-
-После патча CSS — ЗАКРЫТЬ Streamlit (Ctrl+C) и запустить заново,
-потом в браузере Ctrl+F5. Иначе CSS из кэша.
-
-⚠️ Уроки:
-
-re.sub с \s+ склеивает код через переводы строк → использовать [ \t]+.
-
-Удаление @import googleapis.com ломает Material Symbols — иконки
-превращаются в буквы. Никогда не удалять этот @import целиком.
-
-* { } селекторы в CSS ломают Material Symbols. Не использовать.
-
-st.expander в app.py требует живых Material Symbols. Если шрифт
-не загружен — будут буквы вместо иконок.
+*Handoff v3 создан 2026-10-11. Проект стабилен, аудит закрыт.*

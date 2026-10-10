@@ -52,7 +52,7 @@ def render() -> None:
         if s.get("description"):
             st.caption(str(s.get("description")))
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 
@@ -72,7 +72,7 @@ def render() -> None:
     st.markdown("### Действия")
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("🌀 Варп-прыжок", use_container_width=True):
+        if st.button("🌀 Варп-прыжок", width="stretch"):
             res = warp_travel(char, distance_ly=5)
             if not res.get("ok"):
                 st.error(res.get("reason", "ошибка"))
@@ -81,7 +81,7 @@ def render() -> None:
                 save_character(login, char_name, char)
                 st.rerun()
     with c2:
-        if st.button("🔧 Ремонт (5 припасов)", use_container_width=True):
+        if st.button("🔧 Ремонт (5 припасов)", width="stretch"):
             res = repair(char, 20)
             if not res.get("ok"):
                 st.error(res.get("reason", "ошибка"))
@@ -90,7 +90,7 @@ def render() -> None:
                 save_character(login, char_name, char)
                 st.rerun()
     with c3:
-        if st.button("📦 Реквизиция (10 припасов)", use_container_width=True):
+        if st.button("📦 Реквизиция (10 припасов)", width="stretch"):
             res = requisition(char)
             if not res.get("ok"):
                 st.error(res.get("reason", "ошибка"))

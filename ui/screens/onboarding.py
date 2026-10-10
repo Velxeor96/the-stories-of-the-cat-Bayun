@@ -85,12 +85,12 @@ def render() -> None:
 
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        if st.button("Начать  →", use_container_width=True,
+        if st.button("Начать  →", width="stretch",
                      type="primary", key="ob_start"):
             _mark_seen(login)
             st.session_state.screen = "splash"
             st.rerun()
-        if st.button("Пропустить", use_container_width=True, key="ob_skip"):
+        if st.button("Пропустить", width="stretch", key="ob_skip"):
             _mark_seen(login)
             st.session_state.screen = "splash"
             st.rerun()

@@ -29,7 +29,7 @@ def render() -> None:
                 unsafe_allow_html=True)
     c1, c2 = st.columns([3, 1])
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 
@@ -48,11 +48,11 @@ def render() -> None:
     st.markdown("---")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("🔄 Другой сон", use_container_width=True):
+        if st.button("🔄 Другой сон", width="stretch"):
             st.session_state.dream_text = get_dream(char)
             st.rerun()
     with c2:
-        if st.button("💾 Записать в дневник", use_container_width=True):
+        if st.button("💾 Записать в дневник", width="stretch"):
             try:
                 from services.journal import add_entry
                 add_entry(char, "Сон: " + st.session_state.dream_text,

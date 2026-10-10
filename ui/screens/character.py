@@ -479,7 +479,7 @@ def render():
                 data=export_character_json(char),
                 file_name=str(char.get("name", "hero")) + ".json",
                 mime="application/json",
-                use_container_width=True,
+                width="stretch",
                 key="ch_dl",
             )
         with c2:
@@ -587,20 +587,21 @@ def render():
     except Exception as _e:
         print("[character] inventory fail: " + type(_e).__name__)
 
-    # --- Кнопки ---    st.markdown("---")
+    # --- Кнопки ---
+    st.markdown("---")
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("В игру", use_container_width=True,
+        if st.button("В игру", width="stretch",
                      type="primary", key="ch_to_game"):
             st.session_state.screen = "game"
             st.rerun()
     with c2:
-        if st.button("Хроники", use_container_width=True,
+        if st.button("Хроники", width="stretch",
                      key="ch_to_chronicles"):
             st.session_state.screen = "chronicles"
             st.rerun()
     with c3:
-        if st.button("В главное меню", use_container_width=True,
+        if st.button("В главное меню", width="stretch",
                      key="ch_to_menu"):
             st.session_state.screen = "main_menu"
             st.rerun()

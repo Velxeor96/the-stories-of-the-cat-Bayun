@@ -87,7 +87,7 @@ def render():
         )
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            if st.button("Продолжить", use_container_width=True,
+            if st.button("Продолжить", width="stretch",
                          type="primary", key="loading_continue"):
                 _finish()
         return

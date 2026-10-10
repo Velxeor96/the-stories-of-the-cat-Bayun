@@ -24,6 +24,10 @@ class LLMRetryableError(LLMError):
 
 def classify_exception(exc: BaseException) -> LLMError:
     """Преобразовать любое исключение в LLMError."""
+    # PATCH_90: уже наша ошибка — не переклассифицируем.
+    # Иначе LLMFatalError(401) превращался бы в LLMRetryableError.
+    if isinstance(exc, LLMError):
+        return exc
     msg = str(exc)
     status = getattr(exc, "status_code", None) or getattr(exc, "http_status", None)
 

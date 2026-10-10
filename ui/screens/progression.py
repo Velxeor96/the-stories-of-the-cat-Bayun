@@ -62,7 +62,7 @@ def _render_characteristics_tab(char: dict, login: str, char_name: str) -> None:
             st.caption("Стоимость: " + cost_str + " XP")
         with c3:
             if lvl < 3 and st.button("↑", key="adv_" + code,
-                                     use_container_width=True):
+                                     width="stretch"):
                 try:
                     cost = int(cost_str)
                 except Exception:
@@ -117,7 +117,7 @@ def _render_talents_tab(char: dict, login: str, char_name: str) -> None:
                     st.markdown("**" + str(t["cost"]) + " XP**")
                     if st.button("Изучить", key="talent_buy_" + t["id"],
                                  type="primary",
-                                 use_container_width=True):
+                                 width="stretch"):
                         ok, msg = buy_talent(char, t["id"])
                         if ok:
                             save_character(login, char_name, char)
@@ -172,7 +172,7 @@ def render() -> None:
         if nxt > total:
             st.progress(min(100, total * 100 // max(1, nxt)) / 100.0)
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 

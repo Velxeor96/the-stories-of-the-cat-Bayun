@@ -104,7 +104,7 @@ def _stat_dialog(key):
     st.markdown("### " + info["name"])
     st.caption(info["short"])
     st.markdown(info["body"])
-    if st.button("Закрыть", use_container_width=True, key="dlg_close"):
+    if st.button("Закрыть", width="stretch", key="dlg_close"):
         st.session_state.tut_stat_dialog = None
         st.rerun()
 
@@ -135,23 +135,23 @@ def _render_intro():
     is_last = page >= len(pages) - 1
     c1, c2, c3 = st.columns(3)
     with c1:
-        if st.button("Назад", use_container_width=True, key="intro_back",
+        if st.button("Назад", width="stretch", key="intro_back",
                      disabled=(page == 0)):
             st.session_state.tut_intro_page = page - 1
             st.rerun()
     with c2:
         if is_last:
-            if st.button("Выбрать персонажа", use_container_width=True,
+            if st.button("Выбрать персонажа", width="stretch",
                          type="primary", key="intro_done"):
                 st.session_state.tut_intro_page = None
                 st.rerun()
         else:
-            if st.button("Далее", use_container_width=True, type="primary",
+            if st.button("Далее", width="stretch", type="primary",
                          key="intro_next"):
                 st.session_state.tut_intro_page = page + 1
                 st.rerun()
     with c3:
-        if st.button("Пропустить", use_container_width=True, key="intro_skip"):
+        if st.button("Пропустить", width="stretch", key="intro_skip"):
             st.session_state.tut_intro_page = None
             st.rerun()
 
@@ -177,7 +177,7 @@ def _render_character_picker():
     st.markdown("<br>", unsafe_allow_html=True)
     cc1, cc2, cc3 = st.columns([1, 2, 1])
     with cc2:
-        if st.button("Пропустить обучение", use_container_width=True,
+        if st.button("Пропустить обучение", width="stretch",
                      key="btn_skip_tut"):
             _finish("create")
 
@@ -198,7 +198,7 @@ def _render_char_card(cid, btn_label):
         for i, key in enumerate(row):
             v = char["characteristics"].get(key, "?")
             with cols[i]:
-                if st.button(key + " · " + str(v), use_container_width=True,
+                if st.button(key + " · " + str(v), width="stretch",
                              key="stat_" + cid + "_" + key):
                     st.session_state.tut_stat_dialog = key
                     st.rerun()
@@ -217,7 +217,7 @@ def _render_char_card(cid, btn_label):
     )
     st.markdown(res_html, unsafe_allow_html=True)
     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-    if st.button(btn_label, use_container_width=True, type="primary",
+    if st.button(btn_label, width="stretch", type="primary",
                  key="btn_" + cid):
         _start(cid)
 
@@ -396,7 +396,7 @@ def _render_combat_ui(state):
             for entry in c["log"][-14:]:
                 _render_combat_log_entry(entry)
     if c["over"]:
-        if st.button("Продолжить", use_container_width=True, type="primary",
+        if st.button("Продолжить", width="stretch", type="primary",
                      key="cmb_resolve"):
             engine = _get_engine()
             engine.combat_resolve(state)
@@ -404,7 +404,7 @@ def _render_combat_ui(state):
             st.rerun()
         return
     if c["turn"] == "enemy":
-        if st.button("Ход врага", use_container_width=True, type="primary",
+        if st.button("Ход врага", width="stretch", type="primary",
                      key="cmb_enemy"):
             engine = _get_engine()
             engine.combat_enemy_turn(state)
@@ -420,7 +420,7 @@ def _render_combat_ui(state):
         for w in weapons:
             if w["type"] == "ranged":
                 label = "Выстрел: " + w["name"] + " (" + w["dmg"] + ")"
-                if st.button(label, use_container_width=True,
+                if st.button(label, width="stretch",
                              key="act_ranged_" + w["id"]):
                     engine = _get_engine()
                     engine.combat_player_action(
@@ -429,7 +429,7 @@ def _render_combat_ui(state):
                     st.rerun()
         if "warp_bolt" in char.get("tutorial_abilities", []):
             if st.button("Варп-выстрел (психосила, WP)",
-                         use_container_width=True, key="act_psy"):
+                         width="stretch", key="act_psy"):
                 engine = _get_engine()
                 engine.combat_player_action(state, {"kind": "psy_bolt"})
                 st.session_state.tutorial_state = state
@@ -438,7 +438,7 @@ def _render_combat_ui(state):
         for w in weapons:
             if w["type"] == "melee":
                 label = "Удар: " + w["name"] + " (" + w["dmg"] + ")"
-                if st.button(label, use_container_width=True,
+                if st.button(label, width="stretch",
                              key="act_melee_" + w["id"]):
                     engine = _get_engine()
                     engine.combat_player_action(
@@ -446,13 +446,13 @@ def _render_combat_ui(state):
                     st.session_state.tutorial_state = state
                     st.rerun()
         if st.button("Граната (2d10)",
-                     use_container_width=True, key="act_grenade"):
+                     width="stretch", key="act_grenade"):
             engine = _get_engine()
             engine.combat_player_action(state, {"kind": "grenade"})
             st.session_state.tutorial_state = state
             st.rerun()
         if st.button("Прицелиться (+20)",
-                     use_container_width=True, key="act_aim"):
+                     width="stretch", key="act_aim"):
             engine = _get_engine()
             engine.combat_player_action(state, {"kind": "aim"})
             st.session_state.tutorial_state = state
@@ -506,7 +506,7 @@ def render():
         except Exception as e:
             print("[tutorial] theme: " + str(e))
         st.markdown("<hr>", unsafe_allow_html=True)
-        if st.button("Пропустить обучение", use_container_width=True,
+        if st.button("Пропустить обучение", width="stretch",
                      key="side_skip"):
             _finish("create")
     st.markdown(
@@ -528,7 +528,7 @@ def render():
                 st.markdown(pending_post)
         adv_key = ("adv_" + str(scene_idx) + "_" + state["step_id"] + "_" +
                    str(len(state["history"])))
-        if st.button("Далее", use_container_width=True, type="primary",
+        if st.button("Далее", width="stretch", type="primary",
                      key=adv_key):
             engine.advance(state)
             st.session_state.tutorial_state = state
@@ -552,7 +552,7 @@ def render():
         for i, opt in enumerate(options):
             key = ("opt_" + str(scene_idx) + "_" + state["step_id"] + "_" +
                    str(i))
-            if st.button(opt["label"], use_container_width=True, key=key):
+            if st.button(opt["label"], width="stretch", key=key):
                 try:
                     engine.choose_option(state, i)
                 except TutorialError as e:
@@ -578,10 +578,10 @@ def _render_finish_screen(state):
         unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("Продолжить этим персонажем", use_container_width=True,
+        if st.button("Продолжить этим персонажем", width="stretch",
                      type="primary", key="finish_go_continue"):
             _finish("continue")
     with c2:
-        if st.button("Создать своего персонажа", use_container_width=True,
+        if st.button("Создать своего персонажа", width="stretch",
                      key="finish_go_create"):
             _finish("create")

@@ -33,10 +33,18 @@ MAX_RETRIES = 2
 IMPERSONATE = "chrome124"
 
 # GigaChat
+API_KEY = None
 try:
     API_KEY = st.secrets["GIGACHAT_API_KEY"]
 except Exception:
-    API_KEY = "MDFhMDk2NGMtZGQ0Yi03NGJiLTkzNWEtODgzMWEwNjZjZDYzOjBkNDViZDZmLTYxYzQtNGYyNC1hYzFlLTczZGY5OWI5MDZiMw=="
+    pass
+if not API_KEY:
+    API_KEY = os.environ.get("GIGACHAT_API_KEY", "")
+if not API_KEY:
+    raise RuntimeError(
+        "GIGACHAT_API_KEY не задан. Положи ключ в .streamlit/secrets.toml "
+        "или задай переменную окружения GIGACHAT_API_KEY."
+    )
 
 GIGA_MODEL = "GigaChat-2-Pro"
 ADAPTATION_PROMPT_PATH = "prompts/adaptation.txt"

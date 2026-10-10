@@ -16,7 +16,7 @@ def render():
 
     c1, c2 = st.columns([5, 1])
     with c2:
-        if st.button("← Назад", key="library_back", use_container_width=True):
+        if st.button("← Назад", key="library_back", width="stretch"):
             st.session_state.screen = "main_menu"
             try:
                 st.rerun()
@@ -58,33 +58,41 @@ def render():
 
 
 def _library_search(query, k=6):
-    """Универсальный поиск по RAG-хранилищу."""
-    candidates = [
-        ("services.rag", ("search", "query", "retrieve", "get_context", "find")),
-        ("services.knowledge", ("search", "query", "retrieve")),
-        ("services.library", ("search", "query", "retrieve")),
-        ("services.orchestrator", ("rag_query", "rag_search", "search")),
-        ("orchestrator", ("rag_query", "rag_search", "search")),
-    ]
-    for mod_name, fn_names in candidates:
+    """Поиск по RAG через services.rag.get_kb() (PATCH_86)."""
+    try:
+        from services.rag import get_kb
+        kb = get_kb()
+    except Exception as e:
+        print("[library] get_kb fail: " + type(e).__name__ + ": " + str(e))
+        return []
+
+    # Определяем фракцию по запросу, если возможно
+    fid = None
+    try:
+        from services.fallbacks import FACTIONS
+        low = str(query).lower()
+        for fk, data in FACTIONS.items():
+            nm = str(data.get("name", "") or "").lower()
+            if (nm and nm in low) or (fk and fk.lower() in low):
+                fid = fk
+                break
+    except Exception:
+        pass
+
+    # Основной вызов (с faction)
+    try:
+        chunks = kb.search(query, top_k=k, faction=fid) or []
+    except TypeError:
         try:
-            mod = __import__(mod_name, fromlist=["*"])
-        except Exception:
-            continue
-        for fn_name in fn_names:
-            fn = getattr(mod, fn_name, None)
-            if not callable(fn):
-                continue
-            for kw in ({"k": k}, {"top_k": k}, {}):
-                try:
-                    out = fn(query, **kw)
-                except TypeError:
-                    continue
-                except Exception:
-                    continue
-                if out:
-                    return out
-    return []
+            chunks = kb.search(query, top_k=k) or []
+        except Exception as e:
+            print("[library] search fail: " + type(e).__name__ + ": " + str(e))
+            return []
+    except Exception as e:
+        print("[library] search fail: " + type(e).__name__ + ": " + str(e))
+        return []
+
+    return chunks
 
 
 def _library_chunk_text(item):

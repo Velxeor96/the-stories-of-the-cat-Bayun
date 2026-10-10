@@ -153,9 +153,12 @@ def _build_alien_character(stats, faction_id, career_id):
 def build_character(
     *, name, gender, age, appearance, user_background,
     faction_id, subfaction_id=None,
-    home_world_id=None, career_id=None,
+    home_world_id=None, career_id=None, archetype_id=None,
     characteristics=None,
 ):
+    # PATCH_88: tutorial передаёт archetype_id — принимаем как алиас career_id.
+    if archetype_id and not career_id:
+        career_id = archetype_id
     if faction_id not in FACTIONS:
         raise ValueError("Неизвестная фракция: " + str(faction_id))
 

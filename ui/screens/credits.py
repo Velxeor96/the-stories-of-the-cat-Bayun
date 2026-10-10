@@ -144,7 +144,7 @@ def render():
 
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        if st.button("← В главное меню", use_container_width=True,
+        if st.button("← В главное меню", width="stretch",
                      key="credits_back"):
             st.session_state.screen = "main_menu"
             st.rerun()

@@ -32,7 +32,7 @@ def render() -> None:
                 unsafe_allow_html=True)
     c1, c2 = st.columns([3, 1])
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 

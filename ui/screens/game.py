@@ -262,7 +262,7 @@ def _render_armour(char: dict, login: str, char_name: str) -> None:
     st.markdown(html, unsafe_allow_html=True)
     equip = char.get("equipment") or []
     if equip:
-        with st.popover("Надеть из рюкзака", use_container_width=True):
+        with st.popover("Надеть из рюкзака", width="stretch"):
             idx = st.selectbox(
                 "Предмет",
                 options=list(range(len(equip))),
@@ -285,7 +285,7 @@ def _render_armour(char: dict, login: str, char_name: str) -> None:
         if slots.get(k):
             if st.button("Снять: " + _slot_label(k),
                          key="armour_off_" + k,
-                         use_container_width=True):
+                         width="stretch"):
                 armour = char.setdefault("armour", {})
                 removed = armour.get(k)
                 armour[k] = ""
@@ -305,14 +305,14 @@ def _render_equipment(char: dict, login: str, char_name: str) -> None:
         st.markdown(chips, unsafe_allow_html=True)
     else:
         st.caption("Рюкзак пуст.")
-    with st.popover("Добавить предмет", use_container_width=True):
+    with st.popover("Добавить предмет", width="stretch"):
         nm = st.text_input("Название", key="equip_add_name")
         if st.button("Добавить", key="equip_add_do") and nm.strip():
             char.setdefault("equipment", []).append(nm.strip())
             if _save_char(login, char_name, char):
                 st.rerun()
     if equip:
-        with st.popover("Удалить предмет", use_container_width=True):
+        with st.popover("Удалить предмет", width="stretch"):
             idx = st.selectbox(
                 "Предмет",
                 options=list(range(len(equip))),
@@ -390,7 +390,7 @@ def _attack_dialog(login: str, char_name: str, char: dict) -> None:
                         key="atk_diff")
 
     if st.button("Бросить", type="primary", key="atk_roll",
-                 use_container_width=True):
+                 width="stretch"):
         base = 45
         try:
             stats = char.get("characteristics") or {}
@@ -430,7 +430,7 @@ def _attack_dialog(login: str, char_name: str, char: dict) -> None:
             if damage_line:
                 st.info(damage_line)
             if st.button("Отправить Мастеру", type="primary",
-                         key="atk_send", use_container_width=True):
+                         key="atk_send", width="stretch"):
                 msg = ("Атакую: " + name + " [" + skill + " " + str(res.get("roll"))
                        + "/" + str(res.get("target")) + " " + diff + "]"
                        + ((" " + damage_line) if damage_line else ""))
@@ -439,7 +439,7 @@ def _attack_dialog(login: str, char_name: str, char: dict) -> None:
                 st.session_state.pop("_attack_weapon", None)
                 st.session_state.pop("_attack_result", None)
                 st.rerun()
-    if st.button("Отмена", key="atk_cancel", use_container_width=True):
+    if st.button("Отмена", key="atk_cancel", width="stretch"):
         st.session_state.pop("_attack_open", None)
         st.session_state.pop("_attack_weapon", None)
         st.session_state.pop("_attack_result", None)
@@ -462,7 +462,7 @@ def _render_weapons(char: dict, login: str, char_name: str) -> None:
         )
         if st.button("Атаковать: " + name,
                      key="atk_btn_" + str(i),
-                     use_container_width=True):
+                     width="stretch"):
             st.session_state["_attack_open"] = True
             st.session_state["_attack_weapon"] = w
             st.session_state.pop("_attack_result", None)
@@ -519,7 +519,7 @@ def _render_skills(char: dict, login: str, char_name: str) -> None:
         )
         if st.button("Проверить: " + nm,
                      key="sk_btn_" + str(i),
-                     use_container_width=True):
+                     width="stretch"):
             st.session_state["_pending_chat"] = "Проверяю: " + nm
             st.rerun()
 
@@ -578,23 +578,25 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
         with st.expander("Способности", expanded=False):
             _render_abilities(char)
         st.markdown("---")
-        if st.button("🏪 Рынок", use_container_width=True,
+        if st.button("🏪 Рынок", width="stretch",
                      key="game_market"):
             st.session_state.screen = "market"
             st.rerun()
-        if st.button("📚 Библиотека", use_container_width=True,
+        if st.button("📚 Библиотека", width="stretch",
                      key="game_library"):
             st.session_state.screen = "library"
             st.rerun()
-        if char.get("has_ship") and st.button("🚀 Корабль", use_container_width=True,
+        if char.get("has_ship") and st.button("🚀 Корабль", width="stretch",
                      key="game_ship"):
             st.session_state.screen = "ship"
             st.rerun()
         # PATCH_86: кнопка Пси-силы (только если psy_rating > 0 и не blocked)
         try:
             from services.psy_archetypes import ensure_psy_fields
-            _psy_changed = ensure_psy_fields(char)
-            if _psy_changed:
+            _before_psy = int(char.get("psy_rating", 0) or 0)
+            ensure_psy_fields(char)
+            _after_psy = int(char.get("psy_rating", 0) or 0)
+            if _after_psy != _before_psy:
                 try:
                     from persistence.characters import save_character as _save_psy
                     _save_psy(login, char_name, char)
@@ -610,47 +612,47 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
             _psy_blocked = True
             _psy_rating = 0
         if _psy_rating > 0 and not _psy_blocked:
-            if st.button("\U0001F52E \u041f\u0441\u0438-\u0441\u0438\u043b\u044b", use_container_width=True,
+            if st.button("\U0001F52E \u041f\u0441\u0438-\u0441\u0438\u043b\u044b", width="stretch",
                          key="game_psy"):
                 st.session_state.screen = "psy"
                 st.rerun()
-        if st.button("⚔️ Бой", use_container_width=True,
+        if st.button("⚔️ Бой", width="stretch",
                      key="game_combat"):
             st.session_state.screen = "combat"
             st.rerun()
-        if st.button("👥 Компаньоны", use_container_width=True,
+        if st.button("👥 Компаньоны", width="stretch",
                      key="game_companions"):
             st.session_state.screen = "companions"
             st.rerun()
-        if st.button("📖 Дневник", use_container_width=True,
+        if st.button("📖 Дневник", width="stretch",
                      key="game_journal"):
             st.session_state.screen = "journal"
             st.rerun()
-        if st.button("🏆 Ачивки", use_container_width=True,
+        if st.button("🏆 Ачивки", width="stretch",
                      key="game_achievements"):
             st.session_state.screen = "achievements"
             st.rerun()
-        if st.button("⚙️ Настройки", use_container_width=True,
+        if st.button("⚙️ Настройки", width="stretch",
                      key="game_settings"):
             st.session_state.screen = "game_settings"
             st.rerun()
-        if st.button("Персонаж", use_container_width=True,
+        if st.button("Персонаж", width="stretch",
                      key="game_character"):
             st.session_state.screen = "character"
             st.rerun()
-        if st.button("Хроники", use_container_width=True,
+        if st.button("Хроники", width="stretch",
                      key="game_chronicles"):
             st.session_state.screen = "chronicles"
             st.rerun()
-        if st.button("Развитие", use_container_width=True,
+        if st.button("Развитие", width="stretch",
                      key="game_progression"):
             st.session_state.screen = "progression"
             st.rerun()
-        if st.button("Обучение", use_container_width=True, key="game_tut"):
+        if st.button("Обучение", width="stretch", key="game_tut"):
             st.session_state.tutorial_mode = True
             st.session_state.screen = "tutorial"
             st.rerun()
-        if st.button("Главное меню", use_container_width=True,
+        if st.button("Главное меню", width="stretch",
                      key="game_to_menu"):
             _back_to_menu()
         with st.expander("📝 Заметки", expanded=False):
@@ -691,7 +693,7 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
                     data=export_character_json(char),
                     file_name=str(char.get("name", "hero")) + ".json",
                     mime="application/json",
-                    use_container_width=True,
+                    width="stretch",
                     key="g_dl",
                 )
                 _up = st.file_uploader("Загрузить .json", type=["json"],
@@ -716,7 +718,7 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
             if has_snapshot(st.session_state.user_login,
                             st.session_state.active_character):
                 if st.button("↩ Откатить на ход назад",
-                             use_container_width=True,
+                             width="stretch",
                              key="game_rollback"):
                     snap = load_snapshot(
                         st.session_state.user_login,
@@ -758,15 +760,13 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
                 data=_md_text.encode("utf-8"),
                 file_name=str(char.get("name", "hero")) + ".md",
                 mime="text/markdown",
-                use_container_width=True,
+                width="stretch",
                 key="game_export_md",
             )
         except Exception as _e:
             print("[game] export fail: " + type(_e).__name__)
 
-        if st.button("Выход", use_container_width=True, key="game_exit"):
-            _logout()
-            _logout()
+        if st.button("Выход", width="stretch", key="game_exit"):
             _logout()
 
 
@@ -837,12 +837,12 @@ def _roll_dialog() -> None:
         c1, c2 = st.columns(2)
         with c1:
             if st.button("БРОСИТЬ", type="primary",
-                         use_container_width=True, key="rd_go"):
+                         width="stretch", key="rd_go"):
                 pend["phase"] = "rolling"
                 st.session_state["_roll_dialog_state"] = pend
                 st.rerun()
         with c2:
-            if st.button("ОТМЕНИТЬ", use_container_width=True, key="rd_cancel"):
+            if st.button("ОТМЕНИТЬ", width="stretch", key="rd_cancel"):
                 st.session_state.pop("_roll_dialog_state", None)
                 st.rerun()
         return
@@ -1011,17 +1011,17 @@ def render() -> None:
     # Быстрые кнопки — БЕЗ st.rerun(), устанавливаем _pending_chat
     _qa = st.columns(4)
     if _qa[0].button("\U0001F50D Осмотреться",
-                     key="qa_observe", use_container_width=True):
+                     key="qa_observe", width="stretch"):
         st.session_state["_pending_chat"] = "Я осматриваюсь"
     if _qa[1].button("\U0001F4AC Говорить",
-                     key="qa_talk", use_container_width=True):
+                     key="qa_talk", width="stretch"):
         st.session_state["_pending_chat"] = \
             "Я пытаюсь заговорить с ближайшим существом"
     if _qa[2].button("\u2694\ufe0f Атака",
-                     key="qa_attack", use_container_width=True):
+                     key="qa_attack", width="stretch"):
         st.session_state["_pending_chat"] = "Я атакую ближайшего врага"
     if _qa[3].button("\U0001F3B2 Иное",
-                     key="qa_other", use_container_width=True):
+                     key="qa_other", width="stretch"):
         st.session_state["_pending_chat"] = \
             "Я действую по обстоятельствам"
 

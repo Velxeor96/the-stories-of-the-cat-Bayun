@@ -281,6 +281,210 @@ FACTION_STARTING = {
                    "Учёное знание (Закон)"],
         "money": 200, "currency": "Троны",
     },
+
+    # ===== PATCH_88: субфракции Эльдар =====
+    "asuryani": {
+        "weapons": [
+            {"name": "Сюрикен-катапульта",
+             "stats": "60м, О/3/-, 1d10+4 R, Пробой 3",
+             "weight": "2.5 кг", "notes": "Надёжное"},
+            {"name": "Эльдарский силовой меч",
+             "stats": "Ближний бой, 1d10+4 E, Пробой 6",
+             "weight": "2 кг", "notes": "Сбалансированное, Силовое поле"},
+        ],
+        "armour": {"head": 6, "body": 6, "arms": 6, "legs": 6,
+                   "notes": "Аспектная броня (Все AP 6)"},
+        "equipment": ["Камень Души", "Шлем Аспекта", "Плащ-хамелеолин"],
+        "talents": ["Обострённые чувства (Зрение)", "Тёмное зрение",
+                    "Молниеносные рефлексы", "Сверхъестественная ловкость"],
+        "skills": ["Общие знания (Эльдар)", "Разговорный язык (Эльдар)",
+                   "Уклонение"],
+        "money": 200, "currency": "Троны",
+    },
+    "harlequin": {
+        "weapons": [
+            {"name": "Поцелуй Арлекина",
+             "stats": "Ближний бой, 1d10+6 E, Пробой 8",
+             "weight": "1.5 кг", "notes": "Силовое поле, Точное"},
+            {"name": "Сюрикен-пистолет",
+             "stats": "30м, О/3/-, 1d10+2 R, Пробой 3",
+             "weight": "1.5 кг", "notes": "Надёжное"},
+        ],
+        "armour": {"head": 6, "body": 6, "arms": 6, "legs": 6,
+                   "notes": "Костюм Арлекина (Все AP 6, +10 Ag)"},
+        "equipment": ["Камень Души", "Маска Арлекина", "Кисел"],
+        "talents": ["Обострённые чувства (Зрение)", "Тёмное зрение",
+                    "Спринт", "Молниеносные рефлексы", "Мастер боя"],
+        "skills": ["Акробатика", "Уклонение", "Скрытность", "Обаяние"],
+        "money": 150, "currency": "Троны",
+    },
+    "exodite": {
+        "weapons": [
+            {"name": "Эльдарский силовой меч",
+             "stats": "Ближний бой, 1d10+4 E, Пробой 6",
+             "weight": "2 кг", "notes": "Сбалансированное, Силовое поле"},
+            {"name": "Длинный лук",
+             "stats": "100м, О/1/-, 1d10+3 R, Пробой 2",
+             "weight": "1.5 кг", "notes": "Примитивное, Точное"},
+        ],
+        "armour": {"head": 5, "body": 5, "arms": 5, "legs": 5,
+                   "notes": "Костяная броня (Все AP 5)"},
+        "equipment": ["Камень Души", "Дракон-компаньон", "Колчан стрел"],
+        "talents": ["Обострённые чувства (Зрение)", "Выживание",
+                    "Снайпер", "Спринт"],
+        "skills": ["Выживание", "Знание природы", "Скрытность",
+                   "Разговорный язык (Эльдар)"],
+        "money": 100, "currency": "Троны",
+    },
+    "chaos_marine": {
+        "weapons": [
+            {"name": "Болтер Хаоса",
+             "stats": "100м, О/3/-, 1d10+9 X, Пробой 5",
+             "weight": "7 кг", "notes": "Разрывное"},
+            {"name": "Цепной меч",
+             "stats": "Ближний бой, 1d10+4 R, Пробой 3",
+             "weight": "6 кг", "notes": "Цепное"},
+        ],
+        "armour": {"head": 11, "body": 11, "arms": 11, "legs": 11,
+                   "notes": "Силовая броня Астартес Хаоса (AP 11, +20 S)"},
+        "equipment": ["Болты (4 обоймы)", "Фраг-гранаты (3)",
+                      "Символ Тёмного Бога", "Печать Скверны"],
+        "talents": ["Владение оружием (Болтерное)",
+                    "Владение оружием (Цепное)", "Мощь Астартес",
+                    "Ненависть (Империум)"],
+        "skills": ["Обыденное знание (Война)",
+                   "Разговорный язык (Тёмный готик)", "Запугивание"],
+        "money": 150, "currency": "Троны",
+    },
+    "dark_mechanicum": {
+        "weapons": [
+            {"name": "Омниссианский топор Хаоса",
+             "stats": "Ближний бой, 2d10+4 E, Пробой 6",
+             "weight": "8 кг", "notes": "Силовое поле, Несбалансированное"},
+            {"name": "Плазма-пистолет",
+             "stats": "30м, О/2/-, 1d10+6 E, Пробой 6",
+             "weight": "4 кг", "notes": "Опасное"},
+        ],
+        "armour": {"head": 9, "body": 9, "arms": 9, "legs": 9,
+                   "notes": "Тяжёлая броня Тёмного Механикум"},
+        "equipment": ["Священные масла Хаоса", "Механодендрит",
+                      "Инфопланшет Хаоса", "Демонический комбиниструмент"],
+        "talents": ["Владение оружием (Силовое)",
+                    "Механодендрит (Оружейный)", "Ритуал освобождения",
+                    "Сопротивление (Псайкеры)"],
+        "skills": ["Запретное знание (Варп)", "Техпользование", "Логика"],
+        "money": 200, "currency": "Троны",
+    },
+    "cultist": {
+        "weapons": [
+            {"name": "Автопистолет",
+             "stats": "30м, О/3/-, 1d10+3 I, Пробой 0",
+             "weight": "1.5 кг", "notes": "Надёжное"},
+            {"name": "Жертвенный нож",
+             "stats": "Ближний бой, 1d10+2 R, Пробой 0",
+             "weight": "1 кг", "notes": "Примитивное"},
+        ],
+        "armour": {"head": 2, "body": 2, "arms": 2, "legs": 2,
+                   "notes": "Гражданская броня"},
+        "equipment": ["Символ Тёмного Бога", "Книга Ритуалов",
+                      "Жертвенные принадлежности"],
+        "talents": ["Сопротивление (Страх)", "Ярость",
+                    "Ненависть (Империум)", "Фанатизм"],
+        "skills": ["Запретное знание (Варп)", "Обман",
+                   "Разговорный язык (Низкий готик)"],
+        "money": 50, "currency": "Троны",
+    },
+    "freebooter": {
+        "weapons": [
+            {"name": "Слагга",
+             "stats": "60м, О/3/-, 1d10+4 I, Пробой 2",
+             "weight": "5 кг", "notes": "Надёжное"},
+            {"name": "Чоппа",
+             "stats": "Ближний бой, 1d10+3 R, Пробой 2",
+             "weight": "4 кг", "notes": "Цепное"},
+        ],
+        "armour": {"head": 4, "body": 4, "arms": 4, "legs": 4,
+                   "notes": "Импровизированная броня"},
+        "equipment": ["Зубы", "Фляга грибного пива", "Грот-помощник"],
+        "talents": ["Ярость", "Сопротивление (Яд)", "Рвач",
+                    "Обострённые чувства (Зрение)"],
+        "skills": ["Разговорный язык (Орочий)", "Запугивание", "Драка"],
+        "money": 50, "currency": "Зубы",
+    },
+    "fire_warrior": {
+        "weapons": [
+            {"name": "Импульсная винтовка",
+             "stats": "150м, О/3/-, 1d10+4 E, Пробой 4",
+             "weight": "4 кг", "notes": "Надёжное, Точное"},
+            {"name": "Плазменный клинок",
+             "stats": "Ближний бой, 1d10+6 E, Пробой 8",
+             "weight": "2 кг", "notes": "Силовое поле"},
+        ],
+        "armour": {"head": 6, "body": 6, "arms": 6, "legs": 6,
+                   "notes": "Боевой костюм Тау (Все AP 6)"},
+        "equipment": ["Дрон-помощник", "Маркерный маяк", "Инфопланшет"],
+        "talents": ["Обострённые чувства (Зрение)", "Снайпер",
+                    "Сопротивление (Страх)"],
+        "skills": ["Пилотирование (Личное)", "Техноиспользование",
+                   "Разговорный язык (Тау)"],
+        "money": 100, "currency": "Троны",
+    },
+    "kabalite": {
+        "weapons": [
+            {"name": "Сюрикен-пистолет",
+             "stats": "30м, О/3/-, 1d10+2 R, Пробой 3",
+             "weight": "1.5 кг", "notes": "Надёжное"},
+            {"name": "Агонайзер",
+             "stats": "Ближний бой, 1d10+4 E, Пробой 4",
+             "weight": "1.5 кг", "notes": "Шоковое (3), Болевое"},
+        ],
+        "armour": {"head": 5, "body": 5, "arms": 5, "legs": 5,
+                   "notes": "Шипастая броня (Все AP 5)"},
+        "equipment": ["Яды", "Клинки-осколки", "Трофей"],
+        "talents": ["Тёмное зрение", "Обострённые чувства (Зрение)",
+                    "Обострённые чувства (Слух)", "Спринт"],
+        "skills": ["Уклонение", "Запугивание", "Скрытность",
+                   "Разговорный язык (Друхкари)"],
+        "money": 200, "currency": "Троны",
+    },
+    "necron_lord": {
+        "weapons": [
+            {"name": "Гаусс-флинта",
+             "stats": "120м, О/3/-, 1d10+5 E, Пробой 4",
+             "weight": "3 кг", "notes": "Гаусс"},
+            {"name": "Силовой клинок Некрона",
+             "stats": "Ближний бой, 1d10+6 E, Пробой 6",
+             "weight": "3 кг", "notes": "Силовое поле, Гиперфазовая"},
+        ],
+        "armour": {"head": 10, "body": 10, "arms": 10, "legs": 10,
+                   "notes": "Некродермис (Все AP 10)"},
+        "equipment": ["Скарабей-слуга", "Фаза-серп",
+                      "Регенерационный слой", "Орб Возрождения"],
+        "talents": ["Сверхъестественная стойкость",
+                    "Сопротивление (Страх)", "Тёмное зрение",
+                    "Молниеносные рефлексы"],
+        "skills": ["Запретные знания (Древние)",
+                   "Общие знания (Некроны)", "Командование"],
+        "money": 0, "currency": "Нет",
+    },
+    "magus": {
+        "weapons": [
+            {"name": "Автопистолет",
+             "stats": "30м, О/3/-, 1d10+2 I, Пробой 0",
+             "weight": "1.5 кг", "notes": "Надёжное"},
+            {"name": "Коготь генокрада",
+             "stats": "Ближний бой, 1d10+4 R, Пробой 5",
+             "weight": "1 кг", "notes": "Рвущее, Точное"},
+        ],
+        "armour": {"head": 3, "body": 3, "arms": 3, "legs": 3,
+                   "notes": "Гражданская броня"},
+        "equipment": ["Символ культа", "Ложные документы",
+                      "Скрытый передатчик"],
+        "talents": ["Обострённые чувства (Зрение)", "Тёмное зрение",
+                    "Маскировка (Мастер)", "Сопротивление (Псайкеры)"],
+        "skills": ["Обман", "Скрытность", "Обаяние", "Командование"],
+        "money": 100, "currency": "Троны",
+    },
 }
 
 
@@ -440,8 +644,62 @@ CAREER_BONUSES = {
 }
 
 
+# PATCH_88: карта «id субфракции -> модуль сервиса»
+_SERVICE_MAP = {
+    "imperial_guard": "services.imperial_guard",
+    "mechanicus":     "services.mechanicus",
+    "inquisition":    "services.inquisition",
+    "sororitas":      "services.sororitas",
+    "space_marine":   "services.space_marines",
+    "arbites":        "services.arbites",
+}
+
+
+def _resolve_parent(fid):
+    try:
+        from services.fallbacks import _resolve_parent_faction
+        return _resolve_parent_faction(fid)
+    except Exception:
+        return fid
+
+
+def _try_subfaction_service(faction_id, name, kind):
+    """PATCH_88: если у субфракции есть свой сервис — берём бонусы оттуда."""
+    mod_name = _SERVICE_MAP.get(faction_id)
+    if not mod_name:
+        return None
+    try:
+        mod = __import__(mod_name, fromlist=["get_archetypes", "get_home_worlds"])
+    except Exception as e:
+        print("[starting] " + faction_id + " import: " + str(e))
+        return None
+    n = _norm(name)
+    if kind == "home_world":
+        try:
+            for hw in mod.get_home_worlds():
+                if _norm(hw.get("name", "")) == n:
+                    return {"bonus": dict(hw.get("chars") or {}),
+                            "penalty": dict(hw.get("penalty") or {})}
+        except Exception as e:
+            print("[starting] " + faction_id + " hw: " + str(e))
+    elif kind == "career":
+        try:
+            for a in mod.get_archetypes():
+                if _norm(a.get("name", "")) == n:
+                    return {"bonus": dict(a.get("bonus_characteristics") or {}),
+                            "penalty": {}}
+        except Exception as e:
+            print("[starting] " + faction_id + " career: " + str(e))
+    return None
+
+
 def get_starting_kit(faction_id):
-    return FACTION_STARTING.get(faction_id, FACTION_STARTING.get("imperium", {}))
+    if faction_id in FACTION_STARTING:
+        return FACTION_STARTING[faction_id]
+    parent = _resolve_parent(faction_id)
+    if parent != faction_id and parent in FACTION_STARTING:
+        return FACTION_STARTING[parent]
+    return FACTION_STARTING.get("imperium", {})
 
 
 def _lookup(table, faction_id, name):
@@ -457,8 +715,24 @@ def _lookup(table, faction_id, name):
 
 
 def get_home_world_bonuses(faction_id, name):
-    return _lookup(HOME_WORLD_BONUSES, faction_id, name)
+    if not name:
+        return {"bonus": {}, "penalty": {}}
+    r = _lookup(HOME_WORLD_BONUSES, faction_id, name)
+    if r["bonus"] or r["penalty"]:
+        return r
+    sub = _try_subfaction_service(faction_id, name, "home_world")
+    if sub is not None:
+        return sub
+    return _lookup(HOME_WORLD_BONUSES, _resolve_parent(faction_id), name)
 
 
 def get_career_bonuses(faction_id, name):
-    return _lookup(CAREER_BONUSES, faction_id, name)
+    if not name:
+        return {"bonus": {}, "penalty": {}}
+    r = _lookup(CAREER_BONUSES, faction_id, name)
+    if r["bonus"] or r["penalty"]:
+        return r
+    sub = _try_subfaction_service(faction_id, name, "career")
+    if sub is not None:
+        return sub
+    return _lookup(CAREER_BONUSES, _resolve_parent(faction_id), name)

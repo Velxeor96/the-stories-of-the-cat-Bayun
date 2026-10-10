@@ -184,7 +184,7 @@ SCREENS = {
     "journal": journal.render,
     "rituals": rituals.render,
     "dreams": dreams.render,
-    "psy": psy.render,
+    "psy": psy.render_entry,
     "character": character.render,
 }
 

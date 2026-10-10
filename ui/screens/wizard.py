@@ -80,7 +80,7 @@ def render() -> None:
                     st.markdown("**" + nm + "**")
                 with c2:
                     if st.button("Играть", key="play_" + nm,
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state.active_character = nm
                         _goto("game")
                         st.rerun()
@@ -244,7 +244,7 @@ def render() -> None:
             })
         edited = st.data_editor(
             rows,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "Код": st.column_config.TextColumn("Код", disabled=True),
@@ -281,7 +281,7 @@ def render() -> None:
         st.caption("9 раз бросается 2d10+25, распределяешь значения.")
         c1, c2 = st.columns([1, 2])
         with c1:
-            if st.button("🎲 Сгенерировать пул", use_container_width=True):
+            if st.button("🎲 Сгенерировать пул", width="stretch"):
                 pool = roll_pool()
                 st.session_state.wz_pool = sorted(pool, reverse=True)
                 auto = auto_distribute(pool)
@@ -315,7 +315,7 @@ def render() -> None:
 
     st.markdown("---")
     if st.button("💾 Сохранить персонажа", type="primary",
-                 use_container_width=True, key="wz_save"):
+                 width="stretch", key="wz_save"):
         if not name or not name.strip():
             st.error("Введи имя персонажа.")
             return

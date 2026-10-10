@@ -117,3 +117,8 @@ _hf_cache_assembled.zip
 # PATCH_75b: дампы патчей
 scripts/_d*.txt
 scripts/_diag*.txt
+
+# PATCH_90
+dump_*.txt
+_trash_*/
+hf_cache_part*.zip

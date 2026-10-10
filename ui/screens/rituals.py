@@ -31,7 +31,7 @@ def render() -> None:
     with c1:
         st.caption("Традиции фракции: " + str(char.get("faction", "?")))
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 
@@ -47,7 +47,7 @@ def render() -> None:
             st.markdown("**" + name + "** — " + desc)
         with c2:
             if st.button("Провести", key="rit_" + name,
-                         use_container_width=True):
+                         width="stretch"):
                 res = perform(char, name)
                 if res.get("ok"):
                     st.success(res.get("text", ""))

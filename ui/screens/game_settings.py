@@ -21,7 +21,7 @@ def render() -> None:
                 unsafe_allow_html=True)
     c1, c2 = st.columns([3, 1])
     with c2:
-        if st.button("← Назад", use_container_width=True):
+        if st.button("← Назад", width="stretch"):
             _goto("game")
             st.rerun()
 
@@ -61,7 +61,7 @@ def render() -> None:
     c1, c2 = st.columns(2)
     with c1:
         if st.button("💾 Сохранить", type="primary",
-                     use_container_width=True, key="gs_save"):
+                     width="stretch", key="gs_save"):
             save_settings(login, {
                 "response_length": length,
                 "lethality": leth,
@@ -69,7 +69,7 @@ def render() -> None:
             })
             st.success("Настройки сохранены.")
     with c2:
-        if st.button("↺ Сбросить", use_container_width=True,
+        if st.button("↺ Сбросить", width="stretch",
                      key="gs_reset"):
             save_settings(login, {
                 "response_length": "Средний",

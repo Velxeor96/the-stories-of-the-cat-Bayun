@@ -159,7 +159,7 @@ def _protocol_section():
     if st.button("АКТИВИРОВАТЬ ПРОТОКОЛ",
                  key="_secret_protocol_go",
                  type="primary",
-                 use_container_width=True):
+                 width="stretch"):
         _activate_protocol(login, code)
 
 

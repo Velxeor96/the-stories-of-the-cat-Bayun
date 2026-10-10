@@ -74,11 +74,11 @@ def render() -> None:
 
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        if st.button("▶  Войти", use_container_width=True, type="primary",
+        if st.button("▶  Войти", width="stretch", type="primary",
                      key="splash_enter"):
             st.session_state.screen = "auth"
             st.rerun()
-        if st.button("📖  Об игре", use_container_width=True,
+        if st.button("📖  Об игре", width="stretch",
                      key="splash_about"):
             st.session_state.screen = "about"
             st.rerun()

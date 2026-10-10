@@ -302,67 +302,7 @@ if __name__ == "__main__":
     print("Брони:", len(get_armour()))
     print("Кораблей:", len(get_ships()))
 
-# === PATCH_43: загрузка расширенных данных ===
-NECRONS_WEAPONS_FILE = ROOT / "data" / "necrons_weapons.json"
-NECRONS_ARMOUR_FILE = ROOT / "data" / "necrons_armour.json"
-NECRONS_FLEET_FILE = ROOT / "data" / "necrons_fleet.json"
-
-_WEAPONS_CACHE = None
-_ARMOUR_CACHE = None
-_FLEET_CACHE = None
-
-
-def _load_json(path):
-    if not path.exists():
-        return {}
-    import json
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:
-        print("[necrons] " + path.name + " error: " + str(e))
-        return {}
-
-
-def get_weapons_extended():
-    global _WEAPONS_CACHE
-    if _WEAPONS_CACHE is None:
-        _WEAPONS_CACHE = _load_json(NECRONS_WEAPONS_FILE).get("weapons", [])
-    return _WEAPONS_CACHE
-
-
-def get_armour_extended():
-    global _ARMOUR_CACHE
-    if _ARMOUR_CACHE is None:
-        _ARMOUR_CACHE = _load_json(NECRONS_ARMOUR_FILE).get("armour", [])
-    return _ARMOUR_CACHE
-
-
-def get_equipment_extended():
-    global _ARMOUR_CACHE
-    if _ARMOUR_CACHE is None:
-        _ARMOUR_CACHE = _load_json(NECRONS_ARMOUR_FILE)
-    return _ARMOUR_CACHE.get("equipment", [])
-
-
-def get_fleet():
-    global _FLEET_CACHE
-    if _FLEET_CACHE is None:
-        _FLEET_CACHE = _load_json(NECRONS_FLEET_FILE)
-    return _FLEET_CACHE
-
-
-def get_hulls():
-    return get_fleet().get("hulls", [])
-
-
-def get_ship_weapons():
-    return get_fleet().get("weapons", [])
-
-
-def get_components():
-    return get_fleet().get("components", [])
-
-
+# === PATCH_43: расширенные данные (дедуп в PATCH_88) ===
 # === PATCH_43: расширенные данные ===
 import json as _json
 
@@ -414,3 +354,8 @@ def get_ship_weapons():
 
 def get_ship_components():
     return get_fleet().get("components", [])
+
+
+# PATCH_88: алиас для совместимости с внешним кодом
+def get_components():
+    return get_ship_components()

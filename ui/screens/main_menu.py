@@ -109,46 +109,46 @@ def render():
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
         if st.button("Продолжить",
-                     use_container_width=True, type="primary",
+                     width="stretch", type="primary",
                      key="menu_continue",
                      disabled=not can_continue):
             _continue()
         if not can_continue:
             st.caption("Нет персонажей. Создайте первого в разделе «Новая игра».")
 
-        if st.button("Новая игра", use_container_width=True,
+        if st.button("Новая игра", width="stretch",
                      key="menu_new"):
             st.session_state.pop("active_character", None)
             st.session_state.screen = "wizard"
             st.rerun()
 
-        if st.button("Обучение", use_container_width=True,
+        if st.button("Обучение", width="stretch",
                      key="menu_tutorial"):
             st.session_state.screen = "tutorial_prompt"
             st.rerun()
 
-        if st.button("Загрузки", use_container_width=True,
+        if st.button("Загрузки", width="stretch",
                      key="menu_loads"):
             st.session_state.screen = "loads"
             st.rerun()
 
         if st.button("Что нового в " + get_current_version(),
-                     use_container_width=True,
+                     width="stretch",
                      key="menu_whats_new"):
             st.session_state["_show_changelog_dialog"] = True
             st.rerun()
 
-        if st.button("Настройки", use_container_width=True,
+        if st.button("Настройки", width="stretch",
                      key="menu_settings"):
             st.session_state.screen = "settings_screen"
             st.rerun()
 
-        if st.button("Создатели", use_container_width=True,
+        if st.button("Создатели", width="stretch",
                      key="menu_credits"):
             st.session_state.screen = "credits"
             st.rerun()
 
-        if st.button("Выход", use_container_width=True,
+        if st.button("Выход", width="stretch",
                      key="menu_exit"):
             _logout()
 
@@ -268,7 +268,7 @@ def _changelog_dialog():
     else:
         st.caption("История изменений недоступна.")
     if st.button("Понятно", key="dlg_changelog_ok",
-                 type="primary", use_container_width=True):
+                 type="primary", width="stretch"):
         login = st.session_state.get("user_login")
         if login:
             mark_version_seen(login)

@@ -103,12 +103,11 @@ def apply_changes(char, changes):
 
     applied = []
 
+    # PATCH_88: wounds/fate/xp вынесены ниже как "дельта или абсолют".
+    # insanity/corruption/rank остаются абсолютными.
     simple_abs = {
-        "wounds": ("wounds", "current"),
-        "fate": ("fate_points", "current"),
         "insanity": (None, "insanity"),
         "corruption": (None, "corruption"),
-        "xp": (None, "xp"),
         "rank": (None, "rank"),
     }
     for key, (sub_dict, sub_key) in simple_abs.items():
@@ -124,10 +123,27 @@ def apply_changes(char, changes):
             char[sub_key] = val
         applied.append(key)
 
+    # PATCH_88: wounds / fate / xp — дельта, если начинается с +/-,
+    # иначе абсолют. Убирает двойной подсчёт xp=+50.
+    if "wounds" in changes:
+        w = _ensure_dict(char, "wounds")
+        is_d, v = _delta(changes["wounds"])
+        cur = int(w.get("current", 0) or 0)
+        w["current"] = (cur + v) if is_d else _to_int(changes["wounds"], cur)
+        applied.append("wounds")
+
+    if "fate" in changes:
+        fp = _ensure_dict(char, "fate_points")
+        is_d, v = _delta(changes["fate"])
+        cur = int(fp.get("current", 0) or 0)
+        fp["current"] = (cur + v) if is_d else _to_int(changes["fate"], cur)
+        applied.append("fate")
+
     if "xp" in changes:
         is_d, v = _delta(changes["xp"])
-        if is_d:
-            char["xp"] = int(char.get("xp", 0) or 0) + v
+        cur = int(char.get("xp", 0) or 0)
+        char["xp"] = (cur + v) if is_d else _to_int(changes["xp"], cur)
+        applied.append("xp")
 
     if "money" in changes:
         # PATCH_75: clamp negative + log

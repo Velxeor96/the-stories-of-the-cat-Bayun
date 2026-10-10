@@ -23,6 +23,13 @@ class LLMClient:
         sleep_fn: Callable[[float], None] = time.sleep,
         on_retry: Optional[Callable[[int, float, LLMError], None]] = None,
     ):
+        # PATCH_89: валидация параметров.
+        if int(max_retries) < 0:
+            raise ValueError("max_retries должен быть >= 0")
+        if float(base_delay) <= 0:
+            raise ValueError("base_delay должен быть > 0")
+        if float(max_delay) < float(base_delay):
+            raise ValueError("max_delay должен быть >= base_delay")
         self.call_fn = call_fn
         self.max_retries = max_retries
         self.base_delay = base_delay
