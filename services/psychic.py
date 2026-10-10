@@ -1,84 +1,48 @@
-"""services/psychic.py — диспетчер пси-сил.
-
-Определяет по фракции/субфракции/карьере, какой модуль использовать.
-"""
+"""services/psychic.py — диспетчер пси-сил по фракциям."""
 from __future__ import annotations
 
 from services import psychic_human
 from services import psychic_navigator
+from services import psychic_chaos
 
 
-# --- Кто имеет доступ к каким модулям ---
-# Eldar / Tyranids / Orks — добавятся в PATCH_80-81
-_RACE_ACCESS = {
-    "imperium":     ["human", "navigator"],  # зависит от карьеры
-    "chaos":        ["human"],               # Sorcerer, включая Demonology
-    "eldar":        [],                      # PATCH_80
-    "drukhari":     [],                      # НЕТ психосил
-    "orks":         [],                      # PATCH_81
-    "tau":          [],                      # НЕТ психосил
-    "necrons":      [],                      # НЕТ психосил
-    "tyranids":     [],                      # PATCH_81
-    "genestealers": [],                      # PATCH_81
-}
-
-# Внутри human — какие карьеры что видят
-_HUMAN_ASTROPATH_CAREERS = {"astropath", "Астропат"}
-_HUMAN_NAVIGATOR_CAREERS = {"navigator", "Навигатор"}
+_HUMAN_ASTROPATH_CAREERS = {"astropath", "астропат"}
+_HUMAN_NAVIGATOR_CAREERS = {"navigator", "навигатор"}
 
 
 def _classify(char: dict) -> dict:
-    """Определяет доступ для персонажа."""
     fid = str(char.get("faction_id", "")).lower()
     sfid = str(char.get("subfaction_id", "")).lower()
     cid = str(char.get("career_id", "")).lower()
     cname = str(char.get("career_name", ""))
     rating = int(char.get("psy_rating", 0) or 0)
 
-    out = {
-        "module": None,
-        "chaos_only": False,
-        "astropath_only": False,
-        "navigator_only": False,
-        "has_psy": rating > 0,
-    }
+    out = {"module": None, "chaos_only": False,
+           "astropath_only": False, "has_psy": rating > 0}
 
-    if fid not in _RACE_ACCESS:
-        return out
-    allowed = _RACE_ACCESS[fid]
-    if not allowed:
-        return out
-
-    # Chaos — Sorcerer
-    if fid == "chaos":
-        if "human" in allowed:
-            out["module"] = "human"
-            out["chaos_only"] = True
-        return out
-
-    # Imperium — по карьере
     if fid == "imperium":
         if cid in _HUMAN_NAVIGATOR_CAREERS or cname in _HUMAN_NAVIGATOR_CAREERS:
             out["module"] = "navigator"
-            out["navigator_only"] = True
             return out
         if cid in _HUMAN_ASTROPATH_CAREERS or cname in _HUMAN_ASTROPATH_CAREERS:
             out["module"] = "human"
             out["astropath_only"] = True
             return out
-        # Все остальные псайкеры Империума (Sanctioned Psyker, Librarian, Inq Psyker)
         out["module"] = "human"
         return out
+
+    if fid == "chaos":
+        out["module"] = "chaos"
+        return out
+
+    # Eldar — PATCH_81
+    # Orks — PATCH_81
+    # Tyranids / Genestealers — PATCH_81
 
     return out
 
 
-# ============================================================
-# Публичный API
-# ============================================================
-
 def get_disciplines(char: dict = None) -> dict:
-    """Список дисциплин для персонажа (или пустой, если нет доступа)."""
     if not char:
         return {}
     info = _classify(char)
@@ -86,11 +50,12 @@ def get_disciplines(char: dict = None) -> dict:
         return psychic_human.get_disciplines()
     if info["module"] == "navigator":
         return psychic_navigator.get_disciplines()
+    if info["module"] == "chaos":
+        return psychic_chaos.get_disciplines()
     return {}
 
 
 def get_powers(char: dict) -> list:
-    """Список доступных сил по персонажу."""
     info = _classify(char)
     if info["module"] == "human":
         return psychic_human.get_powers(
@@ -100,17 +65,16 @@ def get_powers(char: dict) -> list:
         )
     if info["module"] == "navigator":
         return psychic_navigator.get_powers(char)
+    if info["module"] == "chaos":
+        return psychic_chaos.get_powers(char)
     return []
 
 
 def get_power(power_id: str):
-    """Ищет силу во всех модулях."""
-    p = psychic_human.get_power(power_id)
-    if p:
-        return p
-    p = psychic_navigator.get_power(power_id)
-    if p:
-        return p
+    for mod in (psychic_human, psychic_navigator, psychic_chaos):
+        p = mod.get_power(power_id)
+        if p:
+            return p
     return None
 
 
@@ -129,7 +93,6 @@ def regen_charge(char: dict) -> None:
 
 
 def cast(char: dict, power_key: str) -> dict:
-    """Применяет силу."""
     info = _classify(char)
     if not info["module"]:
         return {"ok": False, "reason": "нет доступа к психосилам"}
@@ -141,11 +104,12 @@ def cast(char: dict, power_key: str) -> dict:
         )
     if info["module"] == "navigator":
         return psychic_navigator.cast(char, power_key)
+    if info["module"] == "chaos":
+        return psychic_chaos.cast(char, power_key)
     return {"ok": False, "reason": "нет доступа"}
 
 
 def full_catalog(char: dict) -> dict:
-    """Полный каталог для UI по персонажу."""
     info = _classify(char)
     rating = int(char.get("psy_rating", 0) or 0)
     if not info["module"]:
@@ -158,11 +122,12 @@ def full_catalog(char: dict) -> dict:
         )
     if info["module"] == "navigator":
         return psychic_navigator.full_catalog(rating)
+    if info["module"] == "chaos":
+        return psychic_chaos.full_catalog(rating, char=char)
     return {}
 
 
 def has_access(char: dict) -> bool:
-    """Есть ли у персонажа вообще доступ к психосилам."""
     if not isinstance(char, dict):
         return False
     info = _classify(char)
