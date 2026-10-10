@@ -1,9 +1,9 @@
-# scripts/patch.py — PATCH_73c: фикс списка тестеров
+# scripts/patch.py — PATCH_75: критические исходы, деньги, gitignore
 from __future__ import annotations
 import ast, re, shutil, sys
 from pathlib import Path
 
-TAG = "PATCH_73c"
+TAG = "PATCH_75"
 ROOT = Path(__file__).resolve().parent.parent
 if not (ROOT / "app.py").exists():
     print("[ERROR] app.py не найден.")
@@ -19,65 +19,198 @@ def _bk(p):
         except Exception:
             pass
 
-p = ROOT / "ui" / "screens" / "credits.py"
+
+# ============================================================
+# 1) prompts/master_core.txt — критические исходы
+# ============================================================
+p = ROOT / "prompts" / "master_core.txt"
 text = p.read_text(encoding="utf-8")
 
-# Целевой список
-TARGET = [
-    "Ксения",
-    "Кайса",
-    "Puslik",
-    "Игорь",
-    "Сергей",
-    "Роман",
-    "Валерий",
-    "друзья Романа (кем бы вы ни были, ребят)",
-]
+MARKER = "КРИТИЧЕСКИЕ ИСХОДЫ"
 
-# Найдём блок THANKS_NAMES = [...] по регулярке
-pattern = re.compile(
-    r"THANKS_NAMES\s*=\s*\[(.*?)\]",
-    re.DOTALL,
-)
-m = pattern.search(text)
-if not m:
-    r["errors"].append("credits.py: блок THANKS_NAMES не найден")
+CRITS_SECTION = """---
+
+## ⚡ КРИТИЧЕСКИЕ ИСХОДЫ
+
+Бросок d100 различает **четыре исхода**. От исхода зависит не только результат
+действия, но и **сюжетное последствие**. Это твой главный инструмент драмы.
+
+| Бросок | Исход | Что описывать |
+|--------|-------|---------------|
+| 1-5 | **КРИТ. УСПЕХ** | Лучшее из возможного. Сюжетный подарок. |
+| 6-95 (успех) | УСПЕХ | Заявка удалась как ожидалось. |
+| 6-95 (провал) | ПРОВАЛ | Не удалось, есть цена. |
+| 96-100 | **КРИТ. ПРОВАЛ** | Худшее из возможного. Катастрофа. |
+
+### ✅ КРИТ. УСПЕХ — сюжетный подарок
+
+Это **не просто «получилось»**. Игрок получает **то, чего не просил**, но что
+приносит выгоду: союзника, ресурс, информацию, репутацию, преимущество.
+
+**Требования:**
+- Опиши **больше**, чем заявка игрока.
+- Добавь **неожиданный позитивный поворот** — деталь, которая повлияет на будущие ходы.
+- Дай **бонус в [STATE]**: предмет, XP, репутацию, флаг.
+
+**Пример:**
+> Игрок: «Взламываю дверь».
+> Обычный успех: «Замок поддался, дверь открылась.»
+> **Крит. успех:** «Замок поддался с первого касания. За дверью — не только коридор,
+> но и старый терминал с частично сохранившимися данными: пароли к потайным
+> ходам крепости. Ты запоминаешь их.»
+
+### 💀 КРИТ. ПРОВАЛ — сюжетная катастрофа
+
+Это **не просто «не получилось»**. Игрок не только провалил заявку, но и
+**получил долгосрочную проблему**: рану, врага, потерю, ловушку.
+
+**Требования:**
+- Опиши **больше последствий**, чем ожидалось.
+- Добавь **негативный сюжетный поворот** — то, что будет мешать в будущем.
+- Примени **штраф в [STATE]**: раны, потеря предмета, флаг-враг.
+
+**Пример:**
+> Игрок: «Взламываю дверь».
+> Обычный провал: «Замок не поддался, ломается отмычка.»
+> **Крит. провал:** «Замок не поддался. С громким щелчком сработала ловушка —
+> дротик из стены впился в плечо. По коридору уже слышны шаги стражи.
+> Ты отравлен, и тебе не уйти незамеченным.»
+
+### ПРАВИЛА
+
+1. **Крит = изменение сюжета.** Не оставайся на месте. Дай или отними то, что повлияет на следующие сцены.
+2. **Никогда не пиши `КРИТ. УСПЕХ` в тексте.** Опиши результат художественно — мастер не объявляет исход, он **рассказывает сцену**.
+3. **Крит. успех ≠ «ты выиграл игру».** Это **локальный** поворот, не финал.
+4. **Крит. провал ≠ «ты умер».** Это **серьёзная** проблема, но не обязательно смерть. Если смерть — только если игрок сам лез в пекло.
+5. **Один крит = одно сюжетное последствие.** Не 5 подарков и не 5 катастроф — **одно**, но яркое.
+
+---
+
+## 💰 ДЕНЬГИ
+
+Игрок платит или получает деньги в **каждой сцене торговли, найма, грабежа,
+взятки, награды**. Не забудь отразить это в `[STATE]`.
+
+### Когда добавлять в `[STATE]`
+
+**Платит:**
+- Купил предмет → `money=-N` + `equipment_add=Название`
+- Оплатил услугу → `money=-N`
+- Заплатил взятку → `money=-N` + `flag_взяточник=true`
+- Отдал долг → `money=-N` + `flag_долг_закрыт=true`
+
+**Получает:**
+- Продал предмет → `money=+N` + `equipment_remove=Название`
+- Получил награду → `money=+N` + `journal=Награда от ...`
+- Обобрал труп → `money=+N` + `equipment_add=...`
+- Заработал (торговля, служба) → `money=+N`
+
+### Сколько?
+
+- **Обычный предмет** (нож, паёк, билет) — 5-50 тронов
+- **Хороший предмет** (лазган, броня) — 100-500 тронов
+- **Редкий предмет** (плазма, артефакт) — 1000-10000 тронов
+- **Награда за задание** — 200-2000 тронов
+- **Услуга (ночлег, лекарь)** — 10-100 тронов
+
+Если игрок **сам торгуется** — цена может отклониться в 1.5-2 раза (см. бросок
+Фел или Торговли).
+
+### Важно
+
+- **НЕ ПИШИ** в тексте «у вас стало 500 тронов» — это работа системы.
+- Опиши **факт сделки** в тексте: «Купец отсчитал монеты, ты передал меч».
+- Если денег не хватает — **не давай предмет**. Опиши «Купец не согласился».
+
+---
+
+"""
+
+if MARKER in text:
+    r["modified"].append("master_core.txt — критические исходы уже есть")
 else:
-    # Парсим текущие строки
-    old_body = m.group(1)
-    old_names = re.findall(r'"([^"]*)"', old_body)
-
-    # Проверим, что уже целевое
-    if old_names == TARGET:
-        r["modified"].append("credits.py — список уже целевой")
+    # Вставим после секции «ФОРМАТ ОТВЕТА», до «БЛОК СОСТОЯНИЯ [STATE]»
+    m = re.search(r'\n##\s+[^\n]*БЛОК\s+СОСТОЯНИЯ\s*\[STATE\][^\n]*\n', text)
+    if not m:
+        r["errors"].append("master_core.txt: якорь 'БЛОК СОСТОЯНИЯ' не найден")
     else:
-        # Собираем новый блок
-        new_lines = ["THANKS_NAMES = ["]
-        for n in TARGET:
-            new_lines.append('    "' + n + '",')
-        new_lines.append("]")
-        new_block = "\n".join(new_lines)
+        pos = m.start()
+        nt = text[:pos] + "\n" + CRITS_SECTION + text[pos+1:]
+        _bk(p)
+        p.write_text(nt, encoding="utf-8")
+        r["modified"].append("master_core.txt — +секция «КРИТИЧЕСКИЕ ИСХОДЫ И ДЕНЬГИ»")
 
-        nt = text[:m.start()] + new_block + text[m.end():]
-        try:
-            ast.parse(nt)
-        except SyntaxError as e:
-            r["errors"].append("credits.py syntax: " + str(e))
+
+# ============================================================
+# 2) services/state_applier.py — clamp money + logging
+# ============================================================
+p = ROOT / "services" / "state_applier.py"
+text = p.read_text(encoding="utf-8")
+
+OLD_MONEY = '''    if "money" in changes:
+        raw = changes["money"]
+        is_d, v = _delta(raw)
+        if is_d:
+            char["money"] = int(char.get("money", 0) or 0) + v
         else:
-            _bk(p)
-            p.write_text(nt, encoding="utf-8")
-            r["modified"].append(
-                "credits.py — список тестеров обновлён ("
-                + str(len(old_names)) + " → " + str(len(TARGET)) + ")"
-            )
-            # Покажем diff
-            removed = [n for n in old_names if n not in TARGET]
-            added = [n for n in TARGET if n not in old_names]
-            if removed:
-                print("  Убрано: " + ", ".join(removed))
-            if added:
-                print("  Добавлено: " + ", ".join(added))
+            char["money"] = _to_int(raw, int(char.get("money", 0) or 0))
+        applied.append("money")'''
 
+NEW_MONEY = '''    if "money" in changes:
+        # PATCH_75: clamp negative + log
+        raw = changes["money"]
+        is_d, v = _delta(raw)
+        _old = int(char.get("money", 0) or 0)
+        if is_d:
+            _new = _old + v
+        else:
+            _new = _to_int(raw, _old)
+        if _new < 0:
+            print("[state_applier] money clamped: " + str(_old)
+                  + " → " + str(_new) + " → 0")
+            _new = 0
+        char["money"] = _new
+        if _new != _old:
+            print("[state_applier] money: " + str(_old) + " → " + str(_new))
+        applied.append("money")'''
+
+if NEW_MONEY in text:
+    r["modified"].append("state_applier.py — money уже пропатчен")
+elif OLD_MONEY in text:
+    nt = text.replace(OLD_MONEY, NEW_MONEY, 1)
+    try:
+        ast.parse(nt)
+    except SyntaxError as e:
+        r["errors"].append("state_applier.py syntax: " + str(e))
+    else:
+        _bk(p)
+        p.write_text(nt, encoding="utf-8")
+        r["modified"].append("state_applier.py — +clamp money + logging")
+else:
+    r["errors"].append("state_applier.py: блок money не найден целиком")
+
+
+# ============================================================
+# 3) .gitignore — универсальные паттерны для дампов
+# ============================================================
+p = ROOT / ".gitignore"
+text = p.read_text(encoding="utf-8")
+
+if "scripts/_d*.txt" in text:
+    r["modified"].append(".gitignore — паттерн дампов уже есть")
+else:
+    _bk(p)
+    add = """
+
+# PATCH_75: все дампы патчей (универсальный паттерн)
+scripts/_d*.txt
+scripts/_diag*.txt
+"""
+    p.write_text(text.rstrip() + add, encoding="utf-8")
+    r["modified"].append(".gitignore — +scripts/_d*.txt")
+
+
+# ============================================================
 print("=== PATCH " + TAG + " ===")
 for m in r["modified"]:
     print("  [MODIFIED] " + m)

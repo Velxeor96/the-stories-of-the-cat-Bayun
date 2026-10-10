@@ -130,12 +130,21 @@ def apply_changes(char, changes):
             char["xp"] = int(char.get("xp", 0) or 0) + v
 
     if "money" in changes:
+        # PATCH_75: clamp negative + log
         raw = changes["money"]
         is_d, v = _delta(raw)
+        _old = int(char.get("money", 0) or 0)
         if is_d:
-            char["money"] = int(char.get("money", 0) or 0) + v
+            _new = _old + v
         else:
-            char["money"] = _to_int(raw, int(char.get("money", 0) or 0))
+            _new = _to_int(raw, _old)
+        if _new < 0:
+            print("[state_applier] money clamped: " + str(_old)
+                  + " → " + str(_new) + " → 0")
+            _new = 0
+        char["money"] = _new
+        if _new != _old:
+            print("[state_applier] money: " + str(_old) + " → " + str(_new))
         applied.append("money")
 
     if "location" in changes:
