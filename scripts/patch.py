@@ -1,9 +1,9 @@
-# scripts/patch.py — PATCH_64: стартовые наборы субфракций Империума
+# scripts/patch.py — PATCH_68: continuation prompt + choice hint + diagnostics
 from __future__ import annotations
-import ast, shutil, sys
+import ast, re, shutil, sys
 from pathlib import Path
 
-TAG = "PATCH_64"
+TAG = "PATCH_68"
 ROOT = Path(__file__).resolve().parent.parent
 if not (ROOT / "app.py").exists():
     print("[ERROR] app.py не найден.")
@@ -20,240 +20,191 @@ def _bk(p):
             pass
 
 # ============================================================
-# 1) faction_starting.py — добавить 6 наборов субфракций
+# 1) prompts/master_core.txt — секция «ПРОДОЛЖЕНИЕ ИСТОРИИ»
 # ============================================================
-p = ROOT / "services" / "faction_starting.py"
+p = ROOT / "prompts" / "master_core.txt"
 text = p.read_text(encoding="utf-8")
 
-MARKER = '"imperial_guard": {'
+MARKER = "ПРОДОЛЖЕНИЕ ИСТОРИИ"
+
+CONTINUATION = """---
+
+## 📖 ПРОДОЛЖЕНИЕ ИСТОРИИ
+
+В блоке **«ПОСЛЕДНИЕ ХОДЫ»** (если он есть) ты видишь прошлые реплики игрока
+и свои собственные ответы. Это твоя память о разговоре.
+
+### Жёсткие правила
+
+- **НЕ НАЧИНАЙ СЦЕНУ ЗАНОВО.** Если ты уже описал «Ты стоишь на мосту…» —
+  второй раз так не пиши. Продолжай с того момента, где остановился.
+- **ПОМНИ NPC, места, договорённости.** Если раньше был инквизитор Драган —
+  это он и в следующем ходу. Если игрок обещал встретиться — он помнит.
+- **ЕСЛИ ИГРОК ПИШЕТ «1», «2», «3», «4»** — это номер из твоего последнего
+  блока «Варианты действий». Ты **обязан** описать, что происходит, когда
+  игрок делает этот выбор. Не спрашивай «что делаешь?» снова — просто
+  опиши последствия.
+- **ЕСЛИ ИГРОК ПИШЕТ СВОБОДНО** («Я иду к башне») — это действие, продолжай
+  сцену от текущего момента, не от начала.
+
+### Как понять, что ты повторяешься
+
+Признаки «начала заново»:
+- Ты описываешь первую сцену (место, где игрок «только что прибыл»).
+- Ты говоришь «Ты стоишь на…» в третий раз.
+- Ты описываешь NPC, который уже был представлен.
+- Ты повторяешь атмосферные детали (погоду, запахи) без причины.
+
+Если такое ловишь — **остановись** и продолжай с того места, где закончился
+предыдущий ответ. Продвинь сюжет вперёд хотя бы на одну деталь:
+новый NPC, новая угроза, новая зацепка, поворот.
+
+### Формат ответа (напоминание)
+
+1. Художественное описание (3-5 абзацев) — **продолжение**, не заново.
+2. Короткий вопрос в конце.
+3. **Варианты действий:** 2-4 варианта + «Иное: опиши».
+
+"""
+
 if MARKER in text:
-    r["modified"].append("faction_starting.py — наборы субфракций уже есть")
+    r["modified"].append("master_core.txt — секция ПРОДОЛЖЕНИЕ ИСТОРИИ уже есть")
 else:
-    # Найдём конец FACTION_STARTING — закрывающая "}\n\n\n" перед HOME_WORLD_BONUSES
-    ANCHOR = '''    "genestealers": {
-        "weapons": [
-            {"name": "Автопистолет",
-             "stats": "30м, О/3/-, 1d10+2 I, Пробой 0",
-             "weight": "1.5 кг", "notes": "Надёжное"},
-        ],
-        "armour": {"head": 2, "body": 2, "arms": 2, "legs": 2,
-                   "notes": "Гражданская броня"},
-        "equipment": ["Символ культа", "Ложные документы",
-                      "Скрытый передатчик"],
-        "talents": ["Обострённые чувства (Зрение)", "Тёмное зрение",
-                    "Маскировка (Мастер)"],
-        "skills": ["Обман", "Скрытность", "Обаяние"],
-        "money": 100, "currency": "Троны",
-    },
-}'''
-
-    NEW_KITS = '''    "genestealers": {
-        "weapons": [
-            {"name": "Автопистолет",
-             "stats": "30м, О/3/-, 1d10+2 I, Пробой 0",
-             "weight": "1.5 кг", "notes": "Надёжное"},
-        ],
-        "armour": {"head": 2, "body": 2, "arms": 2, "legs": 2,
-                   "notes": "Гражданская броня"},
-        "equipment": ["Символ культа", "Ложные документы",
-                      "Скрытый передатчик"],
-        "talents": ["Обострённые чувства (Зрение)", "Тёмное зрение",
-                    "Маскировка (Мастер)"],
-        "skills": ["Обман", "Скрытность", "Обаяние"],
-        "money": 100, "currency": "Троны",
-    },
-
-    # ===== PATCH_64: субфракции Империума =====
-    "imperial_guard": {
-        "weapons": [
-            {"name": "Лазган", "stats": "100м, О/3/-, 1d10+3 E, Пробой 0",
-             "weight": "2 кг", "notes": "Надёжное"},
-            {"name": "Боевой нож", "stats": "Ближний бой, 1d10+2 R, Пробой 0",
-             "weight": "1 кг", "notes": "Примитивное"},
-        ],
-        "armour": {"head": 4, "body": 4, "arms": 4, "legs": 4,
-                   "notes": "Флак-броня"},
-        "equipment": ["Фляга", "Респиратор", "Рюкзак",
-                      "Фраг-гранаты (3)", "Крак-гранаты (3)", "Шлем"],
-        "talents": ["Владение оружием (Лазерное)",
-                    "Владение оружием (Низкотехнологичное)",
-                    "Владение оружием (Стабберы)"],
-        "skills": ["Обыденное знание (Имперская Гвардия)",
-                   "Языкознание (Низкий готик)", "Бдительность"],
-        "money": 50, "currency": "Троны",
-    },
-    "mechanicus": {
-        "weapons": [
-            {"name": "Омниссианский топор",
-             "stats": "Ближний бой, 2d10+4 E, Пробой 6",
-             "weight": "8 кг", "notes": "Силовое поле, Несбалансированное"},
-            {"name": "Лазпистолет", "stats": "30м, О/--/--, 1d10+2 E, Пробой 0",
-             "weight": "1 кг", "notes": "Надёжное"},
-        ],
-        "armour": {"head": 8, "body": 8, "arms": 8, "legs": 8,
-                   "notes": "Тяжёлая броня Механикус"},
-        "equipment": ["Священные масла", "Инфопланшет", "Комбиниструмент",
-                      "Механодендрит"],
-        "talents": ["Владение оружием (Силовое)",
-                    "Механодендрит (Утилита)", "Ритуал освобождения"],
-        "skills": ["Запретное знание (Адептус Механикус)",
-                   "Техпользование", "Логика"],
-        "money": 100, "currency": "Троны",
-    },
-    "inquisition": {
-        "weapons": [
-            {"name": "Болт-пистолет",
-             "stats": "30м, О/3/-, 1d10+5 X, Пробой 4",
-             "weight": "3.5 кг", "notes": "Разрывное"},
-            {"name": "Силовой меч",
-             "stats": "Ближний бой, 1d10+5 E, Пробой 5",
-             "weight": "3 кг", "notes": "Силовое поле, Сбалансированное"},
-        ],
-        "armour": {"head": 8, "body": 8, "arms": 8, "legs": 8,
-                   "notes": "Карапасная броня"},
-        "equipment": ["Инсигния", "Розарий", "Инфопланшет",
-                      "Печать Инквизитора"],
-        "talents": ["Владение оружием (Болтерное)",
-                    "Владение оружием (Силовое)", "Непоколебимая вера"],
-        "skills": ["Запретное знание (Ересь)",
-                   "Сбор информации", "Допрос"],
-        "money": 300, "currency": "Троны",
-    },
-    "sororitas": {
-        "weapons": [
-            {"name": "Болтер (Годвин-Де'аз)",
-             "stats": "90м, О/2/4, 1d10+5 X, Пробой 4",
-             "weight": "7 кг", "notes": "Разрывное"},
-            {"name": "Боевой нож", "stats": "Ближний бой, 1d10+2 R, Пробой 0",
-             "weight": "1 кг", "notes": "Примитивное"},
-        ],
-        "armour": {"head": 9, "body": 9, "arms": 9, "legs": 9,
-                   "notes": "Силовая броня Сестёр (AP 9, +10 к Силе)"},
-        "equipment": ["Розарий", "Благословение Императора",
-                      "Священные реликвии"],
-        "talents": ["Владение оружием (Болтерное)",
-                    "Непоколебимая вера", "Ненависть (Еретики)"],
-        "skills": ["Обыденное знание (Экклезиархия)",
-                   "Учёное знание (Имперская вера)"],
-        "money": 150, "currency": "Троны",
-    },
-    "space_marine": {
-        "weapons": [
-            {"name": "Болтер Астартес",
-             "stats": "100м, О/3/-, 1d10+9 X, Пробой 5",
-             "weight": "7 кг", "notes": "Разрывное"},
-            {"name": "Цепной меч",
-             "stats": "Ближний бой, 1d10+3 R, Пробой 3",
-             "weight": "6 кг", "notes": "Цепное"},
-        ],
-        "armour": {"head": 11, "body": 11, "arms": 11, "legs": 11,
-                   "notes": "Силовая броня Астартес (AP 11, +20 к Силе)"},
-        "equipment": ["Болты (4 обоймы)", "Фраг-гранаты (3)"],
-        "talents": ["Владение оружием (Болтерное)",
-                    "Владение оружием (Цепное)", "Мощь Астартес"],
-        "skills": ["Обыденное знание (Война)", "Знание языка (Боевой)"],
-        "money": 0, "currency": "Реквизиция",
-    },
-    "arbites": {
-        "weapons": [
-            {"name": "Боевой дробовик",
-             "stats": "30м, О/3/-, 1d10+4 I, Пробой 0",
-             "weight": "6 кг", "notes": "Надёжное, Разброс"},
-            {"name": "Силовой молот",
-             "stats": "Ближний бой, 1d10+5 E, Пробой 6",
-             "weight": "5 кг", "notes": "Силовое поле, Шоковое (2)"},
-        ],
-        "armour": {"head": 8, "body": 8, "arms": 8, "legs": 8,
-                   "notes": "Карапасная броня"},
-        "equipment": ["Наручники", "Печати", "Ауспик",
-                      "Личный вокс", "Щит Адептус Арбитрес"],
-        "talents": ["Владение оружием (Стабберы)",
-                    "Владение оружием (Силовое)", "Аура власти"],
-        "skills": ["Запугивание", "Сбор информации",
-                   "Учёное знание (Закон)"],
-        "money": 200, "currency": "Троны",
-    },
-}'''
-
-    if ANCHOR in text:
-        nt = text.replace(ANCHOR, NEW_KITS, 1)
-        try:
-            ast.parse(nt)
-        except SyntaxError as e:
-            r["errors"].append("faction_starting.py syntax: " + str(e))
-        else:
-            _bk(p)
-            p.write_text(nt, encoding="utf-8")
-            r["modified"].append("faction_starting.py — +6 наборов субфракций")
+    m = re.search(r'\n##\s+[^\n]*ТОН\s+И\s+СТИЛЬ[^\n]*\n', text)
+    if m:
+        pos = m.start()
+        nt = text[:pos] + "\n" + CONTINUATION + text[pos+1:]
+        _bk(p)
+        p.write_text(nt, encoding="utf-8")
+        r["modified"].append("master_core.txt — +ПРОДОЛЖЕНИЕ ИСТОРИИ")
     else:
-        r["errors"].append("faction_starting.py: не нашёл конец FACTION_STARTING (genestealers)")
+        r["errors"].append("master_core.txt: якорь '## …ТОН И СТИЛЬ' не найден")
 
 # ============================================================
-# 2) character_creation.py — использовать subfaction_id + arch bonus
+# 2) services/orchestrator.py — подсказка при выборе цифры
 # ============================================================
-p = ROOT / "services" / "character_creation.py"
+p = ROOT / "services" / "orchestrator.py"
 text = p.read_text(encoding="utf-8")
 
-if "PATCH_64" in text and "_arch_service_map" in text:
-    r["modified"].append("character_creation.py — уже пропатчен")
+MARKER_ORCH = "# PATCH_68: continuation + choice hint"
+
+if MARKER_ORCH in text:
+    r["modified"].append("orchestrator.py — уже пропатчен")
 else:
-    # 2а) Найти строку "    if faction_id in ("necrons", "tyranids"):" и вставить
-    #      перед ней блок применения архетипных бонусов + определения _kit_key
-    OLD_IF = '    if faction_id in ("necrons", "tyranids"):'
-    NEW_IF = '''    # PATCH_64: бонусы архетипа для всех субфракций с сервисом
-    _arch_service_map = {
-        "imperial_guard": "services.imperial_guard",
-        "mechanicus":     "services.mechanicus",
-        "inquisition":    "services.inquisition",
-        "sororitas":      "services.sororitas",
-        "space_marine":   "services.space_marines",
-        "arbites":        "services.arbites",
-    }
-    _kit_key = subfaction_id if subfaction_id else faction_id
-    _arch_key = _kit_key if _kit_key in _arch_service_map else None
-    if _arch_key:
-        try:
-            _mod = __import__(_arch_service_map[_arch_key],
-                              fromlist=["get_archetype"])
-            _arch = _mod.get_archetype(career_id or "")
-        except Exception as _e:
-            print("[build_character] archetype: " + type(_e).__name__)
-            _arch = None
-        if _arch:
-            for _k, _v in (_arch.get("bonus_characteristics", {}) or {}).items():
-                if _k in stats:
-                    stats[_k] = int(stats[_k]) + int(_v)
+    # 2а) добавить функцию _parse_master_choices после DEFAULT_SKILL_VALUE
+    ANCHOR_TOP = "DEFAULT_SKILL_VALUE = 45\n"
+    HELPER = '''
 
-    if faction_id in ("necrons", "tyranids"):'''
+# PATCH_68: continuation + choice hint
+def _parse_master_choices(text: str) -> list[str]:
+    """Извлекает список вариантов действий из последнего ответа мастера."""
+    if not text:
+        return []
+    import re as _re
+    m = _re.search(
+        r"(?i)(?:\\*\\*)?(варианты\\s+действий|варианты)(?:\\*\\*)?[^\\n]*\\n((?:.|\\n)*)",
+        text,
+    )
+    if not m:
+        return []
+    block = m.group(2)
+    entries: dict = {}
+    for line in block.split("\\n"):
+        mm = _re.match(
+            r"^\\s*(\\d+)\\.\\s+\\*\\*(.+?)\\*\\*[.\\s]*(.*)$",
+            line.strip(),
+        )
+        if mm:
+            n = int(mm.group(1))
+            title = mm.group(2).strip()
+            body = mm.group(3).strip()
+            entries[n] = title + (". " + body if body else "")
+    return [entries[k] for k in sorted(entries.keys())]
 
-    # 2б) Заменить get_starting_kit(faction_id) на get_starting_kit(_kit_key)
-    OLD_KIT = '        kit = get_starting_kit(faction_id)'
-    NEW_KIT = '        kit = get_starting_kit(_kit_key)'
 
-    nt = text
+def _choice_hint_for(player_input: str, history: list) -> str:
+    """Если ввод — номер 1..9, возвращает подсказку мастеру с текстом выбора."""
+    s = str(player_input).strip()
+    if s not in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
+        return ""
+    if not history:
+        return ""
+    n = int(s)
+    last_master = ""
+    for t in reversed(history):
+        if isinstance(t, dict) and str(t.get("role")) == "master":
+            last_master = str(t.get("text", ""))
+            break
+    if not last_master:
+        return ""
+    choices = _parse_master_choices(last_master)
+    if not choices or n > len(choices):
+        return ""
+    return (
+        "\\n\\n=== ВЫБОР ИГРОКА ===\\n"
+        "Игрок написал \\"" + s + "\\" — это означает, что он выбирает "
+        "вариант " + str(n) + " из твоего последнего блока «Варианты действий»:\\n"
+        "«" + choices[n-1] + "»\\n"
+        "Опиши, что происходит, когда игрок делает этот выбор. "
+        "НЕ повторяй вступление и НЕ задавай вопрос «что делаешь?» снова — "
+        "сразу переходи к последствиям и новой сцене."
+    )
+# /PATCH_68
+
+'''
+
+    # 2б) заменить extra_context=rag_ctx на extra_context=(rag_ctx or "") + _choice_hint
+    OLD_CALL = '''        narrative = self.master.narrate(
+            state, command, roll=roll, history=history or [],
+            extra_context=rag_ctx,
+        )'''
+    NEW_CALL = '''        # PATCH_68: подсказка мастеру, если игрок выбрал вариант цифрой
+        _choice_hint = _choice_hint_for(player_input, history or [])
+        if _choice_hint:
+            print("[orchestrator] choice hint: " + player_input.strip())
+        narrative = self.master.narrate(
+            state, command, roll=roll, history=history or [],
+            extra_context=(rag_ctx or "") + _choice_hint,
+        )'''
+
     changed = 0
-
-    if OLD_IF in nt:
-        nt = nt.replace(OLD_IF, NEW_IF, 1)
+    if ANCHOR_TOP in text:
+        text = text.replace(ANCHOR_TOP, ANCHOR_TOP + HELPER, 1)
         changed += 1
     else:
-        r["errors"].append("character_creation.py: 'if faction_id in (necrons, tyranids)' не найдена")
+        r["errors"].append("orchestrator.py: якорь DEFAULT_SKILL_VALUE не найден")
 
-    if OLD_KIT in nt:
-        nt = nt.replace(OLD_KIT, NEW_KIT, 1)
+    if OLD_CALL in text:
+        text = text.replace(OLD_CALL, NEW_CALL, 1)
         changed += 1
     else:
-        r["errors"].append("character_creation.py: 'kit = get_starting_kit(faction_id)' не найдена")
+        r["errors"].append("orchestrator.py: блок narrate(...) не найден")
 
-    if changed > 0 and not r["errors"]:
+    if changed == 2:
         try:
-            ast.parse(nt)
+            ast.parse(text)
         except SyntaxError as e:
-            r["errors"].append("character_creation.py syntax: " + str(e))
+            r["errors"].append("orchestrator.py syntax: " + str(e))
         else:
             _bk(p)
-            p.write_text(nt, encoding="utf-8")
-            r["modified"].append("character_creation.py — subfaction kit + arch bonuses")
+            p.write_text(text, encoding="utf-8")
+            r["modified"].append("orchestrator.py — +_choice_hint + _parse_master_choices")
+
+# ============================================================
+# 3) Диагностика analyst.py и moderator.py (для PATCH_69)
+# ============================================================
+for rel, out_name in [
+    ("services/analyst.py",   "_d68_analyst.txt"),
+    ("services/moderator.py", "_d68_moderator.txt"),
+]:
+    fp = ROOT / rel
+    if not fp.exists():
+        continue
+    lines = fp.read_text(encoding="utf-8", errors="ignore").split("\n")
+    body = [f"=== {rel}: {len(lines)} строк ===", ""]
+    for i, ln in enumerate(lines, 1):
+        body.append(f"{i:5d} | {ln}")
+    (ROOT / "scripts" / out_name).write_text("\n".join(body), encoding="utf-8")
 
 print("=== PATCH " + TAG + " ===")
 for m in r["modified"]:
@@ -261,3 +212,4 @@ for m in r["modified"]:
 for e in r["errors"]:
     print("  [ERROR] " + e)
 print("DONE" if not r["errors"] else "DONE (with errors)")
+print("Дампы: scripts/_d68_analyst.txt, scripts/_d68_moderator.txt")

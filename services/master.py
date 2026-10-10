@@ -193,13 +193,33 @@ class Master:
             pass
 
         if history:
-            hl = ["=== ПОСЛЕДНИЕ ХОДЫ ==="]
-            for t in history[-6:]:
-                if hasattr(t, "player_input"):
-                    hl.append("> " + t.player_input)
-                if hasattr(t, "narrative") and t.narrative:
-                    hl.append(t.narrative[:400])
-            parts.append("\n".join(hl))
+            # PATCH_67: history может быть dict {"role": "player"|"master", "text": "..."}
+            # или dataclass TurnResult (в старом формате). Поддерживаем оба.
+            import re as _re
+            hl = ["=== ПОСЛЕДНИЕ ХОДЫ (продолжай сцену, не начинай заново) ==="]
+            recent = history[-12:]  # ~6 пар ход-ответ
+            for t in recent:
+                if isinstance(t, dict):
+                    role = str(t.get("role", "")).lower()
+                    txt = str(t.get("text", ""))
+                    if role == "player":
+                        hl.append("> Игрок: " + txt[:600])
+                    elif role == "master":
+                        clean = _re.sub(r"<!--ROLLCARD:.*?-->", "",
+                                        txt, flags=_re.DOTALL)
+                        clean = _re.sub(r"\[STATE\].*?\[/STATE\]", "",
+                                        clean, flags=_re.DOTALL)
+                        hl.append("Мастер: " + clean.strip()[:1200])
+                else:
+                    # fallback: TurnResult-объект
+                    if hasattr(t, "player_input") and t.player_input:
+                        hl.append("> Игрок: " + str(t.player_input)[:600])
+                    if hasattr(t, "narrative") and t.narrative:
+                        hl.append("Мастер: " + str(t.narrative)[:1200])
+            if len(hl) > 1:
+                hl.append("=== СЮЖЕТ: ПРОДОЛЖАЙ ИСТОРИЮ С ЭТОГО МОМЕНТА, "
+                          "НЕ ПЕРЕСКАЗЫВАЙ ВСТУПЛЕНИЕ. ===")
+                parts.append("\n".join(hl))
 
         action = getattr(command, "action", "?")
         raw = getattr(command, "raw", "")

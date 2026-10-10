@@ -16,6 +16,64 @@ from services.variants import ensure_action_variants
 DEFAULT_SKILL_VALUE = 45
 
 
+# PATCH_68: continuation + choice hint
+def _parse_master_choices(text: str) -> list[str]:
+    """Извлекает список вариантов действий из последнего ответа мастера."""
+    if not text:
+        return []
+    import re as _re
+    m = _re.search(
+        r"(?i)(?:\*\*)?(варианты\s+действий|варианты)(?:\*\*)?[^\n]*\n((?:.|\n)*)",
+        text,
+    )
+    if not m:
+        return []
+    block = m.group(2)
+    entries: dict = {}
+    for line in block.split("\n"):
+        mm = _re.match(
+            r"^\s*(\d+)\.\s+\*\*(.+?)\*\*[.\s]*(.*)$",
+            line.strip(),
+        )
+        if mm:
+            n = int(mm.group(1))
+            title = mm.group(2).strip()
+            body = mm.group(3).strip()
+            entries[n] = title + (". " + body if body else "")
+    return [entries[k] for k in sorted(entries.keys())]
+
+
+def _choice_hint_for(player_input: str, history: list) -> str:
+    """Если ввод — номер 1..9, возвращает подсказку мастеру с текстом выбора."""
+    s = str(player_input).strip()
+    if s not in ("1", "2", "3", "4", "5", "6", "7", "8", "9"):
+        return ""
+    if not history:
+        return ""
+    n = int(s)
+    last_master = ""
+    for t in reversed(history):
+        if isinstance(t, dict) and str(t.get("role")) == "master":
+            last_master = str(t.get("text", ""))
+            break
+    if not last_master:
+        return ""
+    choices = _parse_master_choices(last_master)
+    if not choices or n > len(choices):
+        return ""
+    return (
+        "\n\n=== ВЫБОР ИГРОКА ===\n"
+        "Игрок написал \"" + s + "\" — это означает, что он выбирает "
+        "вариант " + str(n) + " из твоего последнего блока «Варианты действий»:\n"
+        "«" + choices[n-1] + "»\n"
+        "Опиши, что происходит, когда игрок делает этот выбор. "
+        "НЕ повторяй вступление и НЕ задавай вопрос «что делаешь?» снова — "
+        "сразу переходи к последствиям и новой сцене."
+    )
+# /PATCH_68
+
+
+
 @dataclass
 class TurnResult:
     player_input: str
@@ -120,9 +178,13 @@ class Orchestrator:
                 print("[orchestrator] RAG ошибка: " + str(e))
                 rag_ctx = ""
 
+        # PATCH_68: подсказка мастеру, если игрок выбрал вариант цифрой
+        _choice_hint = _choice_hint_for(player_input, history or [])
+        if _choice_hint:
+            print("[orchestrator] choice hint: " + player_input.strip())
         narrative = self.master.narrate(
             state, command, roll=roll, history=history or [],
-            extra_context=rag_ctx,
+            extra_context=(rag_ctx or "") + _choice_hint,
         )
         narrative = ensure_action_variants(narrative)
 
