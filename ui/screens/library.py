@@ -8,62 +8,117 @@ def _goto(screen: str) -> None:
     st.session_state.screen = screen
 
 
-def render() -> None:
-    login = st.session_state.get("user_login")
-    if not login:
-        _goto("main_menu")
-        st.rerun()
-        return
+def render():
+    """Чистый экран Библиотеки: запрос + ответ одним блоком."""
+    import streamlit as st
 
-    st.markdown("<h2 style='font-family:Georgia,serif;'>📚 Библиотека</h2>",
-                unsafe_allow_html=True)
-    st.caption("Поиск по архивам. Введите запрос — увидите выдержки из базы.")
+    st.markdown("## 📚 Библиотека")
 
-    c1, c2 = st.columns([4, 1])
-    with c1:
-        query = st.text_input("Запрос", key="lib_query",
-                              placeholder="Кто такие друкхари?")
+    c1, c2 = st.columns([5, 1])
     with c2:
-        if st.button("← Назад", use_container_width=True):
-            _goto("game")
-            st.rerun()
+        if st.button("← Назад", key="library_back", use_container_width=True):
+            st.session_state.screen = "main_menu"
+            try:
+                st.rerun()
+            except AttributeError:
+                st.experimental_rerun()
+            return
+    with c1:
+        query = st.text_input(
+            "Запрос",
+            key="library_query",
+            placeholder="Например: Что такое Инквизиция?",
+            label_visibility="collapsed",
+        )
 
-    if not query or not query.strip():
-        st.info("Введите запрос.")
+    if not query:
+        st.caption("Введите запрос — я поищу ответ в архивах.")
         return
 
-    try:
-        from services.rag import get_kb
-        kb = get_kb()
-    except Exception as e:
-        st.error("База недоступна: " + str(e))
+    with st.spinner("Ищу в архивах..."):
+        results = _library_search(query, k=6)
+
+    if not results:
+        st.warning("Ничего не найдено.")
         return
 
-    # Определяем фракцию по запросу, если возможно
-    fid = None
-    try:
-        from services.fallbacks import FACTIONS
-        low = query.lower()
-        for k, data in FACTIONS.items():
-            if data["name"].lower() in low or k in low:
-                fid = k
-                break
-    except Exception:
-        pass
+    parts = []
+    for item in results:
+        text = _library_chunk_text(item)
+        if text and text.strip():
+            parts.append(_library_clean(text).strip())
 
-    try:
-        chunks = kb.search(query, top_k=5, faction=fid) or []
-    except Exception as e:
-        st.error("Поиск не удался: " + str(e))
+    combined = "\n\n".join(p for p in parts if p)
+    if not combined.strip():
+        st.info("Ничего полезного в найденных фрагментах.")
         return
 
-    if not chunks:
-        st.warning("Ничего не найдено. Попробуйте другую формулировку.")
-        return
+    st.markdown("---")
+    st.markdown(combined)
 
-    for c in chunks:
-        src = c.get("source") or "—"
-        fac = c.get("faction") or "general"
-        text = c.get("text") or ""
-        with st.expander("[" + str(fac) + "] " + str(src), expanded=True):
-            st.markdown(text[:1500])
+
+def _library_search(query, k=6):
+    """Универсальный поиск по RAG-хранилищу."""
+    candidates = [
+        ("services.rag", ("search", "query", "retrieve", "get_context", "find")),
+        ("services.knowledge", ("search", "query", "retrieve")),
+        ("services.library", ("search", "query", "retrieve")),
+        ("services.orchestrator", ("rag_query", "rag_search", "search")),
+        ("orchestrator", ("rag_query", "rag_search", "search")),
+    ]
+    for mod_name, fn_names in candidates:
+        try:
+            mod = __import__(mod_name, fromlist=["*"])
+        except Exception:
+            continue
+        for fn_name in fn_names:
+            fn = getattr(mod, fn_name, None)
+            if not callable(fn):
+                continue
+            for kw in ({"k": k}, {"top_k": k}, {}):
+                try:
+                    out = fn(query, **kw)
+                except TypeError:
+                    continue
+                except Exception:
+                    continue
+                if out:
+                    return out
+    return []
+
+
+def _library_chunk_text(item):
+    """Достаёт текст из чанка (str / dict / tuple / object)."""
+    if item is None:
+        return ""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, tuple) and len(item) >= 1:
+        return _library_chunk_text(item[0])
+    if isinstance(item, dict):
+        for k in ("page_content", "text", "content", "chunk", "document"):
+            if item.get(k):
+                return str(item[k])
+        return ""
+    for attr in ("page_content", "text", "content"):
+        v = getattr(item, attr, None)
+        if v:
+            return str(v)
+    return str(item)
+
+
+def _library_clean(text):
+    """Убирает «== Заголовок ==» из источника, оставляет текст."""
+    out = []
+    for line in str(text).split("\n"):
+        s = line.strip()
+        if len(s) >= 4 and set(s) <= set("= "):
+            continue
+        if s.startswith("==") and s.endswith("=="):
+            title = s.strip("= ").strip()
+            if title:
+                out.append("**" + title + "**")
+            continue
+        out.append(line)
+    return "\n".join(out).strip()
+
