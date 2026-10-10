@@ -590,6 +590,30 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
                      key="game_ship"):
             st.session_state.screen = "ship"
             st.rerun()
+        # PATCH_86: кнопка Пси-силы (только если psy_rating > 0 и не blocked)
+        try:
+            from services.psy_archetypes import ensure_psy_fields
+            _psy_changed = ensure_psy_fields(char)
+            if _psy_changed:
+                try:
+                    from persistence.characters import save_character as _save_psy
+                    _save_psy(login, char_name, char)
+                except Exception:
+                    pass
+        except Exception as _e:
+            print("[game] ensure_psy fail: " + type(_e).__name__)
+        try:
+            from services import psychic as _psy_mod
+            _psy_blocked = _psy_mod.is_blocked(char)
+            _psy_rating = int(char.get("psy_rating", 0) or 0)
+        except Exception:
+            _psy_blocked = True
+            _psy_rating = 0
+        if _psy_rating > 0 and not _psy_blocked:
+            if st.button("\U0001F52E \u041f\u0441\u0438-\u0441\u0438\u043b\u044b", use_container_width=True,
+                         key="game_psy"):
+                st.session_state.screen = "psy"
+                st.rerun()
         if st.button("⚔️ Бой", use_container_width=True,
                      key="game_combat"):
             st.session_state.screen = "combat"

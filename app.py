@@ -153,7 +153,7 @@ from ui.screens import (  # noqa: E402
     main_menu, loads, settings_screen, credits, progression,
     character, chronicles, combat, ship, market, library,
     game_settings, companions, achievements, journal,
-    rituals, dreams, skills,
+    rituals, dreams, skills, psy,
 )
 
 SCREENS = {
@@ -184,6 +184,8 @@ SCREENS = {
     "journal": journal.render,
     "rituals": rituals.render,
     "dreams": dreams.render,
+    "psy": psy.render,
+    "character": character.render,
 }
 
 _PRELOGIN = {"splash", "auth"}
@@ -246,6 +248,8 @@ def _resolve_screen():
         return _fix("splash", "wizard needs login")
 
     return screen
+
+
 
 
 screen = _resolve_screen()

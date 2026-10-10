@@ -345,6 +345,24 @@ SUBFACTION_FALLBACKS = {
 }
 
 
+def _resolve_parent_faction(fid: str) -> str:
+    """PATCH_87: subfaction -> родительская faction. Пример:
+    'rogue_trader' -> 'imperium', 'asuryani' -> 'eldar'.
+    Если fid уже faction или неизвестен — возвращает как есть."""
+    if not fid:
+        return fid
+    try:
+        if fid in FACTIONS:
+            return fid
+        for parent, data in FACTIONS.items():
+            subs = data.get("subfactions") or []
+            if fid in subs:
+                return parent
+    except Exception:
+        pass
+    return fid
+
+
 def _loader_hw(faction_id):
     try:
         from services.data_loader import list_home_world_ids
@@ -364,100 +382,116 @@ def _loader_careers(faction_id):
 
 
 def home_worlds_for(faction_id: str) -> list:
-    ids = _loader_hw(faction_id)
-    if ids:
-        return ids
-    if faction_id == "eldar":
+    """PATCH_87: сначала пробуем subfaction-specific, потом родительскую."""
+    resolved = _resolve_parent_faction(faction_id)
+    tried = [faction_id] if faction_id == resolved else [faction_id, resolved]
+    for fid in tried:
+        ids = _loader_hw(fid)
+        if ids:
+            return ids
+    if resolved == "eldar":
         return list(ELDAR_CRAFTWORLDS.keys())
     out = []
     for key, data in HOME_WORLDS.items():
         allowed = data.get("allowed_factions") or []
-        if not allowed or faction_id in allowed:
+        if not allowed or resolved in allowed:
             out.append(key)
     return out
 
 
 def careers_for(faction_id: str) -> list:
-    ids = _loader_careers(faction_id)
-    if ids:
-        return ids
-    if faction_id == "eldar":
+    """PATCH_87: сначала subfaction-specific, потом родительская."""
+    resolved = _resolve_parent_faction(faction_id)
+    tried = [faction_id] if faction_id == resolved else [faction_id, resolved]
+    for fid in tried:
+        ids = _loader_careers(fid)
+        if ids:
+            return ids
+    if resolved == "eldar":
         return list(ELDAR_PATHS.keys())
     out = []
     for key, data in CAREERS.items():
         allowed = data.get("allowed_factions") or []
-        if not allowed or faction_id in allowed:
+        if not allowed or resolved in allowed:
             out.append(key)
     return out
 
 
 def home_world_display_name(faction_id: str, key: str) -> str:
-    if faction_id == "eldar" and key in ELDAR_CRAFTWORLDS:
+    resolved = _resolve_parent_faction(faction_id)
+    if resolved == "eldar" and key in ELDAR_CRAFTWORLDS:
         return ELDAR_CRAFTWORLDS[key]["name"]
-    try:
-        from services.data_loader import get_home_world
-        d = get_home_world(faction_id, key)
-        if d and d.get("name"):
-            return d["name"]
-    except Exception:
-        pass
+    for fid in ([faction_id] if faction_id == resolved else [faction_id, resolved]):
+        try:
+            from services.data_loader import get_home_world
+            d = get_home_world(fid, key)
+            if d and d.get("name"):
+                return d["name"]
+        except Exception:
+            pass
     if key in HOME_WORLDS:
         return HOME_WORLDS[key].get("name", key)
     return key
 
 
 def career_display_name(faction_id: str, key: str) -> str:
-    if faction_id == "eldar" and key in ELDAR_PATHS:
+    resolved = _resolve_parent_faction(faction_id)
+    if resolved == "eldar" and key in ELDAR_PATHS:
         return ELDAR_PATHS[key]["name"]
-    try:
-        from services.data_loader import get_career
-        d = get_career(faction_id, key)
-        if d and d.get("name"):
-            return d["name"]
-    except Exception:
-        pass
+    for fid in ([faction_id] if faction_id == resolved else [faction_id, resolved]):
+        try:
+            from services.data_loader import get_career
+            d = get_career(fid, key)
+            if d and d.get("name"):
+                return d["name"]
+        except Exception:
+            pass
     if key in CAREERS:
         return CAREERS[key].get("name", key)
     return key
 
 
 def home_world_data(faction_id: str, key: str) -> dict:
-    if faction_id == "eldar" and key in ELDAR_CRAFTWORLDS:
+    resolved = _resolve_parent_faction(faction_id)
+    if resolved == "eldar" and key in ELDAR_CRAFTWORLDS:
         d = dict(ELDAR_CRAFTWORLDS[key])
         d["id"] = key
         return d
+    for fid in ([faction_id] if faction_id == resolved else [faction_id, resolved]):
+        try:
+            from services.data_loader import get_home_world
+            d = get_home_world(fid, key)
+            if d:
+                d["id"] = key
+                return d
+        except Exception:
+            pass
     if key in HOME_WORLDS:
         d = dict(HOME_WORLDS[key])
         d["id"] = key
         return d
-    try:
-        from services.data_loader import get_home_world
-        d = get_home_world(faction_id, key)
-        if d:
-            d["id"] = key
-            return d
-    except Exception:
-        pass
     return {}
 
 
 def career_data(faction_id: str, key: str) -> dict:
-    if faction_id == "eldar" and key in ELDAR_PATHS:
+    resolved = _resolve_parent_faction(faction_id)
+    if resolved == "eldar" and key in ELDAR_PATHS:
         d = dict(ELDAR_PATHS[key])
         d["id"] = key
         return d
+    for fid in ([faction_id] if faction_id == resolved else [faction_id, resolved]):
+        try:
+            from services.data_loader import get_career
+            d = get_career(fid, key)
+            if d:
+                d["id"] = key
+                return d
+        except Exception:
+            pass
     if key in CAREERS:
         d = dict(CAREERS[key])
         d["id"] = key
         return d
-    try:
-        from services.data_loader import get_career
-        d = get_career(faction_id, key)
-        if d:
-            d["id"] = key
-            return d
-    except Exception:
-        pass
     return {}
 
 

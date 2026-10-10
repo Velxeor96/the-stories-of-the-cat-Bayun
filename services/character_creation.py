@@ -291,7 +291,7 @@ def build_character(
         or subfaction_id == "rogue_trader"
     )
 
-    return {  # PATCH_59: has_ship
+    char = {  # PATCH_59: has_ship
         "has_ship": _has_ship,
         "name": name, "gender": gender, "age": age,
         "appearance": appearance,
@@ -335,3 +335,23 @@ def build_character(
         "necron_traits": faction_traits if faction_id == "necrons" else [],
         "tyranid_traits": faction_traits if faction_id == "tyranids" else [],
     }
+
+    # PATCH_87: авто-инициализация психосил по архетипу
+    try:
+        from services.psy_archetypes import ensure_psy_fields
+        ensure_psy_fields(char)
+        # Если у псайкера есть psy_rating, но не заданы силы —
+        # дадим стартовый набор доступных ему сил.
+        _pr = int(char.get("psy_rating", 0) or 0)
+        if _pr > 0 and not char.get("psychic_powers"):
+            try:
+                from services import psychic as _psy
+                _powers = _psy.get_powers(char) or []
+                char["psychic_powers"] = list(_powers)[:5]
+                char["psy_charge"] = _pr * 3
+            except Exception as _e:
+                print("[creation] psy powers: " + type(_e).__name__)
+    except Exception as _e:
+        print("[creation] ensure_psy_fields: " + type(_e).__name__)
+
+    return char
