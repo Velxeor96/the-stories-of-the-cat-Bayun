@@ -1,96 +1,150 @@
-"""persistence/cloud_store.py — облачное хранилище (Upstash Redis).
+"""persistence/cloud_store.py — облако через GitHub Gist.
 
-Если UPSTASH_REDIS_REST_URL и UPSTASH_REDIS_REST_TOKEN заданы — используем
-облако. Если нет — null-store, persistence/* работает с локальными файлами.
+Если GITHUB_GIST_ID и GITHUB_GIST_TOKEN заданы — используем Gist.
+Если нет — локальные файлы.
 """
 from __future__ import annotations
 import json
 import os
+import time
 
-_CLIENT = None
+import requests
+
+_GIST_ID = None
+_GIST_TOKEN = None
 _CONFIGURED = None
+_CACHE = {"data": None, "ts": 0.0}
+_CACHE_TTL = 5.0
 
 
-def _get_client():
-    global _CLIENT, _CONFIGURED
-    if _CONFIGURED is not None:
-        return _CLIENT
-
-    url = os.environ.get("UPSTASH_REDIS_REST_URL", "").strip()
-    token = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "").strip()
-
-    if not url or not token:
-        try:
-            import streamlit as st
-            url = url or str(st.secrets.get("UPSTASH_REDIS_REST_URL", "")).strip()
-            token = token or str(st.secrets.get("UPSTASH_REDIS_REST_TOKEN", "")).strip()
-        except Exception:
-            pass
-
-    if not url or not token:
-        _CONFIGURED = False
-        _CLIENT = None
-        print("[cloud_store] Upstash не настроен → локальные файлы")
-        return None
-
+def _get_secret(key: str) -> str:
+    val = os.environ.get(key, "").strip()
+    if val:
+        return val
     try:
-        from upstash_redis import Redis
-        _CLIENT = Redis(url=url, token=token)
-        _CONFIGURED = True
-        print("[cloud_store] Upstash подключён")
-    except Exception as e:
-        print("[cloud_store] Ошибка: " + type(e).__name__ + ": " + str(e))
+        import streamlit as st
+        val = str(st.secrets.get(key, "")).strip()
+    except Exception:
+        pass
+    return val
+
+
+def _ensure_config() -> bool:
+    global _GIST_ID, _GIST_TOKEN, _CONFIGURED
+    if _CONFIGURED is not None:
+        return _CONFIGURED
+
+    _GIST_ID = _get_secret("GITHUB_GIST_ID")
+    _GIST_TOKEN = _get_secret("GITHUB_GIST_TOKEN")
+
+    if not _GIST_ID or not _GIST_TOKEN:
         _CONFIGURED = False
-        _CLIENT = None
-    return _CLIENT
+        print("[cloud_store] Gist не настроен → локальные файлы")
+        return False
+
+    _CONFIGURED = True
+    print("[cloud_store] GitHub Gist подключён: " + _GIST_ID[:8] + "...")
+    return True
 
 
 def is_configured() -> bool:
-    return _get_client() is not None
+    return _ensure_config()
+
+
+def _headers() -> dict:
+    return {
+        "Authorization": "token " + _GIST_TOKEN,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _load_gist() -> dict:
+    now = time.time()
+    if _CACHE["data"] is not None and (now - _CACHE["ts"]) < _CACHE_TTL:
+        return _CACHE["data"]
+
+    try:
+        r = requests.get(
+            "https://api.github.com/gists/" + _GIST_ID,
+            headers=_headers(),
+            timeout=15,
+        )
+        if r.status_code != 200:
+            print("[cloud_store] GET fail: HTTP " + str(r.status_code))
+            return _CACHE["data"] or {}
+
+        files = r.json().get("files", {}) or {}
+        f = files.get("wh40k_saves.json") or {}
+        content = f.get("content", "") or "{}"
+        data = json.loads(content) if content.strip() else {}
+        if not isinstance(data, dict):
+            data = {}
+        _CACHE["data"] = data
+        _CACHE["ts"] = now
+        return data
+    except Exception as e:
+        print("[cloud_store] load error: " + type(e).__name__ + ": " + str(e))
+        return _CACHE["data"] or {}
+
+
+def _save_gist(data: dict) -> bool:
+    try:
+        payload = {
+            "files": {
+                "wh40k_saves.json": {
+                    "content": json.dumps(data, ensure_ascii=False, indent=2),
+                }
+            }
+        }
+        r = requests.patch(
+            "https://api.github.com/gists/" + _GIST_ID,
+            headers=_headers(),
+            json=payload,
+            timeout=15,
+        )
+        if r.status_code not in (200, 201):
+            print("[cloud_store] PATCH fail: HTTP " + str(r.status_code)
+                  + " " + r.text[:200])
+            return False
+        _CACHE["data"] = data
+        _CACHE["ts"] = time.time()
+        return True
+    except Exception as e:
+        print("[cloud_store] save error: " + type(e).__name__ + ": " + str(e))
+        return False
 
 
 def hset_json(namespace: str, key: str, value) -> bool:
-    r = _get_client()
-    if r is None:
+    if not _ensure_config():
         return False
-    try:
-        r.hset(namespace, key, json.dumps(value, ensure_ascii=False))
-        return True
-    except Exception as e:
-        print("[cloud_store] hset fail: " + type(e).__name__)
-        return False
+    data = _load_gist()
+    data.setdefault(namespace, {})[key] = value
+    return _save_gist(data)
 
 
 def hget_json(namespace: str, key: str):
-    r = _get_client()
-    if r is None:
+    if not _ensure_config():
         return None
-    try:
-        raw = r.hget(namespace, key)
-        if raw is None:
-            return None
-        return json.loads(raw)
-    except Exception as e:
-        print("[cloud_store] hget fail: " + type(e).__name__)
-        return None
+    data = _load_gist()
+    ns = data.get(namespace, {}) or {}
+    return ns.get(key)
 
 
 def hkeys(namespace: str) -> list:
-    r = _get_client()
-    if r is None:
+    if not _ensure_config():
         return []
-    try:
-        return list(r.hkeys(namespace) or [])
-    except Exception:
-        return []
+    data = _load_gist()
+    ns = data.get(namespace, {}) or {}
+    return list(ns.keys())
 
 
 def hdel(namespace: str, key: str) -> bool:
-    r = _get_client()
-    if r is None:
+    if not _ensure_config():
         return False
-    try:
-        r.hdel(namespace, key)
-        return True
-    except Exception:
-        return False
+    data = _load_gist()
+    ns = data.get(namespace, {}) or {}
+    if key in ns:
+        del ns[key]
+        return _save_gist(data)
+    return True
