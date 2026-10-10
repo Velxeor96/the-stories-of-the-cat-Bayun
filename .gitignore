@@ -110,3 +110,6 @@ data/imperium/imperial_guard.json
 # Бэкапы патчей
 *.bak_pre_*
 *.bak
+# HF cache (не пушим один большой zip, только части)
+hf_cache_full.zip
+_hf_cache_assembled.zip

@@ -1,0 +1,10 @@
+{
+  "total_size": 283947896,
+  "chunk_size": 73400320,
+  "parts": [
+    "hf_cache_part1.zip",
+    "hf_cache_part2.zip",
+    "hf_cache_part3.zip",
+    "hf_cache_part4.zip"
+  ]
+}
