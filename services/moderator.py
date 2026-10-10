@@ -18,6 +18,26 @@ from core.llm_factory import make_client
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
+
+# PATCH_71: refusal detect (moderator)
+def _moderator_is_refusal(text: str) -> bool:
+    """True, если GigaChat вернул отписку вместо JSON."""
+    if not text:
+        return False
+    low = str(text).lower()
+    for m in (
+        "не обладает собственным мнением",
+        "не транслирует мнение",
+        "как и любая языковая модель",
+        "иногда генеративные языковые модели",
+        "generative language model",
+        "обобщением информации",
+    ):
+        if m.lower() in low:
+            return True
+    return False
+# /PATCH_71
+
 class ModeratorError(Exception):
     """Ошибка модератора."""
 
@@ -195,6 +215,8 @@ class Moderator:
             text = text.strip()
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if not m:
+            if _moderator_is_refusal(text):
+                raise ModeratorError("GigaChat refused")
             raise ModeratorError(f"JSON не найден: {text[:120]!r}")
         try:
             return json.loads(m.group(0))
