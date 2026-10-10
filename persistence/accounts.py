@@ -1,19 +1,12 @@
-"""persistence/accounts.py — аккаунты пользователей.
-
-Хранение:
-  data/accounts/{login}.json — {login, salt, password_hash, created_at}
-  data/users/{login}/        — characters/, chats/
-
-Пароль: sha256(salt + password). Совместимо с прежним форматом.
-"""
+"""persistence/accounts.py — аккаунты (cloud-aware)."""
 from __future__ import annotations
-
 import hashlib
 import json
 import re
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
+from persistence import cloud_store
 
 _ROOT = Path(__file__).resolve().parents[1]
 _ACCOUNTS_DIR = _ROOT / "data" / "accounts"
@@ -22,7 +15,7 @@ _LOGIN_RE = re.compile(r"^[a-zA-Z0-9_\-]{3,24}$")
 
 
 class AuthError(Exception):
-    """Ошибка аутентификации."""
+    pass
 
 
 def _ensure_dirs() -> None:
@@ -34,30 +27,38 @@ def _hash_password(password: str, salt: str) -> str:
     return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
 
 
-def validate_login(login: str) -> tuple[bool, str]:
+def validate_login(login: str) -> tuple:
     if not login:
         return False, "Пустой логин"
     if not _LOGIN_RE.match(login):
-        return False, "Логин: 3–24 символа, a–z, A–Z, 0–9, _, -"
+        return False, "Логин: 3-24 символа, a-z, A-Z, 0-9, _, -"
     return True, ""
 
 
-def validate_password(password: str) -> tuple[bool, str]:
+def validate_password(password: str) -> tuple:
     if not password or len(password) < 4:
         return False, "Пароль: минимум 4 символа"
     if len(password) > 128:
-        return False, "Пароль слишком длинный (макс 128)"
+        return False, "Пароль слишком длинный"
     return True, ""
 
 
+def _cloud_ns() -> str:
+    return "accounts"
+
+
 def account_exists(login: str) -> bool:
+    if cloud_store.is_configured():
+        return cloud_store.hget_json(_cloud_ns(), login) is not None
     _ensure_dirs()
-    return (_ACCOUNTS_DIR / f"{login}.json").exists()
+    return (_ACCOUNTS_DIR / (login + ".json")).exists()
 
 
-def get_account(login: str) -> dict | None:
+def get_account(login: str):
+    if cloud_store.is_configured():
+        return cloud_store.hget_json(_cloud_ns(), login)
     _ensure_dirs()
-    path = _ACCOUNTS_DIR / f"{login}.json"
+    path = _ACCOUNTS_DIR / (login + ".json")
     if not path.exists():
         return None
     try:
@@ -74,7 +75,7 @@ def register_user(login: str, password: str) -> None:
     if not ok:
         raise AuthError(err)
     if account_exists(login):
-        raise AuthError(f"Логин {login!r} занят")
+        raise AuthError("Логин " + repr(login) + " занят")
 
     salt = secrets.token_hex(16)
     pwd_hash = _hash_password(password, salt)
@@ -84,9 +85,15 @@ def register_user(login: str, password: str) -> None:
         "password_hash": pwd_hash,
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    path = _ACCOUNTS_DIR / f"{login}.json"
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    if cloud_store.is_configured():
+        if cloud_store.hset_json(_cloud_ns(), login, data):
+            return
+        print("[accounts] cloud fail → local")
+
+    _ensure_dirs()
+    path = _ACCOUNTS_DIR / (login + ".json")
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     user_dir = _USERS_DIR / login
     (user_dir / "characters").mkdir(parents=True, exist_ok=True)
     (user_dir / "chats").mkdir(parents=True, exist_ok=True)
@@ -111,66 +118,8 @@ def user_dir_for(login: str) -> Path:
     return d
 
 
-def list_accounts() -> list[str]:
+def list_accounts() -> list:
+    if cloud_store.is_configured():
+        return sorted(cloud_store.hkeys(_cloud_ns()))
     _ensure_dirs()
     return sorted(p.stem for p in _ACCOUNTS_DIR.glob("*.json"))
-
-
-# === PATCH_11_COMPAT: shim для отсутствующих функций ===
-def _compat_ensure_symbols():
-    global AccountError, login, create_account
-    import hashlib as _hl
-    import json as _js
-    from pathlib import Path as _P
-
-    _accounts_dir = _P(__file__).resolve().parents[1] / "data" / "accounts"
-
-    if "AccountError" not in globals():
-        class AccountError(Exception):
-            pass
-
-    if "login" not in globals():
-        def login(login_name: str, password: str):
-            path = _accounts_dir / (login_name + ".json")
-            if not path.exists():
-                raise AccountError("Неверный логин или пароль")
-            try:
-                data = _js.loads(path.read_text(encoding="utf-8"))
-            except Exception as e:
-                raise AccountError("Битый файл аккаунта: " + str(e))
-            salt = str(data.get("salt", ""))
-            stored = str(data.get("password_hash", ""))
-            calc = _hl.sha256((salt + password).encode("utf-8")).hexdigest()
-            if calc != stored:
-                raise AccountError("Неверный логин или пароль")
-            return data
-
-    if "create_account" not in globals():
-        def create_account(login_name: str, password: str):
-            import os as _os
-            from datetime import datetime as _dt
-            _accounts_dir.mkdir(parents=True, exist_ok=True)
-            path = _accounts_dir / (login_name + ".json")
-            if path.exists():
-                raise AccountError("Аккаунт с таким логином уже существует")
-            salt = _os.urandom(16).hex()
-            pwd_hash = _hl.sha256((salt + password).encode("utf-8")).hexdigest()
-            data = {
-                "login": login_name,
-                "salt": salt,
-                "password_hash": pwd_hash,
-                "created_at": _dt.utcnow().isoformat() + "Z",
-            }
-            path.write_text(
-                _js.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            return data
-
-
-_compat_ensure_symbols()
-try:
-    del _compat_ensure_symbols
-except NameError:
-    pass
-

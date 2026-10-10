@@ -8,3 +8,4 @@ openai
 pytest
 pytest-watch
 plotly
+upstash-redis>=1.0.0
