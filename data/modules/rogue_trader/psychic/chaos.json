@@ -1,0 +1,742 @@
+{
+  "disciplines": {
+    "tzeentch": "Пути Тзинча (Tome of Fate)",
+    "nurgle": "Дары Нургла (Tome of Decay)",
+    "slaanesh": "Искусства Слаанеш (Tome of Excess)",
+    "undivided": "Хаос Неделимый",
+    "demonology": "Демонология"
+  },
+  "powers": {
+    "doombolt": {
+      "name": "Стрела Рока",
+      "discipline": "tzeentch",
+      "favor_level": 0,
+      "desc": "Атака: 1d10+7 E, игнорирует щиты.",
+      "cost": 2,
+      "type": "attack",
+      "min_rating": 1,
+      "damage": "1d10+7",
+      "corruption": 1
+    },
+    "twist_fate": {
+      "name": "Изгиб Судьбы",
+      "discipline": "tzeentch",
+      "favor_level": 0,
+      "desc": "+10 к следующему броску.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "next_roll": 10
+      },
+      "corruption": 1
+    },
+    "warp_gaze": {
+      "name": "Взор Варпа",
+      "discipline": "tzeentch",
+      "favor_level": 0,
+      "desc": "Видит истинную природу вещей.",
+      "cost": 2,
+      "type": "utility",
+      "min_rating": 1,
+      "corruption": 1
+    },
+    "boon_of_mutation": {
+      "name": "Дар Мутации",
+      "discipline": "tzeentch",
+      "favor_level": 1,
+      "desc": "Даёт союзнику мутацию +10 T.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "T": 10
+      },
+      "corruption": 1
+    },
+    "tzeentch_shroud": {
+      "name": "Покров Тзинча",
+      "discipline": "tzeentch",
+      "favor_level": 1,
+      "desc": "+10 Ag на сцену.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "Ag": 10
+      },
+      "corruption": 1
+    },
+    "pink_fire": {
+      "name": "Розовый Огонь Тзинча",
+      "discipline": "tzeentch",
+      "favor_level": 1,
+      "desc": "Атака: 2d10+5 E, оглушает.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+5",
+      "corruption": 1
+    },
+    "bolt_of_change": {
+      "name": "Стрела Перемен",
+      "discipline": "tzeentch",
+      "favor_level": 2,
+      "desc": "Атака: 2d10+8 E.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+8",
+      "corruption": 1
+    },
+    "gift_of_tzeentch": {
+      "name": "Дар Тзинча",
+      "discipline": "tzeentch",
+      "favor_level": 2,
+      "desc": "+10 Int, +10 WP на сцену.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "Int": 10,
+        "WP": 10
+      },
+      "corruption": 1
+    },
+    "ghostfire": {
+      "name": "Огонь Призраков",
+      "discipline": "tzeentch",
+      "favor_level": 2,
+      "desc": "Атака: 2d10+6 E, игнорирует броню.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+6",
+      "corruption": 1
+    },
+    "infernal_flames": {
+      "name": "Адское Пламя",
+      "discipline": "tzeentch",
+      "favor_level": 3,
+      "desc": "Атака: 2d10+6 E, длительное горение.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+6",
+      "corruption": 1
+    },
+    "breath_of_chaos": {
+      "name": "Дыхание Хаоса",
+      "discipline": "tzeentch",
+      "favor_level": 3,
+      "desc": "Атака: 2d10 E, разъедает броню.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10",
+      "corruption": 1
+    },
+    "master_fortune": {
+      "name": "Повелитель Фортуны",
+      "discipline": "tzeentch",
+      "favor_level": 3,
+      "desc": "Перебрасывает один провальный бросок.",
+      "cost": 4,
+      "type": "utility",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "tzeentch_firestorm": {
+      "name": "Огненный Шторм Тзинча",
+      "discipline": "tzeentch",
+      "favor_level": 4,
+      "desc": "Атака: 3d10+7 E по всем врагам.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+7",
+      "corruption": 2
+    },
+    "coruscating_blast": {
+      "name": "Сияющий Взрыв",
+      "discipline": "tzeentch",
+      "favor_level": 4,
+      "desc": "Атака: 3d10+5 E, ослепляет.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+5",
+      "corruption": 2
+    },
+    "treason_tzeentch": {
+      "name": "Предательство Тзинча",
+      "discipline": "tzeentch",
+      "favor_level": 5,
+      "desc": "Враги атакуют друг друга.",
+      "cost": 5,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "gift_of_nurgle": {
+      "name": "Дар Нургла",
+      "discipline": "nurgle",
+      "favor_level": 0,
+      "desc": "+10 T на сцену.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "T": 10
+      },
+      "corruption": 1
+    },
+    "miasma_pestilence": {
+      "name": "Миазмы Чумы",
+      "discipline": "nurgle",
+      "favor_level": 0,
+      "desc": "Атака областью: 1d10+3 E.",
+      "cost": 2,
+      "type": "attack",
+      "min_rating": 1,
+      "damage": "1d10+3",
+      "corruption": 1
+    },
+    "pestilent_vapours": {
+      "name": "Заразные Испарения",
+      "discipline": "nurgle",
+      "favor_level": 0,
+      "desc": "Атака областью: 1d10+4 E.",
+      "cost": 2,
+      "type": "attack",
+      "min_rating": 1,
+      "damage": "1d10+4",
+      "corruption": 1
+    },
+    "stream_corruption": {
+      "name": "Поток Гнили",
+      "discipline": "nurgle",
+      "favor_level": 1,
+      "desc": "Атака: 2d10+5 E, отравляет.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+5",
+      "corruption": 1
+    },
+    "withering_touch": {
+      "name": "Иссушающее Касание",
+      "discipline": "nurgle",
+      "favor_level": 1,
+      "desc": "Атака: 2d10+5 E, -1 T.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+5",
+      "corruption": 1
+    },
+    "bountiful_blight": {
+      "name": "Щедрая Порча",
+      "discipline": "nurgle",
+      "favor_level": 1,
+      "desc": "Восстанавливает 1d5 ран за ход.",
+      "cost": 4,
+      "type": "heal",
+      "min_rating": 3,
+      "heal": "1d5",
+      "corruption": 1
+    },
+    "flesh_rot": {
+      "name": "Гниль Плоти",
+      "discipline": "nurgle",
+      "favor_level": 2,
+      "desc": "Атака: 1d10+6 E, длительная гниль.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "1d10+6",
+      "corruption": 1
+    },
+    "curse_leper": {
+      "name": "Проклятие Прокажённого",
+      "discipline": "nurgle",
+      "favor_level": 2,
+      "desc": "-20 T цели.",
+      "cost": 3,
+      "type": "control",
+      "min_rating": 3,
+      "corruption": 1
+    },
+    "rotting_flesh": {
+      "name": "Гниющая Плоть",
+      "discipline": "nurgle",
+      "favor_level": 2,
+      "desc": "+5 AP, -5 Fel.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "AP": 5,
+        "Fel": -5
+      },
+      "corruption": 1
+    },
+    "plague_wind": {
+      "name": "Ветер Чумы",
+      "discipline": "nurgle",
+      "favor_level": 3,
+      "desc": "Атака областью: 2d10+4 E.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+4",
+      "corruption": 2
+    },
+    "grandfather_blessing": {
+      "name": "Благословение Дедушки",
+      "discipline": "nurgle",
+      "favor_level": 3,
+      "desc": "Лечит 2d5 ран.",
+      "cost": 4,
+      "type": "heal",
+      "min_rating": 3,
+      "heal": "2d5",
+      "corruption": 2
+    },
+    "plague_bearer": {
+      "name": "Носитель Чумы",
+      "discipline": "nurgle",
+      "favor_level": 3,
+      "desc": "Цель становится носителем болезни.",
+      "cost": 4,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "nurgle_rot": {
+      "name": "Гниль Нургла",
+      "discipline": "nurgle",
+      "favor_level": 4,
+      "desc": "Атака: 2d10+8 E, заразно.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "2d10+8",
+      "corruption": 2
+    },
+    "breath_plaguefather": {
+      "name": "Дыхание Чумного Отца",
+      "discipline": "nurgle",
+      "favor_level": 4,
+      "desc": "Атака: 3d10+6 E, длительное заражение.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+6",
+      "corruption": 2
+    },
+    "baleful_transmog": {
+      "name": "Зловещее Превращение",
+      "discipline": "nurgle",
+      "favor_level": 5,
+      "desc": "Превращает цель в хаос-спавна.",
+      "cost": 6,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 3
+    },
+    "delightful_pain": {
+      "name": "Восхитительная Боль",
+      "discipline": "slaanesh",
+      "favor_level": 0,
+      "desc": "Атака: 1d10+5 E, оглушает.",
+      "cost": 2,
+      "type": "attack",
+      "min_rating": 1,
+      "damage": "1d10+5",
+      "corruption": 1
+    },
+    "pavane_of_slaanesh": {
+      "name": "Павана Слаанеш",
+      "discipline": "slaanesh",
+      "favor_level": 0,
+      "desc": "Привлекает внимание всех.",
+      "cost": 2,
+      "type": "control",
+      "min_rating": 1,
+      "corruption": 1
+    },
+    "vain_beauty": {
+      "name": "Тщеславная Красота",
+      "discipline": "slaanesh",
+      "favor_level": 0,
+      "desc": "+10 Fel, -5 T.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "Fel": 10,
+        "T": -5
+      },
+      "corruption": 1
+    },
+    "sirens_call": {
+      "name": "Зов Сирены",
+      "discipline": "slaanesh",
+      "favor_level": 1,
+      "desc": "Цель идёт к вам против воли.",
+      "cost": 3,
+      "type": "control",
+      "min_rating": 3,
+      "corruption": 1
+    },
+    "excessive_endurance": {
+      "name": "Чрезмерная Выносливость",
+      "discipline": "slaanesh",
+      "favor_level": 1,
+      "desc": "+10 T на сцену.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "T": 10
+      },
+      "corruption": 1
+    },
+    "transfixing_gaze": {
+      "name": "Пронзающий Взор",
+      "discipline": "slaanesh",
+      "favor_level": 1,
+      "desc": "Цель замирает.",
+      "cost": 3,
+      "type": "control",
+      "min_rating": 3,
+      "corruption": 1
+    },
+    "lash_submission": {
+      "name": "Плеть Подчинения",
+      "discipline": "slaanesh",
+      "favor_level": 2,
+      "desc": "Подчиняет цель на раунд.",
+      "cost": 4,
+      "type": "control",
+      "min_rating": 3,
+      "corruption": 1
+    },
+    "symphony_of_pain": {
+      "name": "Симфония Боли",
+      "discipline": "slaanesh",
+      "favor_level": 2,
+      "desc": "Атака областью: 2d10+6 E.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+6",
+      "corruption": 1
+    },
+    "daemonic_visage": {
+      "name": "Демонический Лик",
+      "discipline": "slaanesh",
+      "favor_level": 2,
+      "desc": "+10 Fel на сцену.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "Fel": 10
+      },
+      "corruption": 1
+    },
+    "cacophonic_caress": {
+      "name": "Какофоническая Ласка",
+      "discipline": "slaanesh",
+      "favor_level": 3,
+      "desc": "Атака: 2d10+7 E, оглушает.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+7",
+      "corruption": 1
+    },
+    "blades_of_remorse": {
+      "name": "Клинки Раскаяния",
+      "discipline": "slaanesh",
+      "favor_level": 3,
+      "desc": "Атака: 2d10+8 E.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+8",
+      "corruption": 1
+    },
+    "hysterical_laughter": {
+      "name": "Истерический Смех",
+      "discipline": "slaanesh",
+      "favor_level": 3,
+      "desc": "Все враги теряют действие.",
+      "cost": 4,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "ecstatic_oblivion": {
+      "name": "Экстатическое Забвение",
+      "discipline": "slaanesh",
+      "favor_level": 4,
+      "desc": "Атака: 3d10+5 E, цель теряет сознание.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+5",
+      "corruption": 2
+    },
+    "acquiescence": {
+      "name": "Покорность",
+      "discipline": "slaanesh",
+      "favor_level": 4,
+      "desc": "Цель покорна на сцену.",
+      "cost": 5,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "hysterical_frenzy": {
+      "name": "Истерическое Безумие",
+      "discipline": "slaanesh",
+      "favor_level": 5,
+      "desc": "Цель атакует всех вокруг.",
+      "cost": 5,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "doombolt_u": {
+      "name": "Стрела Рока",
+      "discipline": "undivided",
+      "favor_level": 0,
+      "desc": "Атака: 1d10+7 E.",
+      "cost": 2,
+      "type": "attack",
+      "min_rating": 1,
+      "damage": "1d10+7",
+      "corruption": 1
+    },
+    "sacrifice": {
+      "name": "Жертва",
+      "discipline": "undivided",
+      "favor_level": 0,
+      "desc": "Отдаёт свои раны союзнику.",
+      "cost": 2,
+      "type": "heal",
+      "min_rating": 1,
+      "heal": "1d5",
+      "corruption": 1
+    },
+    "corruption_gift": {
+      "name": "Дар Порчи",
+      "discipline": "undivided",
+      "favor_level": 0,
+      "desc": "+2 к характеристике за Порчу.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "WS": 2
+      },
+      "corruption": 2
+    },
+    "warptime": {
+      "name": "Время Варпа",
+      "discipline": "undivided",
+      "favor_level": 1,
+      "desc": "+10 Ag, +1 реакция.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "Ag": 10
+      },
+      "corruption": 1
+    },
+    "infernal_gaze": {
+      "name": "Адский Взор",
+      "discipline": "undivided",
+      "favor_level": 1,
+      "desc": "Атака: 2d10+5 E.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+5",
+      "corruption": 1
+    },
+    "daemonbolt": {
+      "name": "Стрела Демона",
+      "discipline": "undivided",
+      "favor_level": 1,
+      "desc": "Атака: 2d10+6 E.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+6",
+      "corruption": 1
+    },
+    "gift_of_chaos": {
+      "name": "Дар Хаоса",
+      "discipline": "undivided",
+      "favor_level": 2,
+      "desc": "Мутация: +10 S.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "S": 10
+      },
+      "corruption": 2
+    },
+    "daemonic_strength": {
+      "name": "Демоническая Сила",
+      "discipline": "undivided",
+      "favor_level": 2,
+      "desc": "+15 S на сцену.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "S": 15
+      },
+      "corruption": 1
+    },
+    "soul_harvest": {
+      "name": "Жатва Душ",
+      "discipline": "undivided",
+      "favor_level": 2,
+      "desc": "Атака: 2d10+6 E, лечит на половину.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+6",
+      "corruption": 1
+    },
+    "wind_of_chaos": {
+      "name": "Ветер Хаоса",
+      "discipline": "undivided",
+      "favor_level": 3,
+      "desc": "Атака областью: 2d10+8 E.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "2d10+8",
+      "corruption": 2
+    },
+    "warp_malefic": {
+      "name": "Варп-Злоба",
+      "discipline": "undivided",
+      "favor_level": 3,
+      "desc": "Отключает способность цели.",
+      "cost": 4,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "warp_rift": {
+      "name": "Разрыв Варпа",
+      "discipline": "undivided",
+      "favor_level": 4,
+      "desc": "Атака: 3d10+8 E, редкий.",
+      "cost": 6,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+8",
+      "corruption": 3
+    },
+    "corruption_bolt": {
+      "name": "Луч Порчи",
+      "discipline": "demonology",
+      "favor_level": 0,
+      "desc": "Атака: 3d10+8 E, накладывает Порчу.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+8",
+      "corruption": 2
+    },
+    "summon_daemon": {
+      "name": "Призыв демона",
+      "discipline": "demonology",
+      "favor_level": 1,
+      "desc": "Призывает малого демона.",
+      "cost": 5,
+      "type": "utility",
+      "min_rating": 3,
+      "corruption": 2
+    },
+    "hellfire": {
+      "name": "Адский Огонь",
+      "discipline": "demonology",
+      "favor_level": 1,
+      "desc": "Атака: 3d10+6 E, игнорирует 8 AP.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+6",
+      "corruption": 2
+    },
+    "banish_daemon": {
+      "name": "Изгнание демона",
+      "discipline": "demonology",
+      "favor_level": 2,
+      "desc": "Изгоняет демоническую сущность.",
+      "cost": 5,
+      "type": "control",
+      "min_rating": 5,
+      "corruption": 2
+    },
+    "pact_with_daemon": {
+      "name": "Пакт с демоном",
+      "discipline": "demonology",
+      "favor_level": 2,
+      "desc": "+20 WP за 3 Порчи.",
+      "cost": 4,
+      "type": "buff",
+      "min_rating": 5,
+      "buff": {
+        "WP": 20
+      },
+      "corruption": 3
+    },
+    "summon_greater": {
+      "name": "Призыв Великого",
+      "discipline": "demonology",
+      "favor_level": 3,
+      "desc": "Призывает Великого демона.",
+      "cost": 8,
+      "type": "utility",
+      "min_rating": 7,
+      "corruption": 4
+    },
+    "possession": {
+      "name": "Демоническая Одержимость",
+      "discipline": "demonology",
+      "favor_level": 3,
+      "desc": "Вселяется в цель на сцену.",
+      "cost": 7,
+      "type": "control",
+      "min_rating": 7,
+      "corruption": 3
+    },
+    "warp_banishment": {
+      "name": "Варп-Изгнание",
+      "discipline": "demonology",
+      "favor_level": 4,
+      "desc": "Изгоняет цель в Варп.",
+      "cost": 7,
+      "type": "control",
+      "min_rating": 7,
+      "corruption": 3
+    }
+  },
+  "config": {
+    "fail_effect": "insanity",
+    "has_favor": true
+  }
+}
