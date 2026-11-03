@@ -174,14 +174,20 @@ def apply_changes(char, changes):
         w = _ensure_dict(char, "wounds")
         is_d, v = _delta(changes["wounds"])
         cur = int(w.get("current", 0) or 0)
-        w["current"] = (cur + v) if is_d else _to_int(changes["wounds"], cur)
+        new_val = (cur + v) if is_d else _to_int(changes["wounds"], cur)
+        if new_val < 0:
+            new_val = 0
+        w["current"] = new_val
         applied.append("wounds")
 
     if "fate" in changes:
         fp = _ensure_dict(char, "fate_points")
         is_d, v = _delta(changes["fate"])
         cur = int(fp.get("current", 0) or 0)
-        fp["current"] = (cur + v) if is_d else _to_int(changes["fate"], cur)
+        new_val = (cur + v) if is_d else _to_int(changes["fate"], cur)
+        if new_val < 0:
+            new_val = 0
+        fp["current"] = new_val
         applied.append("fate")
 
     if "xp" in changes:
