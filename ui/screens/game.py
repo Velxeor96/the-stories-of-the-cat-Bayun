@@ -20,8 +20,7 @@ from ui.roll_card import (
     render_dialog_rolling,
 )
 from ui.loading_screen import full_css, full_html, get_phrases
-from services.state_parser import parse_state
-from services.state_applier import apply_changes
+from services.state_manager import parse_and_apply
 try:
     from ui.roll_card import SKILL_NAMES_RU as _SKILL_RU
 except Exception:
@@ -1074,12 +1073,10 @@ def render() -> None:
         _narr_full = result.narrative or ""
         if _evt_text:
             _narr_full = _narr_full + "\n\n> ⚡ **Событие:** " + _evt_text
-        clean_text, changes = parse_state(_narr_full)
-        if changes:
-            applied = apply_changes(char, changes)
-            if applied:
-                _save_char(login, char_name, char)
-                print("[game] state applied: " + ", ".join(applied))
+        clean_text, applied = parse_and_apply(_narr_full, char)
+        if applied:
+            _save_char(login, char_name, char)
+            print("[game] state applied: " + ", ".join(applied))
 
         if result.roll:
             roll_dict = result.roll.to_dict()

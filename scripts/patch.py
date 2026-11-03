@@ -1,103 +1,102 @@
-# scripts/patch.py — PATCH_96
-# Перенос JSON Империума в модули, архивация остальных.
-# Перевод сервисов на module_loader.
+# scripts/patch.py — PATCH_97
+# Объединение state_parser и state_applier в state_manager. Удаление master_actions.
 from __future__ import annotations
-import re
-import shutil
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MOD_FACTIONS = ROOT / "data" / "modules" / "rogue_trader" / "factions"
-INACTIVE = MOD_FACTIONS / "_inactive"
 LOG = []
 
-def move_data(src_name: str, dst_dir: Path):
-    src = ROOT / "data" / src_name
-    if src.exists():
-        dst = dst_dir / src_name
-        shutil.move(str(src), str(dst))
-        # Вывод более аккуратного пути
-        rel_dst = dst.relative_to(ROOT / "data" / "modules" / "rogue_trader")
-        LOG.append(f"[MOVE] data/{src_name} -> data/modules/rogue_trader/{rel_dst}")
-
-def refactor_service(svc_name: str, faction_id: str):
-    path = ROOT / "services" / svc_name
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    
-    # Ищем блок загрузки в старых сервисах
-    pattern = r"def _load\(\) -> dict:\n    global _DATA\n    if _DATA is None:\n        p = Path\(__file__\)\.resolve\(\)\.parent\.parent / \"data\" / \".*?\.json\"\n        _DATA = json\.loads\(p\.read_text\(encoding=\"utf-8\"\)\)\n    return _DATA"
-    
-    replacement = f"def _load() -> dict:\n    global _DATA\n    if _DATA is None:\n        from services.module_loader import get_faction_data\n        _DATA = get_faction_data(\"{faction_id}\")\n    return _DATA"
-    
-    new_text, count = re.subn(pattern, replacement, text)
-    if count > 0:
-        path.write_text(new_text, encoding="utf-8")
-        LOG.append(f"[PATCH] {svc_name} uses module_loader now")
-
-def patch_necrons_tyranids():
-    # В некронах и тиранидах пути к файлам прописаны в константах
-    replacements = [
-        ("necrons.py", 'ROOT / "data" / "necrons.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons.json"'),
-        ("necrons.py", 'ROOT / "data" / "necrons_weapons.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_weapons.json"'),
-        ("necrons.py", 'ROOT / "data" / "necrons_armour.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_armour.json"'),
-        ("necrons.py", 'ROOT / "data" / "necrons_fleet.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_fleet.json"'),
-        ("tyranids.py", 'ROOT / "data" / "tyranids.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids.json"'),
-        ("tyranids.py", 'ROOT / "data" / "tyranids_weapons.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_weapons.json"'),
-        ("tyranids.py", 'ROOT / "data" / "tyranids_armour.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_armour.json"'),
-        ("tyranids.py", 'ROOT / "data" / "tyranids_fleet.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_fleet.json"'),
-    ]
-    for svc, old_path, new_path in replacements:
-        path = ROOT / "services" / svc
-        if not path.exists():
-            continue
-        text = path.read_text(encoding="utf-8")
-        if old_path in text:
-            text = text.replace(old_path, new_path)
-            path.write_text(text, encoding="utf-8")
-            LOG.append(f"[PATCH] {svc} path updated -> _inactive")
-
 def main() -> int:
-    print("=== PATCH_96: Data Migration ===\n")
-    MOD_FACTIONS.mkdir(parents=True, exist_ok=True)
-    INACTIVE.mkdir(parents=True, exist_ok=True)
-    (INACTIVE / "necrons").mkdir(exist_ok=True)
-    (INACTIVE / "tyranids").mkdir(exist_ok=True)
+    print("=== PATCH_97: State Manager ===\n")
+    
+    parser_path = ROOT / "services" / "state_parser.py"
+    applier_path = ROOT / "services" / "state_applier.py"
+    
+    if not parser_path.exists() or not applier_path.exists():
+        print("[ERROR] Не найдены исходные файлы state_parser.py или state_applier.py")
+        return 1
 
-    # 1. Империум (активные)
-    imperium_files = [
-        "imperial_guard.json", "mechanicus.json", "inquisition.json",
-        "sororitas.json", "space_marines.json", "arbites.json"
-    ]
-    for f in imperium_files:
-        move_data(f, MOD_FACTIONS)
+    parser_text = parser_path.read_text(encoding="utf-8")
+    applier_text = applier_path.read_text(encoding="utf-8")
+    
+    # Безопасно вырезаем тела функций.
+    parser_body = parser_text.split('import re\n', 1)[-1]
+    applier_body = applier_text.split('from __future__ import annotations\n', 1)[-1]
+    
+    lines = []
+    lines.append('"""services/state_manager.py — парсинг [STATE] и применение к персонажу.')
+    lines.append('')
+    lines.append('PATCH_97: Объединяет state_parser и state_applier в единый менеджер.')
+    lines.append('"""')
+    lines.append('from __future__ import annotations')
+    lines.append('import re')
+    lines.append('')
+    lines.append('# --- Из state_parser ---')
+    lines.append(parser_body.strip())
+    lines.append('')
+    lines.append('# --- Из state_applier ---')
+    lines.append(applier_body.strip())
+    lines.append('')
+    lines.append('')
+    lines.append('def parse_and_apply(narrative: str, char: dict) -> tuple[str, list[str]]:')
+    lines.append('    """Парсит [STATE] и сразу применяет к персонажу."""')
+    lines.append('    clean_text, changes = parse_state(narrative)')
+    lines.append('    if not changes:')
+    lines.append('        return clean_text, []')
+    lines.append('    applied = apply_changes(char, changes)')
+    lines.append('    return clean_text, applied')
+    lines.append('')
+    
+    merged = "\n".join(lines)
+    
+    sm_path = ROOT / "services" / "state_manager.py"
+    sm_path.write_text(merged, encoding="utf-8")
+    LOG.append("[CREATE] services/state_manager.py")
 
-    # 2. Некроны и Тираниды (в _inactive)
-    for f in ["necrons.json", "necrons_armour.json", "necrons_fleet.json", "necrons_weapons.json"]:
-        move_data(f, INACTIVE / "necrons")
-    for f in ["tyranids.json", "tyranids_armour.json", "tyranids_fleet.json", "tyranids_weapons.json"]:
-        move_data(f, INACTIVE / "tyranids")
+    # Удаляем старые и мертвые файлы
+    for f in ["state_parser.py", "state_applier.py", "master_actions.py"]:
+        p = ROOT / "services" / f
+        if p.exists():
+            p.unlink()
+            LOG.append(f"[DELETE] services/{f}")
 
-    # 3. Обновляем Python-сервисы (отвязываем от старых путей)
-    for svc, fid in [
-        ("imperial_guard.py", "imperial_guard"),
-        ("mechanicus.py", "mechanicus"),
-        ("inquisition.py", "inquisition"),
-        ("sororitas.py", "sororitas"),
-        ("space_marines.py", "space_marines"),
-        ("arbites.py", "arbites"),
-    ]:
-        refactor_service(svc, fid)
+    # Обновляем game.py
+    game_path = ROOT / "ui" / "screens" / "game.py"
+    if game_path.exists():
+        text = game_path.read_text(encoding="utf-8")
         
-    patch_necrons_tyranids()
+        # Меняем импорты
+        text = text.replace(
+            "from services.state_parser import parse_state\nfrom services.state_applier import apply_changes",
+            "from services.state_manager import parse_and_apply"
+        )
+        
+        # Меняем вызов
+        old_logic = """        clean_text, changes = parse_state(_narr_full)
+        if changes:
+            applied = apply_changes(char, changes)
+            if applied:
+                _save_char(login, char_name, char)
+                print("[game] state applied: " + ", ".join(applied))"""
+        
+        new_logic = """        clean_text, applied = parse_and_apply(_narr_full, char)
+        if applied:
+            _save_char(login, char_name, char)
+            print("[game] state applied: " + ", ".join(applied))"""
+        
+        if old_logic in text:
+            text = text.replace(old_logic, new_logic)
+            game_path.write_text(text, encoding="utf-8")
+            LOG.append("[PATCH] ui/screens/game.py uses parse_and_apply")
+        else:
+            LOG.append("[WARN] ui/screens/game.py: якорь не найден, проверьте вручную")
 
     print("\n".join(LOG))
     print("\n=== ПРОВЕРКИ ===")
-    print("1. Тесты: python -m pytest tests/ -q")
-    print("2. Игра: python -c \"import app\"")
-    print("\nDONE — PATCH_96.")
+    print("python -m pytest tests/ -q")
+    print("python -c \"import app\"")
+    print("\nDONE — PATCH_97.")
     return 0
 
 if __name__ == "__main__":
