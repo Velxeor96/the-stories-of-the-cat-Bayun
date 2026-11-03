@@ -1,79 +1,136 @@
-# scripts/patch.py — PATCH_93
-# Генеральная уборка мусора + создание скелета модуля rogue_trader.
+# scripts/patch.py — PATCH_95
+# Создание единого загрузчика модулей (Module Loader) с fallback на старые пути.
 from __future__ import annotations
-import shutil
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TRASH = ROOT / "_trash_PATCH_93"
 LOG = []
 
-def to_trash(path: Path, reason: str) -> None:
+MODULE_LOADER_PY = '''"""services/module_loader.py — Единая точка доступа к данным фракций.
+
+PATCH_95: Внедрение модульной архитектуры.
+Сначала ищем в data/modules/<active_module>/factions/, затем падаем
+на старые пути (data/<faction_id>.json).
+"""
+from __future__ import annotations
+import json
+from pathlib import Path
+from typing import Optional, Any
+
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
+MODULES_DIR = DATA_DIR / "modules"
+
+# Пока активен только один модуль
+ACTIVE_MODULE = "rogue_trader"
+
+_CACHE: dict[str, dict] = {}
+
+def _load_json(path: Path) -> dict:
     if not path.exists():
-        return
-    rel = path.relative_to(ROOT)
-    dst = TRASH / rel
-    dst.parent.mkdir(parents=True, exist_ok=True)
+        return {}
     try:
-        shutil.move(str(path), str(dst))
-        LOG.append(f"[MOVE]  {rel} -> _trash_PATCH_93/ ({reason})")
+        return json.loads(path.read_text(encoding="utf-8"))
     except Exception as e:
-        LOG.append(f"[ERROR] {rel}: {e}")
+        print(f"[module_loader] Error loading {path}: {e}")
+        return {}
+
+def get_faction_data(faction_id: str) -> dict:
+    """Загружает данные фракции. Ищет в модулях, потом в старых путях."""
+    if faction_id in _CACHE:
+        return _CACHE[faction_id]
+
+    # 1. Новый путь (модульный)
+    new_path = MODULES_DIR / ACTIVE_MODULE / "factions" / f"{faction_id}.json"
+    if new_path.exists():
+        data = _load_json(new_path)
+        _CACHE[faction_id] = data
+        return data
+
+    # 2. Старый путь (fallback)
+    old_path = DATA_DIR / f"{faction_id}.json"
+    if old_path.exists():
+        data = _load_json(old_path)
+        _CACHE[faction_id] = data
+        return data
+
+    # 3. Нет данных
+    print(f"[module_loader] Warning: no data found for faction '{faction_id}'")
+    _CACHE[faction_id] = {}
+    return {}
+
+def get_archetype(faction_id: str, archetype_id: str) -> dict:
+    data = get_faction_data(faction_id)
+    for a in data.get("archetypes", []):
+        if a.get("id") == archetype_id:
+            return a
+    return {}
+
+def list_archetypes(faction_id: str) -> list:
+    return get_faction_data(faction_id).get("archetypes", [])
+
+def get_home_worlds(faction_id: str) -> list:
+    return get_faction_data(faction_id).get("home_worlds", [])
+
+def clear_cache():
+    _CACHE.clear()
+'''
+
+TEST_MODULE_LOADER = '''"""tests/test_module_loader.py"""
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from services.module_loader import get_faction_data, get_archetype, list_archetypes
+
+def test_loader_fallback_to_old_path():
+    # imperial_guard.json сейчас лежит в старом пути data/imperial_guard.json
+    data = get_faction_data("imperial_guard")
+    assert data, "Данные не загрузились"
+    assert "archetypes" in data
+    assert len(data["archetypes"]) > 0
+
+def test_get_archetype():
+    arch = get_archetype("imperial_guard", "sergeant")
+    assert arch, "Архетип sergeant не найден"
+    assert arch.get("name") == "Сержант"
+
+def test_list_archetypes():
+    archs = list_archetypes("imperial_guard")
+    assert len(archs) > 5
+
+def test_missing_faction_returns_empty():
+    data = get_faction_data("non_existent_faction")
+    assert data == {}
+'''
 
 def main() -> int:
-    print("=== PATCH_93: Генеральная уборка ===\n")
-    TRASH.mkdir(exist_ok=True)
-    LOG.append(f"[INIT]  Создана папка _trash_PATCH_93/")
+    print("=== PATCH_95: Module Loader ===\n")
+    
+    # 1. Создать сервис
+    svc_path = ROOT / "services" / "module_loader.py"
+    if not svc_path.exists():
+        svc_path.write_text(MODULE_LOADER_PY, encoding="utf-8")
+        LOG.append(f"[CREATE] services/module_loader.py")
+    else:
+        LOG.append(f"[SKIP] services/module_loader.py already exists")
 
-    # 1. Старые бэкапы (оставляем только самый свежий на каждый файл)
-    baks = sorted(ROOT.glob("**/*.bak_pre_PATCH_*"), key=lambda p: p.stat().st_mtime, reverse=True)
-    kept = set()
-    for b in baks:
-        base = b.name.split(".bak_pre_PATCH_")[0]
-        if base in kept:
-            to_trash(b, "старый бэкап")
-        else:
-            kept.add(base)
-
-    # 2. Дампы и диагностика
-    for f in ["data_list.txt", "data_tree.txt", "dump_wh40k.txt", "dump_wh40k_tree.txt"]:
-        to_trash(ROOT / f, "дамп/диагностика")
-
-    # 3. Legacy папки
-    to_trash(ROOT / "_reference_from_old", "устаревшая структура")
-    to_trash(ROOT / "_trash_pre_PATCH_90", "старый трэш")
-
-    # 4. Дубликаты
-    to_trash(ROOT / "data" / "imperium" / "imperial_guard.json", "дубликат data/imperial_guard.json")
-
-    # 5. Создание структуры модулей
-    mod_dir = ROOT / "data" / "modules" / "rogue_trader"
-    facts_dir = mod_dir / "factions"
-    facts_dir.mkdir(parents=True, exist_ok=True)
-
-    manifest = mod_dir / "manifest.json"
-    if not manifest.exists():
-        manifest.write_text("""{
-  "id": "rogue_trader",
-  "name": "Rogue Trader",
-  "source_book": "Rogue Trader Core Rulebook (FFG, 2009)",
-  "version": "1.0.0",
-  "engine_version": "1.x",
-  "factions": ["imperium"],
-  "unique_mechanics": ["trade", "profit_factor", "ship_management"],
-  "disabled_features": ["chaos_favor", "infamy"]
-}
-""", encoding="utf-8")
-        LOG.append("[CREATE] data/modules/rogue_trader/manifest.json")
-
-    LOG.append("[CREATE] data/modules/rogue_trader/factions/")
+    # 2. Создать тест
+    test_path = ROOT / "tests" / "test_module_loader.py"
+    if not test_path.exists():
+        test_path.write_text(TEST_MODULE_LOADER, encoding="utf-8")
+        LOG.append(f"[CREATE] tests/test_module_loader.py")
+    else:
+        LOG.append(f"[SKIP] tests/test_module_loader.py already exists")
 
     print("\n".join(LOG))
     print("\n=== ПРОВЕРКИ ===")
-    print(f"manifest.json существует: {manifest.exists()}")
-    print(f"factions_dir существует: {facts_dir.exists()}")
-    print("\nDONE — PATCH_93.")
+    print("Запустите: python -m pytest tests/test_module_loader.py -q")
+    print("\nDONE — PATCH_95. Module Loader создан.")
     return 0
 
 if __name__ == "__main__":
