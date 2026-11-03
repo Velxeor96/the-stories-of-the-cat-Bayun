@@ -1,178 +1,114 @@
-# 📋 HANDOFF — WH40K RPG Project (v3)
+# 📋 HANDOFF v5 — WH40K RPG Project (v2.1.0)
 
-**Дата:** 2026-10-11
-**Версия:** 2.0.0
-**Последний коммит:** `682ff40` (локально; push — по решению)
+**Дата:** 2026-11-03
+**Текущий коммит:** `a2ea1b1` (PATCH_101+102)
 **GitHub:** https://github.com/Velxeor96/the-stories-of-the-cat-Bayun.git
-**Путь:** `C:\Users\79109\Desktop\Wh40K`
+**Статус:** Ядро Империума готово (50 тестов passed). Требуется новый аудит и чистка.
 
 ---
 
-## 🎯 ТЕКУЩЕЕ СОСТОЯНИЕ
-
-**Проект прошёл первый большой аудит.** PATCH_88 → PATCH_91 закрыли
-критичные баги, пополнили данные субфракций, починили тесты,
-вычистили ключи из кода.
-
-**Тесты:** `pytest tests/` → **45 passed**.
-
----
-
-## 🚦 ЧТО СДЕЛАНО (аудит v1)
-
-### PATCH_88 — P0-баги + субфракции
-
-- `ui/screens/psy.py` — обёртка `render_entry()` вместо падавшего `render()`
-- `state_applier.apply_changes()` — убран двойной подсчёт xp/wounds/fate
-- `build_character()` — принимает `archetype_id` (алиас `career_id`)
-- `services/necrons.py` — убран дубль функций, добавлен `get_components`
-- **Киты 11 субфракций**: асуряни, арлекин, экзодит, chaos_marine,
-  dark_mechanicum, cultist, freebooter, fire_warrior, kabalite,
-  necron_lord, magus
-- `services/faction_starting.py` — fallback бонусов через сервис субфракции
-- Тесты перенесены из `_reference_from_old/tests/`
-
-### PATCH_89 — чистка тестов
-
-- `classify_exception()` — fatal ошибки больше не переклассифицируются
-- `LLMClient.__init__` — валидация параметров
-- Удалены 6 устаревших тестов (`core.death`, `core.session`,
-  `core.state`, `core.trigger_engine` — модулей давно нет)
-- Удалён `test_function_calling.py` (был hardcoded ключ)
-- Оставлены 4 рабочих тест-файла + `fakes.py`
-
-### PATCH_90 — scraper без ключа + mass cleanup
-
-- `scripts/scraper.py` — убран hardcoded GigaChat ключ
-- `use_container_width=True` → `width="stretch"` (30 файлов)
-- `_reference_from_old/` → `_trash_pre_PATCH_90/` (в `.gitignore`)
-- `.gitignore` + `dump_*.txt`, `_trash_*/`, `hf_cache_part*.zip`
-
-### PATCH_91 — финал аудита
-
-- `scripts/patch.py` — вычищен ключ из финальной версии
-- `VERSION` → 2.0.0
-- `CHANGELOG.md` — новая шапка 2.0.0 с описанием PATCH_88-91
-- `scripts/archive/` — одноразовые скрипты в архив
-- HANDOFF → v3
+## 🎯 ГЛАВНЫЕ ЦЕЛИ И ВИДЕНИЕ ПРОДУКТА
+Мы делаем коммерчески жизнеспособный, но фанатский продукт (текстовая RPG по WH40K).
+Требования к конечному продукту:
+1. **Кроссплатформенность:** Должно работать на ПК (Streamlit) и **на мобильных устройствах** (в идеале — Telegram-бот или PWA).
+2. **Стабильность:** Никаких вылетов. Все изменения проверяются тестами.
+3. **Без галлюцинаций:** ИИ-Мастер не выдумывает лор, локации и имена. Строго следует канону и RAG.
+4. **Интерес и красота:** Хороший визуал, глубокий сюжет (Story Profiles), честная механика.
+5. **Поддержка одним человеком:** Код должен быть простым, модульным и легко чиниться без команды разработчиков. Никаких сложных архитектурных паттернов ради паттернов.
 
 ---
 
-## 📊 АУДИТ: СТАТУС ПРОХОДОВ
+## ⚠️ КРИТИЧЕСКИЕ ПРАВИЛА ДЛЯ ИИ (ЧИТАТЬ ПЕРВЫМ ДЕЛОМ)
 
-- ✅ **Проход 0** (инвентаризация) — завершён
-- ✅ **Проход 1** (анализ кода) — завершён
-- ⏳ **Проход 2** (баги, костыли) — не начат
-- ⏳ **Проход 3** (унификация, PEP 8) — не начат
-- ⏳ **Проход 4** (доп. патчи) — не начат
-
----
-
-## 🚩 ЧТО ОСТАЛОСЬ (по приоритетам)
-
-### P1 — логика
-
-1. **`ui/screens/psy.py::_fire`** пишет в `st.session_state["chat_pending"]`,
-   а `game.py` читает `_pending_chat`. Пси-силы применяются, но Мастеру
-   сообщение не уходит. Имена ключей разошлись.
-2. **`services/master_actions.py`** — старая ветка API, несовместима с
-   `state_applier`. Мёртвый код.
-3. **`services/character_creation.py`** — мертвая ветка для некронов/тиранидов.
-
-### P2 — стиль и предупреждения
-
-4. **`services/progression.py`** vs **`services/talents_registry.py`** —
-   дублируют `buy_talent`.
-5. **`services/master.py` / `analyst.py` / `moderator.py`** — три почти
-   одинаковых класса с `_do_request`, `_extract_text`, `LLMClient`.
-6. **`print()` вместо `logging`** — по всему коду.
-7. **`services/psychic_*.py`** — данные в коде (6 файлов по 200-500 строк),
-   кандидаты на вынос в `data/psychic/*.json`.
-8. **`_safe_display` в character_creation** глушит все ошибки — если
-   data_loader сломан, никто не заметит.
-9. **`scripts/dump_full.py`** — мусорные `any()` в фильтрах.
-
-### P3 — косметика
-
-10. **`services/tutorial_data.py`** (994 строки) — `chr(10)` вместо `\n`.
-11. **`ui/theme.py`** — два похожих API (`render_theme_selector` и
-    `render_theme_strip`).
-12. **`services/combat.py`** — `import re` внутри метода `attack`.
+1. **НИКАКОГО СЛЕПОГО КОДА.** Если ты не видишь содержимое файла в контексте — **ЗАПРЕЩЕНО** писать патч по памяти или использовать регулярные выражения "наугад". Ты обязан сказать: *"Скинь мне файл X, я не вижу его структуру"*.
+2. **СТРОГОЕ СЛЕДОВАНИЕ ДОРОЖНОЙ КАРТЕ.** Не придумывай новые фичи, если они не в плане. Если все текущие задачи выполнены — **ОСТАНОВИСЬ** и напиши: *"План на текущую фазу выполнен. Давай обсудим стратегию следующего шага, прежде чем писать код"*.
+3. **СИСТЕМНЫЙ ПОДХОД.** Никаких "костылей". Патч = логическая задача. Один патч = одна фича или один фикс.
+4. **КОНТРОЛЬ КОНТЕКСТА.** Следи за заполнением чата. Если контекст подходит к концу — предупреди пользователя и предложи сделать новый Handoff.
+5. **СИНТАКСИС.** Все патчи пишутся через `scripts/patch.py`. Обязательно использовать `sys.path.insert(0, str(ROOT))`, raw-строки `r"""..."""` и избегать экранирования `\n` в коде.
 
 ---
 
-## 📁 СТРУКТУРА ПРОЕКТА
-Wh40K/
-├── app.py — HARD ROUTER, SCREENS
-├── config.yaml — провайдеры и роли
-├── VERSION — 2.0.0
-├── CHANGELOG.md — история
-├── HANDOFF.md — этот файл (v3)
-├── core/ — конфиг, LLM, errors, roll_engine
-├── services/ — вся игровая логика (~50 файлов)
-├── ui/
-│ ├── screens/ — 30+ экранов
-│ ├── theme.py — 16 тем
-│ ├── roll_card.py — карточка броска
-│ ├── assets.py — сигилы фракций
-│ └── loading_screen.py — INITIATIO
-├── persistence/ — аккаунты, персонажи, чаты, Gist
-├── prompts/ — master_core, analyst, moderator
-├── data/ — RAG-лор фракций + users/
-├── rules/ — wh40k_triggers.json
-├── tests/ — 4 рабочих файла (45 passed)
-├── scripts/ — patch.py + утилиты
-│ └── archive/ — одноразовые скрипты
-├── static/ — сертификаты GigaChat + сигилы
-├── _trash_pre_PATCH_90/ — legacy (в .gitignore, удалить)
-└── .streamlit/secrets.toml — секреты (не коммитить)
+## 🏗 АРХИТЕКТУРА (Что сделано в PATCH_93–102)
 
-text
+1. **Модульность:** Данные в `data/modules/rogue_trader/` (factions, psychic, story, lore).
+2. **Module Loader (`services/module_loader.py`):** Единая точка входа для JSON.
+3. **State Manager (`services/state_manager.py`):** Парсинг `[STATE]` с валидацией (раны >= 0).
+4. **Psychic Engine (`services/psychic_engine.py`):** Единый движок психосил.
+5. **Anti-Hallucination:** `services/text_validator.py` + `unknown_terms.txt`.
+6. **Story Profiles:** `data/modules/rogue_trader/story/imperium.json`.
+7. **Тесты:** 50 passed (`python -m pytest tests/ -q --no-header`).
 
 ---
 
-## 🛠 КАК ЗАПУСКАТЬ ПАТЧИ
-
-1. `notepad scripts\patch.py`
-2. Ctrl+A, Ctrl+V — новый код патча
-3. Ctrl+S, закрыть
-4. `python scripts\patch.py`
-5. Проверить `[INFO]` строки, запустить проверки
-6. `git add -A && git commit -m "PATCH_XX: ..."`
-7. `git log --oneline -3`
-8. Push — по решению пользователя
-
-**BACKUP:** каждый файл бэкапится как `<file>.bak_pre_PATCH_XX`.
-Откат: `copy file.py.bak_pre_PATCH_XX file.py`.
+## 📦 ИНСТРУКЦИЯ: КАК ДОБАВЛЯТЬ НОВЫЕ ФРАКЦИИ (DLC)
+1. **Данные:** Переместить папку фракции из `data/modules/rogue_trader/factions/_inactive/` в `data/modules/rogue_trader/factions/`.
+2. **Киты:** Добавить стартовые киты в `data/modules/rogue_trader/factions/<faction_id>.json`.
+3. **Сюжет:** Создать `data/modules/rogue_trader/story/<faction_id>.json` по образцу Империума.
+4. **Активация:** В `services/character_creation.py` добавить `faction_id` в `_ACTIVE_FACTIONS`.
+5. **UI:** В `ui/screens/wizard.py` добавить фракцию в список.
+*Код Orchestrator, Master и State Manager менять не нужно.*
 
 ---
 
-## 🔑 БЕЗОПАСНОСТЬ
-
-- **GigaChat ключ** — только в `.streamlit/secrets.toml` + env.
-  В `scripts/scraper.py` hardcoded ключ **убран** в PATCH_90.
-- **Файл `test_function_calling.py`** удалён — содержал ключ.
-- **`_trash_pre_PATCH_90/`** — в `.gitignore`, удалить руками.
-- **`.streamlit/secrets.toml`** — в `.gitignore`.
-- **Gist ID:** `372b7a659c7ec79df1ea85a7e56f5d17`.
-- **Токен GitHub PAT** — `token.txt` в корне (в `.gitignore`).
-  Проверить: `git log --all --oneline -- token.txt` → должно быть пусто.
-
----
-
-## 🚦 С ЧЕГО НАЧАТЬ НОВЫЙ ЧАТ
-
-**Мы прошли первый аудит (PATCH_88-91).**
-
-> Продолжаем WH40K RPG.
->
-> **Статус:** аудит v1 завершён, 45 passed, VERSION 2.0.0.
-> **Дальше:** Проход 2 (поиск костылей) или точечные P1-фиксы (см. HANDOFF v3).
->
-> **Прикладываю:** этот HANDOFF.
-
-**Первый P1-патч:** `ui/screens/psy.py` → `chat_pending` vs `_pending_chat`.
+## 🧹 ИНСТРУКЦИЯ: ГЕНЕРАЛЬНАЯ ЧИСТКА (Следующий шаг)
+В корне проекта и на GitHub скопилось много мусора.
+**Что нужно сделать в PATCH_103:**
+1. Удалить локально и из Git все `*.bak_pre_*` (кроме последних 1-2).
+2. Удалить папку `_trash_PATCH_93/` (она уже не нужна).
+3. Удалить `__pycache__`.
+4. **Разобраться с архивами:** `hf_cache_full.zip`, `hf_cache_part*.zip`, `chroma_db.zip`.
+   - *Важно:* `chroma_db.zip` и `hf_cache_part*.zip` нужны для Streamlit Cloud. Но `hf_cache_full.zip` (280 МБ) — это просто сумма частей, его можно удалить.
+   - Удалить `Wh40K_migration.zip`, `collect_migration.bat` (они больше не нужны).
+5. Проверить `.gitignore` и убедиться, что эти файлы не отслеживаются.
+6. На GitHub: если мусор уже закоммичен, удалить его через `git rm -r --cached` и запушить.
 
 ---
 
-*Handoff v3 создан 2026-10-11. Проект стабилен, аудит закрыт.*
+## 📌 ПРАВИЛО ОБНОВЛЕНИЯ VERSION И CHANGELOG
+Файлы `VERSION` и `CHANGELOG.md` — это наша витрина.
+**Правило:** После каждого крупного патча (добавление фичи, изменение архитектуры) ИИ должен напоминать пользователю:
+> *"Не забудь обновить VERSION и CHANGELOG.md"*
+Формат `VERSION`: `2.1.0` (SemVer: Major.Minor.Patch).
+- **Patch:** фиксы багов.
+- **Minor:** новые фичи (например, DLC).
+- **Major:** глобальные изменения (например, переход на мобилки).
+
+---
+
+## 🚦 ДОРОЖНАЯ КАРТА (Что делать дальше)
+
+### Фаза 1: Новый Аудит и Чистка (PATCH_103)
+- Провести ревизию кода после PATCH_93-102. Убедиться, что нет мертвых импортов (например, старых `psychic_*`).
+- Выполнить генеральную чистку папок и GitHub (см. инструкцию выше).
+- Обновить `VERSION` до `2.1.0`.
+
+### Фаза 2: UI Capabilities (PATCH_104)
+- В `manifest.json` добавить `"capabilities": ["trade", "ship", "psy", "combat"]`.
+- В `app.py` скрывать экраны (например, "Корабль"), если их нет в capabilities модуля. Убрать бесполезные кнопки.
+
+### Фаза 3: Расширение сюжета (PATCH_105)
+- Добавить `story_profiles` для субфракций (Имперская Гвардия, Механикус, Инквизиция и т.д.).
+
+### Фаза 4: Мобильная адаптация (PATCH_106+)
+- Разработка Telegram-бота (отдельный фронтенд, использующий тот же `Orchestrator`).
+
+### Фаза 5: Закрытая бета
+- Собрать 5-10 незнакомых тестеров. Собрать фидбек.
+
+---
+
+## 🛠 КЛЮЧЕВЫЕ ФАЙЛЫ
+- `app.py` — роутер экранов.
+- `services/module_loader.py` — чтение JSON модулей.
+- `services/state_manager.py` — парсинг `[STATE]`.
+- `services/orchestrator.py` — ход игры.
+- `services/master.py` — сборка промпта мастера.
+- `scripts/patch.py` — скрипт для внесения изменений (перезаписывается).
+- `tests/` — 50 тестов (обязательны к прогону перед коммитом).
+
+---
+
+## 📊 КАК РАБОТАТЬ С КОНТЕКСТОМ (Индикатор)
+- **Никогда не прикрепляй `dump_wh40k_code.txt`** (он весит ~800 КБ и сожрет ~200 000 токенов).
+- Если нужен код — проси пользователя скинуть **только конкретный файл**.
+- В начале чата попроси ИИ: *"Покажи текущий лимит контекста"*. Если контекст заполнен на 80% — сразу делаем новый Handoff.

@@ -1,7 +1,6 @@
-# scripts/patch.py — PATCH_101 + PATCH_102
-# Anti-hallucination + Story Profiles (Rogue Trader: Imperium)
+# scripts/patch.py — PATCH_KOT_INTRO_V5
+# Финальный текст приветствия (без версии, с самоиронией).
 from __future__ import annotations
-import json
 import sys
 from pathlib import Path
 
@@ -9,174 +8,61 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 LOG = []
 
-def write_file(rel_path: str, content: str) -> None:
-    p = ROOT / rel_path
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content.strip() + "\n", encoding="utf-8")
-    LOG.append(f"[CREATE] {rel_path}")
+NEW_KOT_HTML = '''<div class='kot-scroll'>
+<p>Приветствую тебя, путник, зашедший на огонек в мою скромную обитель! Спасибо, что открыл ссылку и решил взглянуть на то, что мы тут ваяем. Это дорогого стоит, и я, Кот Баюн, это очень ценю. Устраивайся поудобнее, сейчас я расскажу тебе сказку о том, как рождается игра.</p>
 
-def patch_file(rel_path: str, old: str, new: str) -> None:
-    p = ROOT / rel_path
-    if not p.exists():
-        LOG.append(f"[ERROR] {rel_path} не найден")
-        return
-    text = p.read_text(encoding="utf-8")
-    if old not in text:
-        LOG.append(f"[WARN] {rel_path}: якорь не найден")
-        return
-    p.write_text(text.replace(old, new, 1), encoding="utf-8")
-    LOG.append(f"[PATCH] {rel_path}")
+<p>Разработка игр — это, скажу я тебе, ад кромешный. Это бесконечный круговорот багов, вылетов, неработающих скриптов и бессонных ночей. Особенно когда ты делаешь текстовую РПГ и не можешь свалить все косяки на плохую графику или кривые текстуры. Ты сидишь в три часа ночи, смотришь, как нейросеть выдает «планету Новый Иерусалим» в мрачном будущем, и думаешь: «Господи, за что?». Это выматывает, высасывает все соки и заставляет сомневаться во всем. Но... черт возьми, это безумно весело! Видеть, как из хаоса кода рождается что-то живое, как мир обретает очертания, а ИИ-Мастер перестает нести чушь и начинает вести историю — это магия, ради которой мы и терпим этот ад.</p>
 
-# --- PATCH_101: Anti-Hallucination ---
-UNKNOWN_TERMS_TXT = """
-=== ЗАПРЕЩЁННЫЕ ТЕРМИНЫ (НЕ КАНОН) ===
-Если игрок упоминает эти термины, отвечай: "Такого нет в каноне Warhammer 40,000".
+<p>Мы пережили глобальную перестройку. Выкинули старую кашу из кода, заново собрали движок. Теперь Мастер не выдумывает локации, броски кубиков считает Python (а не нейросеть), а весь лор разложен по полочкам. Мы заставили эту махину работать как надо.</p>
 
-- Новый Иерусалим (нет такой планеты в секторе Коронус)
-- Патриарх Михаил (нет такого святого)
-- Император-Кровопийца (нет такого титула)
-- Варпоман (правильно: псайкер)
-- Храм-психоз (нет такого термина)
-- Ахарак (правильно: Сзарек)
-- Иннарис (правильно: Иннеад)
-"""
+<p>Но, как говорится, один в поле не воин. И в этом аду кромешном без надежного плеча рядом можно просто сойти с ума. Поэтому я хочу сказать огромное, искреннее спасибо тем, без кого этого проекта просто не существовало бы. В первую очередь — Ксении (ака Заяц). Заяц, да, это про тебя! Спасибо тебе огромное за то, что терпела меня все это время. За твое бесконечное терпение, за поддержку, за то, что не дала мне бросить это гиблое дело, когда руки опускались. Ты — мой самый главный критик и самый верный союзник. Без тебя этого проекта бы просто не было.</p>
 
-VALIDATOR_PY = r'''"""services/text_validator.py — Пост-фильтр для ответов Мастера."""
-from __future__ import annotations
-import re
+<p>Отдельное спасибо всем, кто участвовал в альфа-тестах, ловил баги и не послал меня далеко и надолго. Раньше я перечислял вас тут, но теперь у нас есть целый экран «Создатели». Загляните туда, вы там есть. Вы все — настоящие герои, которые помогли сделать эту версию лучше.</p>
 
-# Словарь жестких замен
-_FIXES = {
-    r"\bАхарак\b": "Сзарек",
-    r"\bАбадон\b": "Абаддон",
-    r"\bАзуриан\b": "Асуриан",
-    r"\bварпоман\b": "псайкер",
-    r"\bТёмные Механикум\b": "Тёмный Механикум",
-}
+<p>Что дальше? Мы не стоим на месте. Сейчас мы доводим до ума Империум. Когда это ядро будет работать как швейцарские часы — мы откроем следующую фракцию. Это будет как DLC. Сначала одна идеальная, потом вторая. В планах — мобильная версия (чтобы играть с телефона) и нормальные космические бои. Впереди еще много работы, но мы движемся вперед.</p>
 
-def scrub(text: str) -> str:
-    """Применяет жесткие замены к тексту мастера."""
-    if not text:
-        return text
-    out = text
-    for pattern, repl in _FIXES.items():
-        out = re.sub(pattern, repl, out, flags=re.IGNORECASE)
-    
-    # Если ИИ начал выдумывать Новый Иерусалим — мягко гасим
-    if "Новый Иерусалим" in out:
-        out = out.replace("Новый Иерусалим", "улей")
-        
-    return out
-'''
+<p>Спасибо, что играли. Спасибо за вашу поддержку. Спасибо, что тратите свое время на наше творчество. Надеемся, вам понравилось. Если нет — пишите, мы всегда открыты для фидбека.</p>
 
-# --- PATCH_102: Story Profiles ---
-STORY_PROFILE_JSON = {
-    "faction_id": "imperium",
-    "opening_hooks": [
-        "Наследство дяди — корабль, обременённый долгами",
-        "Пропавший груз из порта Странствие",
-        "Инквизитор, который ищет встречи"
-    ],
-    "starting_goals": ["Найти экипаж", "Разобраться с наследием"],
-    "immediate_threats": ["Пираты", "Инквизиция", "Кредиторы"],
-    "narrative_arc": "Негодяй с благородными задатками / имперский патриот",
-    "taboo_topics": ["Хаос", "Ксеносы в экипаже"]
-}
-
-# --- Модификация module_loader ---
-LOADER_ADD = '''
-
-def get_story_profile(faction_id: str) -> dict:
-    """Загружает сюжетный профиль фракции."""
-    p = MODULES_DIR / ACTIVE_MODULE / "story" / f"{faction_id}.json"
-    return _load_json(p)
-'''
-
-# --- Модификация master ---
-MASTER_OLD = '''        try:
-            from services.notes import render_notes_for_master
-            nb = render_notes_for_master(state)
-            if nb:
-                parts.append(nb)
-        except Exception:
-            pass'''
-
-MASTER_NEW = '''        try:
-            from services.notes import render_notes_for_master
-            nb = render_notes_for_master(state)
-            if nb:
-                parts.append(nb)
-        except Exception:
-            pass
-
-        # PATCH_102: Story Profiles
-        try:
-            from services.module_loader import get_story_profile
-            fid = str(state.get("faction_id") or "imperium")
-            sp = get_story_profile(fid)
-            if sp:
-                lines = ["=== СЮЖЕТНЫЙ ПРОФИЛЬ (СКРЫТО ОТ ИГРОКА) ==="]
-                if sp.get("opening_hooks"):
-                    lines.append("Крючки: " + "; ".join(sp["opening_hooks"]))
-                if sp.get("starting_goals"):
-                    lines.append("Цели: " + "; ".join(sp["starting_goals"]))
-                if sp.get("immediate_threats"):
-                    lines.append("Угрозы: " + "; ".join(sp["immediate_threats"]))
-                if sp.get("narrative_arc"):
-                    lines.append("Арка: " + str(sp["narrative_arc"]))
-                parts.append("\\n".join(lines))
-        except Exception as e:
-            print("[master] story profile fail: " + type(e).__name__)
-'''
-
-# --- Модификация master (scrub) ---
-MASTER_SCRUB_OLD = '''            if _is_gigachat_refusal(text):
-                print("[master] GigaChat refused — fallback")
-                return _master_refusal_fallback()
-            return text'''
-
-MASTER_SCRUB_NEW = '''            if _is_gigachat_refusal(text):
-                print("[master] GigaChat refused — fallback")
-                return _master_refusal_fallback()
-            
-            # PATCH_101: Anti-Hallucination
-            try:
-                from services.text_validator import scrub
-                text = scrub(text)
-            except Exception as e:
-                print("[master] scrub fail: " + type(e).__name__)
-            return text'''
+<div class='sig'>С любовью и уважением,<br>Ваш Кот Баюн.</div>
+</div>'''
 
 def main() -> int:
-    print("=== PATCH_101 + PATCH_102 ===\n")
-
-    # 1. Anti-Hallucination
-    write_file("data/modules/rogue_trader/lore/unknown_terms.txt", UNKNOWN_TERMS_TXT)
-    write_file("services/text_validator.py", VALIDATOR_PY)
-
-    # 2. Story Profiles
-    p = ROOT / "data" / "modules" / "rogue_trader" / "story" / "imperium.json"
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(STORY_PROFILE_JSON, ensure_ascii=False, indent=2), encoding="utf-8")
-    LOG.append("[CREATE] data/modules/rogue_trader/story/imperium.json")
-
-    # 3. Патчим loader
-    loader_path = ROOT / "services" / "module_loader.py"
-    text = loader_path.read_text(encoding="utf-8")
-    if "def get_story_profile" not in text:
-        text += LOADER_ADD
-        loader_path.write_text(text, encoding="utf-8")
-        LOG.append("[PATCH] module_loader.py: + get_story_profile")
-
-    # 4. Патчим master
-    patch_file("services/master.py", MASTER_OLD, MASTER_NEW)
-    patch_file("services/master.py", MASTER_SCRUB_OLD, MASTER_SCRUB_NEW)
-
+    print("=== PATCH_KOT_INTRO_V5 ===\n")
+    path = ROOT / "ui" / "screens" / "kot_intro.py"
+    
+    if not path.exists():
+        print("[ERROR] ui/screens/kot_intro.py не найден")
+        return 1
+        
+    text = path.read_text(encoding="utf-8")
+    
+    start_tag = "KOT_HTML = '''"
+    end_tag = "'''"
+    
+    start_idx = text.find(start_tag)
+    if start_idx == -1:
+        print("[ERROR] Не найден маркер KOT_HTML")
+        return 1
+        
+    end_idx = text.find(end_tag, start_idx + len(start_tag))
+    if end_idx == -1:
+        print("[ERROR] Не найден закрывающий тег")
+        return 1
+        
+    new_text = text[:start_idx] + "KOT_HTML = '''" + NEW_KOT_HTML + "'''" + text[end_idx + len(end_tag):]
+    
+    bak = path.with_suffix(path.suffix + ".bak_pre_KOT_INTRO_V5")
+    if not bak.exists():
+        bak.write_text(text, encoding="utf-8")
+        LOG.append(f"[BACKUP] {bak.name}")
+        
+    path.write_text(new_text, encoding="utf-8")
+    LOG.append("[WRITE] ui/screens/kot_intro.py обновлён")
+    
     print("\n".join(LOG))
     print("\n=== ПРОВЕРКИ ===")
     print("1. python -c \"import app\"")
-    print("2. python -m pytest tests/ -q")
-    print("\nDONE — PATCH_101 + PATCH_102.")
+    print("\nDONE — PATCH_KOT_INTRO_V5.")
     return 0
 
 if __name__ == "__main__":
