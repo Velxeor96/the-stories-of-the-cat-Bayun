@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
-TYRANIDS_FILE = ROOT / "data" / "tyranids.json"
-TYRANIDS_WEAPONS_FILE = ROOT / "data" / "tyranids_weapons.json"
-TYRANIDS_ARMOUR_FILE = ROOT / "data" / "tyranids_armour.json"
-TYRANIDS_FLEET_FILE = ROOT / "data" / "tyranids_fleet.json"
+TYRANIDS_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids.json"
+TYRANIDS_WEAPONS_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_weapons.json"
+TYRANIDS_ARMOUR_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_armour.json"
+TYRANIDS_FLEET_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_fleet.json"
 
 _CACHE = {}
 

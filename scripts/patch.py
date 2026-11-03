@@ -1,136 +1,103 @@
-# scripts/patch.py — PATCH_95
-# Создание единого загрузчика модулей (Module Loader) с fallback на старые пути.
+# scripts/patch.py — PATCH_96
+# Перенос JSON Империума в модули, архивация остальных.
+# Перевод сервисов на module_loader.
 from __future__ import annotations
+import re
+import shutil
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+MOD_FACTIONS = ROOT / "data" / "modules" / "rogue_trader" / "factions"
+INACTIVE = MOD_FACTIONS / "_inactive"
 LOG = []
 
-MODULE_LOADER_PY = '''"""services/module_loader.py — Единая точка доступа к данным фракций.
+def move_data(src_name: str, dst_dir: Path):
+    src = ROOT / "data" / src_name
+    if src.exists():
+        dst = dst_dir / src_name
+        shutil.move(str(src), str(dst))
+        # Вывод более аккуратного пути
+        rel_dst = dst.relative_to(ROOT / "data" / "modules" / "rogue_trader")
+        LOG.append(f"[MOVE] data/{src_name} -> data/modules/rogue_trader/{rel_dst}")
 
-PATCH_95: Внедрение модульной архитектуры.
-Сначала ищем в data/modules/<active_module>/factions/, затем падаем
-на старые пути (data/<faction_id>.json).
-"""
-from __future__ import annotations
-import json
-from pathlib import Path
-from typing import Optional, Any
-
-ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "data"
-MODULES_DIR = DATA_DIR / "modules"
-
-# Пока активен только один модуль
-ACTIVE_MODULE = "rogue_trader"
-
-_CACHE: dict[str, dict] = {}
-
-def _load_json(path: Path) -> dict:
+def refactor_service(svc_name: str, faction_id: str):
+    path = ROOT / "services" / svc_name
     if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as e:
-        print(f"[module_loader] Error loading {path}: {e}")
-        return {}
+        return
+    text = path.read_text(encoding="utf-8")
+    
+    # Ищем блок загрузки в старых сервисах
+    pattern = r"def _load\(\) -> dict:\n    global _DATA\n    if _DATA is None:\n        p = Path\(__file__\)\.resolve\(\)\.parent\.parent / \"data\" / \".*?\.json\"\n        _DATA = json\.loads\(p\.read_text\(encoding=\"utf-8\"\)\)\n    return _DATA"
+    
+    replacement = f"def _load() -> dict:\n    global _DATA\n    if _DATA is None:\n        from services.module_loader import get_faction_data\n        _DATA = get_faction_data(\"{faction_id}\")\n    return _DATA"
+    
+    new_text, count = re.subn(pattern, replacement, text)
+    if count > 0:
+        path.write_text(new_text, encoding="utf-8")
+        LOG.append(f"[PATCH] {svc_name} uses module_loader now")
 
-def get_faction_data(faction_id: str) -> dict:
-    """Загружает данные фракции. Ищет в модулях, потом в старых путях."""
-    if faction_id in _CACHE:
-        return _CACHE[faction_id]
-
-    # 1. Новый путь (модульный)
-    new_path = MODULES_DIR / ACTIVE_MODULE / "factions" / f"{faction_id}.json"
-    if new_path.exists():
-        data = _load_json(new_path)
-        _CACHE[faction_id] = data
-        return data
-
-    # 2. Старый путь (fallback)
-    old_path = DATA_DIR / f"{faction_id}.json"
-    if old_path.exists():
-        data = _load_json(old_path)
-        _CACHE[faction_id] = data
-        return data
-
-    # 3. Нет данных
-    print(f"[module_loader] Warning: no data found for faction '{faction_id}'")
-    _CACHE[faction_id] = {}
-    return {}
-
-def get_archetype(faction_id: str, archetype_id: str) -> dict:
-    data = get_faction_data(faction_id)
-    for a in data.get("archetypes", []):
-        if a.get("id") == archetype_id:
-            return a
-    return {}
-
-def list_archetypes(faction_id: str) -> list:
-    return get_faction_data(faction_id).get("archetypes", [])
-
-def get_home_worlds(faction_id: str) -> list:
-    return get_faction_data(faction_id).get("home_worlds", [])
-
-def clear_cache():
-    _CACHE.clear()
-'''
-
-TEST_MODULE_LOADER = '''"""tests/test_module_loader.py"""
-import sys
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from services.module_loader import get_faction_data, get_archetype, list_archetypes
-
-def test_loader_fallback_to_old_path():
-    # imperial_guard.json сейчас лежит в старом пути data/imperial_guard.json
-    data = get_faction_data("imperial_guard")
-    assert data, "Данные не загрузились"
-    assert "archetypes" in data
-    assert len(data["archetypes"]) > 0
-
-def test_get_archetype():
-    arch = get_archetype("imperial_guard", "sergeant")
-    assert arch, "Архетип sergeant не найден"
-    assert arch.get("name") == "Сержант"
-
-def test_list_archetypes():
-    archs = list_archetypes("imperial_guard")
-    assert len(archs) > 5
-
-def test_missing_faction_returns_empty():
-    data = get_faction_data("non_existent_faction")
-    assert data == {}
-'''
+def patch_necrons_tyranids():
+    # В некронах и тиранидах пути к файлам прописаны в константах
+    replacements = [
+        ("necrons.py", 'ROOT / "data" / "necrons.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons.json"'),
+        ("necrons.py", 'ROOT / "data" / "necrons_weapons.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_weapons.json"'),
+        ("necrons.py", 'ROOT / "data" / "necrons_armour.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_armour.json"'),
+        ("necrons.py", 'ROOT / "data" / "necrons_fleet.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_fleet.json"'),
+        ("tyranids.py", 'ROOT / "data" / "tyranids.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids.json"'),
+        ("tyranids.py", 'ROOT / "data" / "tyranids_weapons.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_weapons.json"'),
+        ("tyranids.py", 'ROOT / "data" / "tyranids_armour.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_armour.json"'),
+        ("tyranids.py", 'ROOT / "data" / "tyranids_fleet.json"', 'ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "tyranids" / "tyranids_fleet.json"'),
+    ]
+    for svc, old_path, new_path in replacements:
+        path = ROOT / "services" / svc
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if old_path in text:
+            text = text.replace(old_path, new_path)
+            path.write_text(text, encoding="utf-8")
+            LOG.append(f"[PATCH] {svc} path updated -> _inactive")
 
 def main() -> int:
-    print("=== PATCH_95: Module Loader ===\n")
-    
-    # 1. Создать сервис
-    svc_path = ROOT / "services" / "module_loader.py"
-    if not svc_path.exists():
-        svc_path.write_text(MODULE_LOADER_PY, encoding="utf-8")
-        LOG.append(f"[CREATE] services/module_loader.py")
-    else:
-        LOG.append(f"[SKIP] services/module_loader.py already exists")
+    print("=== PATCH_96: Data Migration ===\n")
+    MOD_FACTIONS.mkdir(parents=True, exist_ok=True)
+    INACTIVE.mkdir(parents=True, exist_ok=True)
+    (INACTIVE / "necrons").mkdir(exist_ok=True)
+    (INACTIVE / "tyranids").mkdir(exist_ok=True)
 
-    # 2. Создать тест
-    test_path = ROOT / "tests" / "test_module_loader.py"
-    if not test_path.exists():
-        test_path.write_text(TEST_MODULE_LOADER, encoding="utf-8")
-        LOG.append(f"[CREATE] tests/test_module_loader.py")
-    else:
-        LOG.append(f"[SKIP] tests/test_module_loader.py already exists")
+    # 1. Империум (активные)
+    imperium_files = [
+        "imperial_guard.json", "mechanicus.json", "inquisition.json",
+        "sororitas.json", "space_marines.json", "arbites.json"
+    ]
+    for f in imperium_files:
+        move_data(f, MOD_FACTIONS)
+
+    # 2. Некроны и Тираниды (в _inactive)
+    for f in ["necrons.json", "necrons_armour.json", "necrons_fleet.json", "necrons_weapons.json"]:
+        move_data(f, INACTIVE / "necrons")
+    for f in ["tyranids.json", "tyranids_armour.json", "tyranids_fleet.json", "tyranids_weapons.json"]:
+        move_data(f, INACTIVE / "tyranids")
+
+    # 3. Обновляем Python-сервисы (отвязываем от старых путей)
+    for svc, fid in [
+        ("imperial_guard.py", "imperial_guard"),
+        ("mechanicus.py", "mechanicus"),
+        ("inquisition.py", "inquisition"),
+        ("sororitas.py", "sororitas"),
+        ("space_marines.py", "space_marines"),
+        ("arbites.py", "arbites"),
+    ]:
+        refactor_service(svc, fid)
+        
+    patch_necrons_tyranids()
 
     print("\n".join(LOG))
     print("\n=== ПРОВЕРКИ ===")
-    print("Запустите: python -m pytest tests/test_module_loader.py -q")
-    print("\nDONE — PATCH_95. Module Loader создан.")
+    print("1. Тесты: python -m pytest tests/ -q")
+    print("2. Игра: python -c \"import app\"")
+    print("\nDONE — PATCH_96.")
     return 0
 
 if __name__ == "__main__":

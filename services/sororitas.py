@@ -8,8 +8,8 @@ _DATA = None
 def _load() -> dict:
     global _DATA
     if _DATA is None:
-        p = Path(__file__).resolve().parent.parent / "data" / "sororitas.json"
-        _DATA = json.loads(p.read_text(encoding="utf-8"))
+        from services.module_loader import get_faction_data
+        _DATA = get_faction_data("sororitas")
     return _DATA
 
 

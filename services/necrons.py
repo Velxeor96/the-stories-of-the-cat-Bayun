@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
-NECRONS_FILE = ROOT / "data" / "necrons.json"
+NECRONS_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons.json"
 
 _CACHE: Optional[dict] = None
 
@@ -306,9 +306,9 @@ if __name__ == "__main__":
 # === PATCH_43: расширенные данные ===
 import json as _json
 
-_NECRONS_WEAPONS_FILE = ROOT / "data" / "necrons_weapons.json"
-_NECRONS_ARMOUR_FILE = ROOT / "data" / "necrons_armour.json"
-_NECRONS_FLEET_FILE = ROOT / "data" / "necrons_fleet.json"
+_NECRONS_WEAPONS_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_weapons.json"
+_NECRONS_ARMOUR_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_armour.json"
+_NECRONS_FLEET_FILE = ROOT / "data" / "modules" / "rogue_trader" / "factions" / "_inactive" / "necrons" / "necrons_fleet.json"
 
 _EXT_CACHE = {}
 
