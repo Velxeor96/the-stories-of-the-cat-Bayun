@@ -66,3 +66,9 @@ def get_home_worlds(faction_id: str) -> list:
 
 def clear_cache():
     _CACHE.clear()
+
+
+def get_story_profile(faction_id: str) -> dict:
+    """Загружает сюжетный профиль фракции."""
+    p = MODULES_DIR / ACTIVE_MODULE / "story" / f"{faction_id}.json"
+    return _load_json(p)

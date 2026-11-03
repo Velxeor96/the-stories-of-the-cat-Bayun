@@ -136,6 +136,13 @@ class Master:
             if _is_gigachat_refusal(text):
                 print("[master] GigaChat refused — fallback")
                 return _master_refusal_fallback()
+            
+            # PATCH_101: Anti-Hallucination
+            try:
+                from services.text_validator import scrub
+                text = scrub(text)
+            except Exception as e:
+                print("[master] scrub fail: " + type(e).__name__)
             return text
         except Exception as e:
             print("[master] fallback: " + type(e).__name__ + ": " + str(e))
@@ -222,6 +229,26 @@ class Master:
                 parts.append(nb)
         except Exception:
             pass
+
+        # PATCH_102: Story Profiles
+        try:
+            from services.module_loader import get_story_profile
+            fid = str(state.get("faction_id") or "imperium")
+            sp = get_story_profile(fid)
+            if sp:
+                lines = ["=== СЮЖЕТНЫЙ ПРОФИЛЬ (СКРЫТО ОТ ИГРОКА) ==="]
+                if sp.get("opening_hooks"):
+                    lines.append("Крючки: " + "; ".join(sp["opening_hooks"]))
+                if sp.get("starting_goals"):
+                    lines.append("Цели: " + "; ".join(sp["starting_goals"]))
+                if sp.get("immediate_threats"):
+                    lines.append("Угрозы: " + "; ".join(sp["immediate_threats"]))
+                if sp.get("narrative_arc"):
+                    lines.append("Арка: " + str(sp["narrative_arc"]))
+                parts.append("\n".join(lines))
+        except Exception as e:
+            print("[master] story profile fail: " + type(e).__name__)
+
 
         try:
             cs = __import__("streamlit").session_state.get("_combat_state")
