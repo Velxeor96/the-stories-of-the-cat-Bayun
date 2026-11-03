@@ -109,10 +109,11 @@ def render() -> None:
     )
 
     st.markdown("#### 2. Фракция")
-    faction_ids = list(FACTIONS.keys())
+    # PATCH_99: пока активен только модуль rogue_trader, играем за Империум.
+    _ALLOWED_FACTIONS = ["imperium"]
     faction_id = st.selectbox(
-        "Фракция", options=faction_ids,
-        format_func=lambda x: FACTIONS[x]["name"],
+        "Фракция", options=_ALLOWED_FACTIONS,
+        format_func=lambda x: FACTIONS.get(x, {}).get("name", x),
         key="wz_faction", on_change=_reset_subfaction_key,
     )
 

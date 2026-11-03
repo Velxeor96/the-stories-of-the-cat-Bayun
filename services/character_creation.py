@@ -162,6 +162,17 @@ def build_character(
     if faction_id not in FACTIONS:
         raise ValueError("Неизвестная фракция: " + str(faction_id))
 
+    # PATCH_99: пока активен только модуль rogue_trader.
+    # Для других фракций (эльдары, хаос, орки, тау и т.д.) данные
+    # лежат в data/modules/rogue_trader/factions/_inactive/ и не загружаются.
+    _ACTIVE_FACTIONS = {"imperium"}
+    if faction_id not in _ACTIVE_FACTIONS:
+        raise ValueError(
+            "Фракция '" + str(faction_id) + "' пока недоступна. "
+            "Сейчас играбелен только Империум (модуль Rogue Trader). "
+            "Остальные фракции появятся в DLC."
+        )
+
     # 1) Базовые характеристики
     base = characteristics or roll_characteristics()
 
