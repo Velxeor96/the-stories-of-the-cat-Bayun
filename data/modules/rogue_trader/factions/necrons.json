@@ -1,0 +1,60 @@
+{
+  "id": "necrons",
+  "name": "Некроны",
+  "home_worlds": [
+    {
+      "id": "sautekh",
+      "name": "Династия Саутек"
+    },
+    {
+      "id": "nihilakh",
+      "name": "Династия Нихилак"
+    },
+    {
+      "id": "mephrit",
+      "name": "Династия Мефит"
+    },
+    {
+      "id": "novokh",
+      "name": "Династия Новох"
+    },
+    {
+      "id": "nephrekh",
+      "name": "Династия Нефрех"
+    },
+    {
+      "id": "charnovokh",
+      "name": "Династия Чарновох"
+    },
+    {
+      "id": "ogdobekh",
+      "name": "Династия Огдобек"
+    },
+    {
+      "id": "nektist",
+      "name": "Династия Нектист"
+    }
+  ],
+  "archetypes": [
+    {
+      "id": "lord",
+      "name": "Лорд"
+    },
+    {
+      "id": "overlord",
+      "name": "Владыка"
+    },
+    {
+      "id": "cryptek",
+      "name": "Криптек"
+    },
+    {
+      "id": "destroyer",
+      "name": "Дестроер"
+    },
+    {
+      "id": "phaeron",
+      "name": "Фаэрон"
+    }
+  ]
+}

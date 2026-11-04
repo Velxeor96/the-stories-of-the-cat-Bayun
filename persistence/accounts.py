@@ -1,12 +1,15 @@
-"""persistence/accounts.py — аккаунты (cloud-aware)."""
+"""persistence/accounts.py — аккаунты (SQLite)."""
 from __future__ import annotations
+
 import hashlib
 import json
 import re
 import secrets
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
-from persistence import cloud_store
+
+from persistence.db import get_conn, init_db
 
 _ROOT = Path(__file__).resolve().parents[1]
 _ACCOUNTS_DIR = _ROOT / "data" / "accounts"
@@ -43,26 +46,25 @@ def validate_password(password: str) -> tuple:
     return True, ""
 
 
-def _cloud_ns() -> str:
-    return "accounts"
-
-
 def account_exists(login: str) -> bool:
-    if cloud_store.is_configured():
-        return cloud_store.hget_json(_cloud_ns(), login) is not None
-    _ensure_dirs()
-    return (_ACCOUNTS_DIR / (login + ".json")).exists()
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT 1 FROM accounts WHERE login = ?", (login,)
+        ).fetchone()
+    return row is not None
 
 
 def get_account(login: str):
-    if cloud_store.is_configured():
-        return cloud_store.hget_json(_cloud_ns(), login)
-    _ensure_dirs()
-    path = _ACCOUNTS_DIR / (login + ".json")
-    if not path.exists():
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT data FROM accounts WHERE login = ?", (login,)
+        ).fetchone()
+    if row is None:
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(row["data"])
     except Exception:
         return None
 
@@ -86,14 +88,14 @@ def register_user(login: str, password: str) -> None:
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
-    if cloud_store.is_configured():
-        if cloud_store.hset_json(_cloud_ns(), login, data):
-            return
-        print("[accounts] cloud fail → local")
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO accounts (login, data) VALUES (?, ?)",
+            (login, json.dumps(data, ensure_ascii=False)),
+        )
 
     _ensure_dirs()
-    path = _ACCOUNTS_DIR / (login + ".json")
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     user_dir = _USERS_DIR / login
     (user_dir / "characters").mkdir(parents=True, exist_ok=True)
     (user_dir / "chats").mkdir(parents=True, exist_ok=True)
@@ -119,7 +121,9 @@ def user_dir_for(login: str) -> Path:
 
 
 def list_accounts() -> list:
-    if cloud_store.is_configured():
-        return sorted(cloud_store.hkeys(_cloud_ns()))
-    _ensure_dirs()
-    return sorted(p.stem for p in _ACCOUNTS_DIR.glob("*.json"))
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        rows = conn.execute(
+            "SELECT login FROM accounts ORDER BY login"
+        ).fetchall()
+    return [row["login"] for row in rows]

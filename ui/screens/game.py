@@ -11,6 +11,8 @@ import streamlit as st
 
 from persistence.chats import append_turn, load_history
 from persistence.characters import CharacterError, load_character
+from services.game_service import GameService
+from services.settings_game import max_tokens_for
 from services.fallbacks import CHARACTERISTIC_NAMES
 from services.orchestrator import Orchestrator
 from ui.roll_card import (
@@ -20,7 +22,6 @@ from ui.roll_card import (
     render_dialog_rolling,
 )
 from ui.loading_screen import full_css, full_html, get_phrases
-from services.state_manager import parse_and_apply
 try:
     from ui.roll_card import SKILL_NAMES_RU as _SKILL_RU
 except Exception:
@@ -1050,7 +1051,11 @@ def render() -> None:
                 st.write("Анализ действия игрока...")
                 try:
                     orch = _get_orch()
-                    result = orch.process_turn(prompt, char, history=history)
+                    game_service = GameService(orch)
+                    _max_tokens = max_tokens_for(login)
+                    clean_text, roll_dict, applied, char, cmd = game_service.process_player_action(
+                        login, char_name, prompt, history, _max_tokens
+                    )
                     _status.update(label="✔ Ответ получен",
                                    state="complete", expanded=False)
                 except Exception as _e:
@@ -1070,17 +1075,12 @@ def render() -> None:
                 _evt_text = str(_ev.get("text", ""))
         except Exception as _e:
             print("[game] event fail: " + type(_e).__name__)
-        _narr_full = result.narrative or ""
+            
         if _evt_text:
-            _narr_full = _narr_full + "\n\n> ⚡ **Событие:** " + _evt_text
-        clean_text, applied = parse_and_apply(_narr_full, char)
-        if applied:
-            _save_char(login, char_name, char)
-            print("[game] state applied: " + ", ".join(applied))
+            clean_text = clean_text + "\n\n> ⚡ **Событие:** " + _evt_text
 
-        if result.roll:
-            roll_dict = result.roll.to_dict()
-            cmd = result.command
+        if roll_dict:
+            cmd = None # Команда больше не возвращается сервисом, для роллкинга достаточно roll_dict
             st.session_state["_roll_dialog_state"] = {
                 "phase": "await",
                 "prompt": prompt,
@@ -1118,10 +1118,6 @@ def render() -> None:
                     st.toast("🏆 Достижение: " + _n)
         except Exception as _e:
             print("[game] achi fail: " + type(_e).__name__)
-        try:
-            from persistence.characters import save_character as _sc
-            _sc(login, char_name, char)
-        except Exception as _e:
-            print("[game] save fail: " + type(_e).__name__)
+        # Сохранение уже произошло внутри GameService, если были изменения
 
         st.rerun()

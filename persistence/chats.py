@@ -1,8 +1,10 @@
-"""persistence/chats.py — история чата (cloud-aware)."""
+"""persistence/chats.py — история чата (SQLite)."""
 from __future__ import annotations
-import json
+
+from contextlib import closing
 from pathlib import Path
-from persistence import cloud_store
+
+from persistence.db import get_conn, init_db
 
 _ROOT = Path(__file__).resolve().parents[1]
 _USERS_DIR = _ROOT / "data" / "users"
@@ -18,36 +20,36 @@ def _chats_dir(login: str) -> Path:
     return d
 
 
-def _cloud_ns(login: str) -> str:
-    return "chats:" + login
-
-
 def chat_path(login: str, character: str) -> Path:
     safe = character.replace("/", "_").replace("\\", "_")
     return _chats_dir(login) / (safe + ".json")
 
 
 def load_history(login: str, character: str) -> list:
-    if cloud_store.is_configured():
-        data = cloud_store.hget_json(_cloud_ns(login), character)
-        return data if isinstance(data, list) else []
-    p = chat_path(login, character)
-    if not p.exists():
-        return []
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
-    except Exception:
-        return []
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        rows = conn.execute(
+            "SELECT role, text FROM chats "
+            "WHERE login = ? AND character = ? ORDER BY id ASC",
+            (login, character),
+        ).fetchall()
+    return [{"role": row["role"], "text": row["text"]} for row in rows]
 
 
 def save_history(login: str, character: str, history: list) -> None:
-    if cloud_store.is_configured():
-        if cloud_store.hset_json(_cloud_ns(login), character, history):
-            return
-        print("[chats] cloud fail → local")
-    p = chat_path(login, character)
-    p.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        conn.execute(
+            "DELETE FROM chats WHERE login = ? AND character = ?",
+            (login, character),
+        )
+        for item in history or []:
+            role = item.get("role", "") if isinstance(item, dict) else ""
+            text = item.get("text", "") if isinstance(item, dict) else ""
+            conn.execute(
+                "INSERT INTO chats(login, character, role, text) VALUES (?, ?, ?, ?)",
+                (login, character, role, text),
+            )
 
 
 def append_turn(login: str, character: str, player_input: str,

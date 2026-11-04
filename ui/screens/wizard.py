@@ -1,43 +1,27 @@
-# PATCH_34B
-"""ui/screens/wizard.py — создание персонажа с data_editor и full-screen INITIATIO."""
+"""ui/screens/wizard.py — создание персонажа."""
 from __future__ import annotations
 import streamlit as st
 
-from persistence.characters import (
-    CharacterError, save_character, list_characters,
-)
-from services.character_creation import (
-    build_character, roll_pool, auto_distribute,
-)
+from persistence.characters import CharacterError, save_character, list_characters
+from services.character_creation import roll_pool, auto_distribute
+from services.character_service import validate_and_build, calculate_preview
 from services.fallbacks import (
-    CHARACTERISTIC_KEYS, CHARACTERISTIC_NAMES,
-    FACTIONS, SUBFACTION_NAMES,
-    home_worlds_for, careers_for,
-    home_world_display_name, career_display_name,
+    CHARACTERISTIC_KEYS, CHARACTERISTIC_NAMES, FACTIONS, SUBFACTION_NAMES,
+    home_worlds_for, careers_for, home_world_display_name, career_display_name,
     home_world_data, career_data,
 )
 
 FACTION_LORE = {
     "imperium": "Ветераны и бюрократы, сражающиеся за Императора.",
-    "chaos": "Проклятые и одержимые. Сила через Варп, цена — душа.",
-    "eldar": "Древняя раса с погибающего крафт-мира.",
-    "drukhari": "Тёмные родичи эльдар. Боль как искусство.",
-    "orks": "Зелёная орда. Просто. Громко. Весело.",
-    "tau": "Молодая империя Высшего Блага.",
-    "necrons": "Пробудившиеся машины древней династии.",
-    "genestealers": "Скрытая угроза.",
 }
-
 
 def _goto(screen: str) -> None:
     st.session_state.screen = screen
-
 
 def _reset_subfaction_key() -> None:
     for k in list(st.session_state.keys()):
         if k.startswith("wz_subfaction_"):
             st.session_state.pop(k, None)
-
 
 def render() -> None:
     login = st.session_state.get("user_login")
@@ -51,8 +35,8 @@ def render() -> None:
     try:
         from services.data_loader import get_index
         get_index()
-    except Exception as _e:
-        print("[wizard] data_loader: " + type(_e).__name__)
+    except Exception:
+        pass
 
     try:
         from ui.theme import render_theme_strip
@@ -79,8 +63,7 @@ def render() -> None:
                 with c1:
                     st.markdown("**" + nm + "**")
                 with c2:
-                    if st.button("Играть", key="play_" + nm,
-                                 width="stretch"):
+                    if st.button("Играть", key="play_" + nm, width="stretch"):
                         st.session_state.active_character = nm
                         _goto("game")
                         st.rerun()
@@ -92,25 +75,19 @@ def render() -> None:
     with c2:
         gender = st.selectbox(
             "Пол", options=["male", "female"],
-            format_func=lambda x: {"male": "Мужской",
-                                   "female": "Женский"}[x],
+            format_func=lambda x: {"male": "Мужской", "female": "Женский"}[x],
             key="wz_gender",
         )
     c1, c2 = st.columns(2)
     with c1:
-        age = st.number_input("Возраст", min_value=16, max_value=600,
-                              value=30, step=1, key="wz_age")
+        age = st.number_input("Возраст", min_value=16, max_value=600, value=30, step=1, key="wz_age")
     with c2:
         appearance = st.text_input("Внешность (кратко)", key="wz_appearance")
 
-    user_background = st.text_area(
-        "Краткая предыстория (необязательно)",
-        key="wz_background", height=90,
-    )
+    user_background = st.text_area("Краткая предыстория (необязательно)", key="wz_background", height=90)
 
     st.markdown("#### 2. Фракция")
-    # PATCH_99: пока активен только модуль rogue_trader, играем за Империум.
-    _ALLOWED_FACTIONS = ["imperium"]
+    _ALLOWED_FACTIONS = ["imperium", "eldar", "tau", "necrons", "tyranids"]
     faction_id = st.selectbox(
         "Фракция", options=_ALLOWED_FACTIONS,
         format_func=lambda x: FACTIONS.get(x, {}).get("name", x),
@@ -131,8 +108,7 @@ def render() -> None:
     subfaction_id = None
     if subfaction_options:
         subfaction_id = st.selectbox(
-            "Субфракция",
-            options=subfaction_options,
+            "Субфракция", options=subfaction_options,
             format_func=lambda x: SUBFACTION_NAMES.get(x, x),
             key="wz_subfaction_" + faction_id,
         )
@@ -150,22 +126,22 @@ def render() -> None:
         hw = home_world_data(_effective_id, home_world_id)
         if hw.get("desc"):
             st.caption(hw["desc"])
-    else:
-        st.info("Нет данных о родных мирах.")
 
-    # === PATCH_49: универсальный блок архетипов ===
-    # Карта: faction_id -> (модуль_сервиса, метка_секции)
-    # Чтобы добавить новую фракцию с архетипами — просто допиши строку сюда.
     _ARCH_FACTIONS = {
-        "necrons":            ("services.necrons",         "Династия"),
-        "tyranids":           ("services.tyranids",        "Биоформа"),
-        "imperial_guard":     ("services.imperial_guard",  "Специальность"),
-        "Имперская Гвардия":  ("services.imperial_guard",  "Специальность"),
-        "mechanicus":           ("services.mechanicus", "Специальность"),
-        "inquisition":          ("services.inquisition", "Служение"),
-        "sororitas":            ("services.sororitas", "Сестринство"),
-        "space_marine":         ("services.space_marines", "Специализация"),
-        "arbites":              ("services.arbites", "Звание"),
+        # === Империум ===
+        "imperial_guard": ("services.imperial_guard", "Специальность"),
+        "Имперская Гвардия": ("services.imperial_guard", "Специальность"),
+        "mechanicus": ("services.mechanicus", "Специальность"),
+        "inquisition": ("services.inquisition", "Служение"),
+        "sororitas": ("services.sororitas", "Сестринство"),
+        "space_marine": ("services.space_marines", "Специализация"),
+        "arbites": ("services.arbites", "Звание"),
+        # === DLC (ксеносы) ===
+        # Работают, когда id фракции добавлен в _ALLOWED_FACTIONS ниже.
+        # Диспетчер character_creation._get_alien_kit_builder подхватит
+        # сервис services.<id> автоматически.
+        "necrons": ("services.necrons", "Династия"),
+        "tyranids": ("services.tyranids", "Биоформа"),
     }
 
     career_id = None
@@ -175,16 +151,14 @@ def render() -> None:
         try:
             _mod = __import__(_mod_name, fromlist=["get_archetypes"])
             arch_list = _mod.get_archetypes()
-        except Exception as _e:
-            print("[wizard] " + _effective_id + ": " + type(_e).__name__)
+        except Exception:
             arch_list = []
 
         if arch_list:
             arch_map = {a["id"]: a for a in arch_list}
             arch_ids = list(arch_map.keys())
             career_id = st.selectbox(
-                "Архетип",
-                options=arch_ids,
+                "Архетип", options=arch_ids,
                 format_func=lambda x: arch_map[x]["name"],
                 key="wz_career_" + _effective_id,
             )
@@ -193,13 +167,10 @@ def render() -> None:
                 st.caption(arch["description"])
             bonus = arch.get("bonus_characteristics", {}) or {}
             if bonus:
-                items = []
-                for k, v in bonus.items():
-                    items.append(k + (" +" if v >= 0 else " ") + str(v))
+                items = [k + (" +" if v >= 0 else " ") + str(v) for k, v in bonus.items()]
                 st.markdown("**Бонусы:** " + ", ".join(items))
             if arch.get("starting_weapons"):
-                st.markdown("**Стартовое оружие:** "
-                            + ", ".join(str(w) for w in arch["starting_weapons"]))
+                st.markdown("**Стартовое оружие:** " + ", ".join(str(w) for w in arch["starting_weapons"]))
         else:
             st.info("Архетипы не загружены.")
     else:
@@ -214,8 +185,6 @@ def render() -> None:
             cr = career_data(_effective_id, career_id)
             if cr.get("desc"):
                 st.caption(cr["desc"])
-        else:
-            st.info("Нет данных о карьерах.")
 
     st.markdown("#### 5. Характеристики")
     mode = st.radio(
@@ -227,15 +196,12 @@ def render() -> None:
     raw: dict = {}
 
     if mode == "Закупка очков (по книге)":
-        st.caption("База 25. Распредели до 35 очков на характеристику. "
-                   "Всего 200 очков на пул. Печатай в колонке «Очки».")
+        st.caption("База 25. Распредели до 35 очков на характеристику. Всего 200 очков на пул.")
         rows = []
         for stat in CHARACTERISTIC_KEYS:
             added = int(st.session_state.get("wz_buy_" + stat, 0) or 0)
-            if added < 0:
-                added = 0
-            if added > 35:
-                added = 35
+            if added < 0: added = 0
+            if added > 35: added = 35
             rows.append({
                 "Код": stat,
                 "Характеристика": CHARACTERISTIC_NAMES[stat] + " (" + stat + ")",
@@ -244,19 +210,13 @@ def render() -> None:
                 "Итог": 25 + added,
             })
         edited = st.data_editor(
-            rows,
-            width="stretch",
-            hide_index=True,
+            rows, width="stretch", hide_index=True,
             column_config={
                 "Код": st.column_config.TextColumn("Код", disabled=True),
-                "Характеристика": st.column_config.TextColumn(
-                    "Характеристика", disabled=True),
-                "База": st.column_config.NumberColumn(
-                    "База", disabled=True),
-                "Очки": st.column_config.NumberColumn(
-                    "Очки (+0…+35)", min_value=0, max_value=35, step=1),
-                "Итог": st.column_config.NumberColumn(
-                    "Итог", disabled=True),
+                "Характеристика": st.column_config.TextColumn("Характеристика", disabled=True),
+                "База": st.column_config.NumberColumn("База", disabled=True),
+                "Очки": st.column_config.NumberColumn("Очки (+0…+35)", min_value=0, max_value=35, step=1),
+                "Итог": st.column_config.NumberColumn("Итог", disabled=True),
             },
             key="wz_data_editor",
         )
@@ -264,10 +224,8 @@ def render() -> None:
         for row in edited:
             code = str(row.get("Код", "")).strip()
             v = int(row.get("Очки", 0) or 0)
-            if v < 0:
-                v = 0
-            if v > 35:
-                v = 35
+            if v < 0: v = 0
+            if v > 35: v = 35
             raw[code] = 25 + v
             st.session_state["wz_buy_" + code] = v
             total_added += v
@@ -276,7 +234,6 @@ def render() -> None:
             st.error("Перебор на " + str(-left) + " очков. Снимите лишние.")
         else:
             st.success("Осталось очков: " + str(left) + " / 200")
-
 
     else:
         st.caption("9 раз бросается 2d10+25, распределяешь значения.")
@@ -291,8 +248,7 @@ def render() -> None:
                 st.rerun()
         with c2:
             if st.session_state.get("wz_pool"):
-                st.write("**Пул:** " + ", ".join(
-                    str(v) for v in st.session_state.wz_pool))
+                st.write("**Пул:** " + ", ".join(str(v) for v in st.session_state.wz_pool))
                 st.write("**Сумма:** " + str(sum(st.session_state.wz_pool)))
         pool = st.session_state.get("wz_pool") or []
         if pool:
@@ -311,12 +267,19 @@ def render() -> None:
                 st.warning("Не совпадает с пулом.")
             else:
                 st.success("Пул распределён корректно.")
-        else:
-            st.info("Сначала сгенерируй пул.")
+
+    # ПРЕВЬЮ ФИНАЛЬНЫХ ХАРАКТЕРИСТИК (Устраняет рассинхрон)
+    if raw and home_world_id and career_id:
+        st.markdown("#### 6. Итоговые характеристики (с бонусами)")
+        preview = calculate_preview(faction_id, _effective_id, home_world_id, career_id, raw)
+        pcols = st.columns(3)
+        for i, (k, v) in enumerate(preview.items()):
+            with pcols[i % 3]:
+                st.metric(CHARACTERISTIC_NAMES.get(k, k), v)
+        st.info("Именно эти значения будут использоваться в игре.")
 
     st.markdown("---")
-    if st.button("💾 Сохранить персонажа", type="primary",
-                 width="stretch", key="wz_save"):
+    if st.button("💾 Сохранить персонажа", type="primary", width="stretch", key="wz_save"):
         if not name or not name.strip():
             st.error("Введи имя персонажа.")
             return
@@ -329,22 +292,13 @@ def render() -> None:
             if used != expected:
                 st.error("Пул не распределён.")
                 return
-        else:
-            total = sum(raw.values()) - 25 * 9
-            if total > 150:
-                st.error("Перебор очков.")
-                return
-            for k in CHARACTERISTIC_KEYS:
-                if raw[k] > 60:
-                    st.error(k + " > 60 (35 + 25).")
-                    return
         try:
-            data = build_character(
+            data = validate_and_build(
                 name=name.strip(), gender=gender, age=str(age),
                 appearance=appearance, user_background=user_background,
                 faction_id=faction_id, subfaction_id=subfaction_id,
                 home_world_id=home_world_id, career_id=career_id,
-                characteristics=raw,
+                stats_dict=raw,
             )
             save_character(login, name.strip(), data)
             st.session_state.active_character = name.strip()
@@ -355,7 +309,3 @@ def render() -> None:
             st.error(str(e))
         except Exception as e:
             st.error("Ошибка: " + type(e).__name__ + ": " + str(e))
-
-
-if __name__ == "__main__":
-    pass

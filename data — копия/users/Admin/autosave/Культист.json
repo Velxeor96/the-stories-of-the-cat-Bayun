@@ -1,0 +1,184 @@
+{
+  "char": {
+    "has_ship": false,
+    "name": "Культист",
+    "gender": "male",
+    "age": "30",
+    "appearance": "",
+    "user_background": "",
+    "background": "(не задано)",
+    "faction": "Силы Хаоса",
+    "faction_id": "chaos",
+    "subfaction": "Культист",
+    "subfaction_id": "cultist",
+    "home_world_id": "",
+    "home_world_name": "",
+    "career_id": "",
+    "career_name": "",
+    "archetype": "",
+    "archetype_id": "",
+    "extra_choices": {},
+    "characteristics": {
+      "WS": 23,
+      "BS": 30,
+      "S": 30,
+      "T": 32,
+      "Ag": 32,
+      "Int": 32,
+      "Per": 33,
+      "WP": 34,
+      "Fel": 36
+    },
+    "bonuses": {
+      "WS": 0,
+      "BS": 0,
+      "S": 0,
+      "T": 0,
+      "Ag": 0,
+      "Int": 0,
+      "Per": 0,
+      "WP": 0,
+      "Fel": 0
+    },
+    "skills": [
+      "Общие знания (Империум)",
+      "Разговорный язык (Высокий готик)",
+      "Обаяние"
+    ],
+    "talents": [
+      {
+        "id": "Обострённые чувства (Зрение)",
+        "name": "Обострённые чувства (Зрение)"
+      },
+      {
+        "id": "Молниеносные рефлексы",
+        "name": "Молниеносные рефлексы"
+      },
+      {
+        "id": "Сопротивление (Страх)",
+        "name": "Сопротивление (Страх)"
+      },
+      {
+        "id": "Аура власти",
+        "name": "Аура власти"
+      }
+    ],
+    "weapons": [
+      {
+        "name": "Лазпистолет",
+        "stats": "30м, О/3/-, 1d10+2 E, Пробой 0",
+        "weight": "1.5 кг",
+        "notes": "Надёжное"
+      },
+      {
+        "name": "Силовой меч",
+        "stats": "Ближний бой, 1d10+5 E, Пробой 6",
+        "weight": "3 кг",
+        "notes": "Сбалансированное, Силовое поле"
+      }
+    ],
+    "equipment": [
+      "Плащ-хамелеолин",
+      "Вокс-кастер",
+      "Инфопланшет",
+      "Медальон династии"
+    ],
+    "armour": {
+      "head": 4,
+      "body": 4,
+      "arms": 3,
+      "legs": 3,
+      "notes": "Флак-броня с нагрудником"
+    },
+    "wounds": {
+      "current": 12,
+      "max": 12
+    },
+    "fate_points": {
+      "current": 2,
+      "max": 2
+    },
+    "psy_rating": 0,
+    "psychic_powers": [],
+    "corruption": 0,
+    "insanity": 0,
+    "money": 200,
+    "currency": "Троны",
+    "special_resources": {},
+    "extra_currencies": {},
+    "ship": {
+      "name": "",
+      "class": "",
+      "type": "",
+      "description": "",
+      "hull": "",
+      "crew": "",
+      "weapons": [],
+      "features": [],
+      "status": ""
+    },
+    "location": "",
+    "game_date": "Начало приключения",
+    "quests": [],
+    "npcs": [],
+    "effects": [],
+    "companions": [],
+    "goals": [],
+    "journal": [
+      {
+        "text": "→ я становлюсь псайкером\nВ тебе пробуждаются скрытые силы, кровь пульсирует в такт древним ритмам.\n\n**Варианты действий:**\n\n- Осмотреться. Ты оцениваешь обстановку.\n- Двигаться дальше. Ты делаешь следующий шаг.\n- Ждать. Ты слушаешь и наблюдаешь.\n- Иное: опиши.",
+        "kind": "turn",
+        "ts": "2026-10-10T23:25:52"
+      }
+    ],
+    "notes": "",
+    "player_notes": [],
+    "reputation": {
+      "Империум": 0,
+      "Механикус": 0,
+      "Инквизиция": 0,
+      "Эльдары": 0,
+      "Друхкари": 0,
+      "Орки": 0,
+      "Тау": 0,
+      "Некроны": 0,
+      "Хаос": 0,
+      "Тираниды": 0
+    },
+    "generation_method": "roll+distribute",
+    "xp": 300,
+    "rank": 1,
+    "created_at": "2026-10-10T23:22:32.847829",
+    "alien_traits": [],
+    "necron_traits": [],
+    "tyranid_traits": [],
+    "achievements": {
+      "ten_rolls": true
+    },
+    "inventory": {
+      "weapons": [],
+      "armour": [
+        {
+          "name": "Плащ-хамелеолин",
+          "qty": 1
+        }
+      ],
+      "consumables": [
+        {
+          "name": "Вокс-кастер",
+          "qty": 1
+        },
+        {
+          "name": "Инфопланшет",
+          "qty": 1
+        },
+        {
+          "name": "Медальон династии",
+          "qty": 1
+        }
+      ],
+      "artefacts": [],
+      "quest": []
+    }
+  }
+}

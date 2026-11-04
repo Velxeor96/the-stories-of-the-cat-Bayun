@@ -1,11 +1,10 @@
-# PATCH_26
-"""services/settings_game.py — игровые настройки игрока."""
+"""settings_game.py — игровые настройки игрока (SQLite)."""
 from __future__ import annotations
-import json
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-USERS_DIR = ROOT / "data" / "users"
+import json
+from contextlib import closing
+
+from persistence.db import get_conn, init_db
 
 DEFAULTS = {
     "response_length": "Средний",
@@ -17,20 +16,22 @@ LENGTH_VALUES = {"Короткий": 300, "Средний": 700, "Развёрн
 LETHALITY_MODS = {"Лёгкая": 0.5, "Норма": 1.0, "Хардкор": 1.5}
 
 
-def _path(login: str) -> Path:
-    d = USERS_DIR / login
-    d.mkdir(parents=True, exist_ok=True)
-    return d / "game_settings.json"
-
-
 def get_settings(login: str) -> dict:
-    p = _path(login)
-    if not p.exists():
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT data FROM settings WHERE login = ?",
+            (login,),
+        ).fetchone()
+
+    if row is None:
         return dict(DEFAULTS)
+
     try:
-        data = json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(row["data"])
     except Exception:
         return dict(DEFAULTS)
+
     out = dict(DEFAULTS)
     out.update(data or {})
     return out
@@ -40,9 +41,14 @@ def save_settings(login: str, data: dict) -> bool:
     try:
         merged = dict(DEFAULTS)
         merged.update(data or {})
-        _path(login).write_text(
-            json.dumps(merged, ensure_ascii=False, indent=2),
-            encoding="utf-8")
+        payload = json.dumps(merged, ensure_ascii=False)
+
+        init_db()
+        with closing(get_conn()) as conn, conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO settings(login, data) VALUES (?, ?)",
+                (login, payload),
+            )
         return True
     except Exception as e:
         print("[settings_game] save: " + str(e))

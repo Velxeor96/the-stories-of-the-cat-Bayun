@@ -23,6 +23,7 @@ def _analyst_is_refusal(text: str) -> bool:
 
 import json
 import re
+from core.logger import get_logger
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -32,6 +33,7 @@ from core.llm_client import LLMClient
 from core.llm_factory import make_client
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+logger = get_logger(__name__)
 
 
 class AnalystError(Exception):
@@ -57,39 +59,24 @@ VALID_DIFFICULTIES = {
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
 _HEURISTIC_RULES: list[tuple[re.Pattern, dict]] = [
-    (re.compile(r"пси|психич|варп[- ]маг|колдую|варп[- ]выстрел|психосил",
-                re.IGNORECASE),
-     {"action": "use_psychic", "skill": "WP", "roll_needed": True,
-      "difficulty": "Ordinary"}),
-    (re.compile(r"всматрива|вглядыва|оглядыва|осматрива|осмотр|прислушива|"
-                r"слуша|слыш|искать|ищу|ищешь|поиск|замеча|наблюда|высматрива",
-                re.IGNORECASE),
-     {"action": "observe", "skill": "Per", "roll_needed": True,
-      "difficulty": "Ordinary"}),
-    (re.compile(r"крадусь|скрыва|подкрадыва|прячусь|незаметно|бесшумно",
-                re.IGNORECASE),
-     {"action": "stealth", "skill": "Ag", "roll_needed": True,
-      "difficulty": "Challenging"}),
-    (re.compile(r"стреля|выстрел|палю|жму\s+курок|открываю\s+огонь",
-                re.IGNORECASE),
-     {"action": "attack_ranged", "skill": "BS", "roll_needed": True,
-      "difficulty": "Ordinary"}),
-    (re.compile(r"атакую|ударяю|бью|рублю|колю|режу|машу|замахива",
-                re.IGNORECASE),
-     {"action": "attack_melee", "skill": "WS", "roll_needed": True,
-      "difficulty": "Ordinary"}),
-    (re.compile(r"защища|блокиру|париру|уворачива", re.IGNORECASE),
-     {"action": "defend", "skill": "WS", "roll_needed": True,
-      "difficulty": "Ordinary"}),
-    (re.compile(r"убежда|уговарива|договарива|склоня|прошу", re.IGNORECASE),
-     {"action": "persuade", "skill": "Fel", "roll_needed": True,
-      "difficulty": "Ordinary"}),
-    (re.compile(r"запугива|угрожа|пуга|страща", re.IGNORECASE),
-     {"action": "intimidate", "skill": "S", "roll_needed": True,
-      "difficulty": "Ordinary"}),
-    (re.compile(r"обманыва|блефу|вру|лгу|лгать|хитрю", re.IGNORECASE),
-     {"action": "deceive", "skill": "Fel", "roll_needed": True,
-      "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(пси|колдую|психосил)", re.IGNORECASE),
+     {"action": "use_psychic", "skill": "WP", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(осмотр|ищу|слушаю|замечаю)", re.IGNORECASE),
+     {"action": "observe", "skill": "Per", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(скрываюсь|крадусь|прячусь)", re.IGNORECASE),
+     {"action": "stealth", "skill": "Ag", "roll_needed": True, "difficulty": "Challenging"}),
+    (re.compile(r"^\s*(стреляю|выстрел|палю)", re.IGNORECASE),
+     {"action": "attack_ranged", "skill": "BS", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(атакую|бью|рублю|колю)", re.IGNORECASE),
+     {"action": "attack_melee", "skill": "WS", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(защищаюсь|блокирую|парирую)", re.IGNORECASE),
+     {"action": "defend", "skill": "WS", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(убеждаю|уговариваю|прошу)", re.IGNORECASE),
+     {"action": "persuade", "skill": "Fel", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(запугиваю|угрожаю)", re.IGNORECASE),
+     {"action": "intimidate", "skill": "S", "roll_needed": True, "difficulty": "Ordinary"}),
+    (re.compile(r"^\s*(обманываю|блефую|вру)", re.IGNORECASE),
+     {"action": "deceive", "skill": "Fel", "roll_needed": True, "difficulty": "Ordinary"}),
 ]
 
 
@@ -149,7 +136,7 @@ class Analyst:
 
         heuristic = self._heuristic_parse(text)
         if heuristic is not None:
-            print("[analyst] heuristic -> action=" + heuristic.action
+            logger.info("[analyst] heuristic -> action=" + heuristic.action
                   + " skill=" + str(heuristic.skill)
                   + " roll=" + str(heuristic.roll_needed))
             return heuristic
@@ -168,12 +155,12 @@ class Analyst:
             valid, reason = parsed.is_valid()
             if not valid:
                 raise AnalystError("некорректный JSON: " + reason)
-            print("[analyst] llm -> action=" + parsed.action
+            logger.info("[analyst] llm -> action=" + parsed.action
                   + " skill=" + str(parsed.skill)
                   + " roll=" + str(parsed.roll_needed))
             return parsed
         except Exception as e:
-            print("[analyst] fallback (LLM): " + type(e).__name__ + ": " + str(e))
+            logger.error("[analyst] fallback (LLM): " + type(e).__name__ + ": " + str(e))
             return ParsedCommand(
                 action="other", target=None, skill=None,
                 roll_needed=False, difficulty="Ordinary", raw=player_input,

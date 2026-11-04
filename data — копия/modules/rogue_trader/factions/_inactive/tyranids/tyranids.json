@@ -1,0 +1,111 @@
+{
+  "faction": "tyranids",
+  "version": "1.0",
+  "lore": "Внегалактическая раса биологических машин, руководимая единым Разумом Улья. Их цель — поглотить всю биомассу галактики. Не имеют личности в человеческом смысле. Не используют Варп напрямую, но создают Тень в Варпе. Каждый тиранид — лишь клетка огромного организма.",
+  "traits": {
+    "hive_mind_link": "Связь с Разумом Улья: +10 к тестам, если действие служит интересам Улья. -10, если действует против инстинкта.",
+    "shadow_in_warp": "Тень в Варпе: все враги-псайкеры в радиусе 30 м получают -20 к психотестам.",
+    "synapse_creature": "Синапс-аура (15 м): союзные тираниды получают +10 к WP против Страха и Запугивания.",
+    "biomass_absorption": "При убийстве врага в ближнем бою восстанавливает 1d5 ран.",
+    "biomorph_adaptation": "Один раз за бой: адаптировать биоморф. +5 к T или +10 к BS/WS на 3 раунда.",
+    "no_warp_psy": "Тираниды не могут быть псайкерами в человеческом смысле. Их силы — биологические.",
+    "brood_telepathy": "Общение с другими тиранидами без слов на любом расстоянии в пределах планеты."
+  },
+  "archetypes": [
+    {
+      "id": "genestealer",
+      "name": "Генокрад",
+      "description": "Идеальный убийца. Быстрый, смертоносный, заражающий. Может вживлять генный материал в жертв.",
+      "starting_skills": ["Stealth", "Awareness", "Dodge", "Tracking", "Acrobatics"],
+      "starting_talents": ["Swift Attack", "Hard Target", "Catfall", "Lightning Reflexes"],
+      "bonus_characteristics": {"WS": 5, "Ag": 10, "Fel": -15},
+      "wounds_bonus": 0,
+      "starting_weapons": ["rending_claws", "scything_talons"],
+      "starting_armour": "carapace_genestealer",
+      "rank_titles": ["Неофит", "Аколит", "Генокрад", "Старший генокрад", "Патриарх"]
+    },
+    {
+      "id": "magus",
+      "name": "Магус",
+      "description": "Психический лидер культа генокрадов. Голос Патриарха, манипулятор, оратор. Внутри — чужой, снаружи — свой.",
+      "starting_skills": ["Charm", "Deceive", "Psyniscience", "Forbidden Lore (Xenos)", "Awareness"],
+      "starting_talents": ["Psy Rating 2", "Air of Authority", "Deceive Mastery"],
+      "bonus_characteristics": {"WP": 10, "Fel": 5, "T": -5},
+      "wounds_bonus": -1,
+      "starting_weapons": ["claw_hand", "laspistol"],
+      "starting_armour": "carapace_magus",
+      "rank_titles": ["Аколит", "Магус", "Старший магус", "Голос Патриарха", "Правая рука Патриарха"]
+    },
+    {
+      "id": "hive_warrior",
+      "name": "Воин Улья",
+      "description": "Рядовой боец Улья. Крепкий, живучий, беспощадный.",
+      "starting_skills": ["Awareness", "Dodge", "Intimidate", "Tracking"],
+      "starting_talents": ["True Grit", "Iron Jaw", "Berserk Charge"],
+      "bonus_characteristics": {"S": 5, "T": 5, "Int": -15},
+      "wounds_bonus": 3,
+      "starting_weapons": ["scything_talons", "spinefists"],
+      "starting_armour": "carapace_warrior",
+      "rank_titles": ["Воин", "Старший воин", "Альфа-воин", "Вожак стаи", "Воин-тиран"]
+    },
+    {
+      "id": "hive_tyrant",
+      "name": "Тиран Улья",
+      "description": "Командующий армией Улья. Могущественный синапс-организм. Единственный тиранид с полноценной индивидуальностью.",
+      "starting_skills": ["Command", "Intimidate", "Awareness", "Dodge", "Logic"],
+      "starting_talents": ["Iron Discipline", "Fearless", "Bloodtracker", "Air of Authority"],
+      "bonus_characteristics": {"WS": 5, "S": 5, "WP": 5, "Fel": -10},
+      "wounds_bonus": 5,
+      "starting_weapons": ["bone_sword", "lash_whip", "scything_talons"],
+      "starting_armour": "carapace_tyrant",
+      "rank_titles": ["Младший тиран", "Тиран", "Старший тиран", "Владыка улья", "Разум-отражение"]
+    },
+    {
+      "id": "lichor",
+      "name": "Ликтор",
+      "description": "Одиночный убийца-разведчик. Практически невидим. Убивает без предупреждения.",
+      "starting_skills": ["Stealth", "Awareness", "Tracking", "Dodge", "Acrobatics"],
+      "starting_talents": ["Hard Target", "Catfall", "Silent Move", "Ambush"],
+      "bonus_characteristics": {"Ag": 10, "Per": 5, "Fel": -15},
+      "wounds_bonus": -2,
+      "starting_weapons": ["rending_claws", "flesh_hooks"],
+      "starting_armour": "chameleonic_skin",
+      "rank_titles": ["Ликтор", "Старший ликтор", "Мастер-охотник", "Тень Улья"]
+    },
+    {
+      "id": "carnifex",
+      "name": "Карнифекс",
+      "description": "Живой таран. Создан для разрушения. Медленный, но неостановимый.",
+      "starting_skills": ["Intimidate", "Awareness", "Dodge"],
+      "starting_talents": ["Iron Jaw", "True Grit", "Bulging Biceps", "Berserk Charge"],
+      "bonus_characteristics": {"S": 15, "T": 10, "Ag": -15, "Int": -20},
+      "wounds_bonus": 8,
+      "starting_weapons": ["scything_talons", "crushing_claws"],
+      "starting_armour": "carapace_carnifex",
+      "rank_titles": ["Карнифекс", "Старший карнифекс", "Разрушитель", "Титан Улья"]
+    }
+  ],
+  "talents": [
+    {"id": "synapse_mastery", "name": "Мастерство Синапса", "category": "leadership", "cost": 600, "tier": 1, "prerequisites": {"rank": 2, "WP": 40}, "description": "Ваша аура синапса крепнет.", "effect": "Радиус синапс-ауры увеличивается до 30 м. Союзники получают +15 к WP вместо +10."},
+    {"id": "biomorph_mastery", "name": "Мастерство Биоморфа", "category": "defense", "cost": 750, "tier": 1, "prerequisites": {"rank": 2, "T": 45}, "description": "Вы контролируете эволюцию своего тела.", "effect": "Один раз за бой: адаптировать биоморф (+10 T, +5 S на 3 раунда)."},
+    {"id": "biomass_devourer", "name": "Поглотитель биомассы", "category": "combat", "cost": 500, "tier": 1, "prerequisites": {"WS": 40}, "description": "Вы поглощаете биомассу павших врагов.", "effect": "При убийстве врага в ближнем бою восстанавливайте 2d5 ран вместо 1d5. Можно поглощать трупы (Full Action) для 1d5 ран."},
+    {"id": "shadow_of_the_warp", "name": "Тень в Варпе", "category": "psychic", "cost": 900, "tier": 2, "prerequisites": {"rank": 3, "WP": 45}, "description": "Ваше присутствие искажает Варп вокруг вас.", "effect": "Радиус Тени — 60 м. Враги-псайкеры получают -30 к психотестам. Ваши собственные психосилы (если есть) не получают штрафов."},
+    {"id": "hive_commander", "name": "Командир Улья", "category": "leadership", "cost": 1200, "tier": 2, "prerequisites": {"rank": 4, "Fel": 30, "WP": 50}, "description": "Вы — синапс-воин, приказы которого выполняются без слов.", "effect": "+20 к Command-тестам для тиранидов. Ваши приказы в радиусе 30 м выполняются как Free Action."},
+    {"id": "adaptive_evolution", "name": "Адаптивная эволюция", "category": "defense", "cost": 1500, "tier": 3, "prerequisites": {"rank": 5, "Int": 30}, "description": "Вы адаптируетесь к угрозе после первого контакта.", "effect": "После первого боя с типом врага вы получаете +10 к защите от его атак до конца сессии."},
+    {"id": "genestealer_infection", "name": "Генокрадская инфекция", "category": "social", "cost": 800, "tier": 2, "prerequisites": {"rank": 3, "WS": 40}, "description": "Ваши когти несут генный материал Улья.", "effect": "При критическом попадании в ближнем бою цель проходит Hard (-20) T-тест или становится носителем генокрадской инфекции."},
+    {"id": "brood_telepathy", "name": "Телепатия Роя", "category": "utility", "cost": 400, "tier": 1, "prerequisites": {}, "description": "Вы можете общаться с любым тиранидом в пределах планеты.", "effect": "Телепатическая связь с тиранидами на расстоянии до 1000 км. В радиусе 10 м можете передавать сообщения союзникам-тиранидам."},
+    {"id": "rending_mastery", "name": "Мастерство разрывания", "category": "combat", "cost": 700, "tier": 2, "prerequisites": {"rank": 3, "WS": 45}, "description": "Ваши когти рвут любую броню.", "effect": "Rending-оружие критует на 8-10 вместо 10. Против брони с AP 8+ — игнорирует 2 AP."},
+    {"id": "venom_sac", "name": "Ядовитая железа", "category": "combat", "cost": 550, "tier": 1, "prerequisites": {"T": 40}, "description": "Ваше тело вырабатывает смертельный яд.", "effect": "При попадании в ближнем бою цель проходит T-тест или получает 1d5 урона от яда. Критический эффект — 2d5."},
+    {"id": "spore_caster", "name": "Споровый кастер", "category": "combat", "cost": 900, "tier": 2, "prerequisites": {"BS": 40, "rank": 3}, "description": "Вы выстреливаете спорами с биологическим оружием.", "effect": "Один раз за бой: выстрелить спорами в область 10 м. Все враги получают 2d10 урона (игнорирует броню)."},
+    {"id": "hive_mind_avatar", "name": "Аватар Разума Улья", "category": "leadership", "cost": 2500, "tier": 4, "prerequisites": {"rank": 6, "WP": 60}, "description": "Вы — прямое воплощение Разума Улья на поле боя.", "effect": "Все тираниды в радиусе 100 м получают +20 к WP и иммунитет к Страху. Один раз за сессию: призвать 1d5 воинов Улья."},
+    {"id": "winged_adaptation", "name": "Крылатая адаптация", "category": "utility", "cost": 650, "tier": 2, "prerequisites": {"rank": 2, "Ag": 40}, "description": "Вы развили крылья.", "effect": "Получить Flyer (12). В бою можете перелетать препятствия."},
+    {"id": "regenerative_tissue", "name": "Регенеративные ткани", "category": "defense", "cost": 1000, "tier": 3, "prerequisites": {"rank": 4, "T": 50}, "description": "Ваша плоть восстанавливается невероятно быстро.", "effect": "Восстанавливайте 1d5 ран в начале каждого хода вне боя. В бою — 1 рану за ход."},
+    {"id": "brood_lord_presence", "name": "Присутствие Владыки Роя", "category": "leadership", "cost": 1800, "tier": 3, "prerequisites": {"rank": 5, "Fel": 40}, "description": "Вы чувствуете всех тиранидов в системе.", "effect": "Знаете местоположение всех союзных тиранидов в радиусе 10 км. Можете отдавать им приказы."}
+  ],
+  "mechanics": [
+    {"id": "synapse_aura", "name": "Синапс-аура", "description": "Аура, дающая бонусы союзным тиранидам.", "default": "Радиус 15 м. +10 к WP против Страха и Запугивания."},
+    {"id": "biomass_absorption", "name": "Поглощение биомассы", "description": "Восстановление ран при убийстве.", "default": "1d5 ран при убийстве в ближнем бою."},
+    {"id": "shadow_in_warp", "name": "Тень в Варпе", "description": "Искажение Варпа вокруг тиранида.", "default": "Враги-псайкеры в 30 м получают -20 к психотестам."},
+    {"id": "biomorph_adaptation", "name": "Биоморф-адаптация", "description": "Способность менять тело.", "default": "Один раз за бой: +5 T или +10 BS/WS на 3 раунда."}
+  ]
+}

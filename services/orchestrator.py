@@ -123,7 +123,7 @@ class Orchestrator:
         return self._kb
 
     def process_turn(self, player_input: str, state: Any,
-                     *, history: Optional[list] = None) -> TurnResult:
+                     *, history: Optional[list] = None, max_tokens: int = 700) -> TurnResult:
         mod = self.moderator.check(player_input)
         if mod.verdict != "ALLOW":
             redirect = (mod.redirect or "").strip() or "Ты возвращаешься к сцене."
@@ -185,6 +185,7 @@ class Orchestrator:
         narrative = self.master.narrate(
             state, command, roll=roll, history=history or [],
             extra_context=(rag_ctx or "") + _choice_hint,
+            max_tokens=max_tokens,
         )
         narrative = ensure_action_variants(narrative)
 

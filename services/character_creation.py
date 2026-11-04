@@ -1,16 +1,40 @@
-# PATCH_46
-"""services/character_creation.py — генерация листа по фракции."""
+"""services/character_creation.py — генерация листа по фракции.
+
+DLC-совместимая архитектура:
+  - Для имперских фракций стартовый кит идёт через services.faction_starting.
+  - Для alien-фракций (некроны, тираниды, любые будущие) модуль
+    services.<faction_id> должен предоставить get_archetype / get_weapon /
+    get_armour_item / get_faction_traits, либо собственный build_starting_kit().
+    Диспетчер подхватит его автоматически — правки здесь не нужны.
+  - Активация фракции — добавьте id в _ACTIVE_FACTIONS (и в _ALLOWED_FACTIONS
+    в ui/screens/wizard.py).
+"""
 from __future__ import annotations
+
+import importlib
 import random
 from datetime import datetime
 
 from services.fallbacks import (
-    CHARACTERISTIC_KEYS, FACTIONS, REPUTATION_FACTIONS,
-    SUBFACTION_NAMES,
+    CHARACTERISTIC_KEYS, FACTIONS, REPUTATION_FACTIONS, SUBFACTION_NAMES,
 )
 from services.faction_starting import (
     get_starting_kit, get_home_world_bonuses, get_career_bonuses,
 )
+
+
+# Активные фракции. DLC добавляет сюда свои id.
+_ACTIVE_FACTIONS = {"imperium", "eldar", "tau", "necrons", "tyranids"}
+
+# Имперские субфракции, у которых есть свой сервис с архетипами.
+_IMPERIAL_ARCH_SERVICES = {
+    "imperial_guard": "services.imperial_guard",
+    "mechanicus": "services.mechanicus",
+    "inquisition": "services.inquisition",
+    "sororitas": "services.sororitas",
+    "space_marine": "services.space_marines",
+    "arbites": "services.arbites",
+}
 
 
 def roll_pool(rng=None):
@@ -50,104 +74,32 @@ def _safe_display(fn_name, faction_id, key):
     return key or ""
 
 
-def _build_alien_character(stats, faction_id, career_id):
+def _get_alien_kit_builder(faction_id):
+    """Возвращает callable(career_id) -> kit_dict для alien-фракции, или None.
+
+    Приоритет:
+      1) если модуль реализует build_starting_kit — используем его;
+      2) иначе — generic-сборка через services._alien_kit.build_kit().
     """
-    Применяет архетип для некронов или тиранидов.
-    Возвращает dict с полями: skills, talents, weapons, armour,
-    money, currency, traits, archetype_name, wounds_bonus.
-    """
-    out = {
-        "skills": [], "talents": [], "weapons": [], "armour": {},
-        "money": 0, "currency": "Нет",
-        "traits": [], "archetype_name": career_id or "",
-        "wounds_bonus": 0,
-    }
-
-    src = None
-    if faction_id == "necrons":
-        try:
-            from services import necrons as src
-        except Exception as e:
-            print("[creation] necrons import: " + str(e))
-    elif faction_id == "tyranids":
-        try:
-            from services import tyranids as src
-        except Exception as e:
-            print("[creation] tyranids import: " + str(e))
-
-    if src is None:
-        return out
-
     try:
-        arch = src.get_archetype(career_id or "")
+        mod = importlib.import_module("services." + str(faction_id))
     except Exception:
-        arch = None
+        return None
 
-    if not arch:
-        return out
+    if hasattr(mod, "build_starting_kit"):
+        def _from_module(career_id, _mod=mod, _fid=faction_id):
+            return _mod.build_starting_kit(career_id, _fid)
+        return _from_module
 
-    out["archetype_name"] = arch.get("name", career_id or "")
+    required = ("get_archetype", "get_weapon", "get_armour_item", "get_faction_traits")
+    if not all(hasattr(mod, fn) for fn in required):
+        return None
 
-    # Бонусы к характеристикам
-    bonus = arch.get("bonus_characteristics", {}) or {}
-    for k, v in bonus.items():
-        if k in stats:
-            stats[k] = int(stats[k]) + int(v)
+    from services._alien_kit import build_kit
 
-    # Навыки
-    out["skills"] = list(arch.get("starting_skills", []))
-
-    # Таланты
-    for t_id in arch.get("starting_talents", []):
-        t_obj = None
-        try:
-            t_obj = src.get_talent(t_id)
-        except Exception:
-            pass
-        out["talents"].append({
-            "id": t_id,
-            "name": (t_obj or {}).get("name", t_id)
-        })
-
-    # Оружие
-    for w_id in arch.get("starting_weapons", []):
-        try:
-            w = src.get_weapon(w_id)
-        except Exception:
-            w = None
-        if w:
-            out["weapons"].append({
-                "id": w_id,
-                "name": w.get("name", w_id),
-                "stats": w.get("damage", "") + " · " + w.get("special", "")
-            })
-        else:
-            out["weapons"].append({"id": w_id, "name": w_id, "stats": ""})
-
-    # Броня
-    arm_id = arch.get("starting_armour", "")
-    if arm_id:
-        try:
-            arm = src.get_armour_item(arm_id)
-        except Exception:
-            arm = None
-        if arm:
-            ap = arm.get("all_ap", 8)
-            out["armour"] = {
-                "head": ap, "body": ap, "arms": ap, "legs": ap,
-                "notes": arm.get("name", "Карапас")
-            }
-
-    # Трейты
-    try:
-        out["traits"] = list(src.get_faction_traits().keys())
-    except Exception:
-        pass
-
-    # Wounds bonus
-    out["wounds_bonus"] = int(arch.get("wounds_bonus", 0) or 0)
-
-    return out
+    def _from_generic(career_id, _mod=mod, _fid=faction_id):
+        return build_kit(_mod, career_id, _fid)
+    return _from_generic
 
 
 def build_character(
@@ -156,37 +108,27 @@ def build_character(
     home_world_id=None, career_id=None, archetype_id=None,
     characteristics=None,
 ):
-    # PATCH_88: tutorial передаёт archetype_id — принимаем как алиас career_id.
     if archetype_id and not career_id:
         career_id = archetype_id
     if faction_id not in FACTIONS:
         raise ValueError("Неизвестная фракция: " + str(faction_id))
 
-    # PATCH_99: пока активен только модуль rogue_trader.
-    # Для других фракций (эльдары, хаос, орки, тау и т.д.) данные
-    # лежат в data/modules/rogue_trader/factions/_inactive/ и не загружаются.
-    _ACTIVE_FACTIONS = {"imperium"}
     if faction_id not in _ACTIVE_FACTIONS:
         raise ValueError(
             "Фракция '" + str(faction_id) + "' пока недоступна. "
-            "Сейчас играбелен только Империум (модуль Rogue Trader). "
-            "Остальные фракции появятся в DLC."
+            "Сейчас играбелен только Империум (модуль Rogue Trader)."
         )
 
-    # 1) Базовые характеристики
     base = characteristics or roll_characteristics()
 
-    # 2) Названия
     hw_name = _safe_display("home_world_display_name", faction_id, home_world_id)
     cr_name = _safe_display("career_display_name", faction_id, career_id)
 
-    # 3) Бонусы от мира/карьеры (для не-ксенов)
     hw_b = get_home_world_bonuses(faction_id, hw_name)
     cr_b = get_career_bonuses(faction_id, cr_name)
     stats = _apply_bonuses(base, hw_b["bonus"], hw_b["penalty"])
     stats = _apply_bonuses(stats, cr_b["bonus"], cr_b["penalty"])
 
-    # 4) Стартовый набор
     weapons = []
     armour = {"head": 4, "body": 4, "arms": 4, "legs": 4, "notes": "Стандарт"}
     equipment = []
@@ -197,21 +139,12 @@ def build_character(
     wounds_bonus_extra = 0
     faction_traits = []
 
-    # PATCH_64: бонусы архетипа для всех субфракций с сервисом
-    _arch_service_map = {
-        "imperial_guard": "services.imperial_guard",
-        "mechanicus":     "services.mechanicus",
-        "inquisition":    "services.inquisition",
-        "sororitas":      "services.sororitas",
-        "space_marine":   "services.space_marines",
-        "arbites":        "services.arbites",
-    }
+    # Бонусы архетипа для имперских субфракций
     _kit_key = subfaction_id if subfaction_id else faction_id
-    _arch_key = _kit_key if _kit_key in _arch_service_map else None
+    _arch_key = _kit_key if _kit_key in _IMPERIAL_ARCH_SERVICES else None
     if _arch_key:
         try:
-            _mod = __import__(_arch_service_map[_arch_key],
-                              fromlist=["get_archetype"])
+            _mod = importlib.import_module(_IMPERIAL_ARCH_SERVICES[_arch_key])
             _arch = _mod.get_archetype(career_id or "")
         except Exception as _e:
             print("[build_character] archetype: " + type(_e).__name__)
@@ -221,48 +154,25 @@ def build_character(
                 if _k in stats:
                     stats[_k] = int(stats[_k]) + int(_v)
 
-    if faction_id in ("necrons", "tyranids"):
-        alien = _build_alien_character(dict(stats), faction_id, career_id)
-        # Переписываем stats на изменённые
-        for k in list(stats.keys()):
-            stats[k] = int(stats[k])
-        # Но _build_alien_character менял свою копию — поэтому применяем заново
-        stats = dict(base)
-        stats = _apply_bonuses(stats, hw_b["bonus"], hw_b["penalty"])
-        stats = _apply_bonuses(stats, cr_b["bonus"], cr_b["penalty"])
-        # Теперь с архетипом:
-        arch = None
-        if faction_id == "necrons":
-            try:
-                from services.necrons import get_archetype
-                arch = get_archetype(career_id or "")
-            except Exception:
-                pass
-        else:
-            try:
-                from services.tyranids import get_archetype
-                arch = get_archetype(career_id or "")
-            except Exception:
-                pass
-        if arch:
-            for k, v in (arch.get("bonus_characteristics", {}) or {}).items():
-                if k in stats:
-                    stats[k] = int(stats[k]) + int(v)
-
-        skills = alien["skills"]
-        talents = alien["talents"]
-        weapons = alien["weapons"]
-        armour = alien["armour"] or armour
-        faction_traits = alien["traits"]
-        wounds_bonus_extra = alien["wounds_bonus"]
-        if faction_id == "necrons":
-            money = 0
-            currency = "Нет"
-            equipment = ["resurrection_orb"]
-        else:
-            money = 0
-            currency = "Нет"
-            equipment = ["adrenal_gland"]
+    # Alien-фракции через диспетчер. Никаких хардкодов necrons/tyranids —
+    # любая будущая DLC-фракция подхватится, если модуль реализует интерфейс.
+    alien_builder = _get_alien_kit_builder(faction_id) if faction_id != "imperium" else None
+    if alien_builder is not None:
+        alien = alien_builder(career_id) or {}
+        for k, v in (alien.get("bonus_characteristics") or {}).items():
+            if k in stats:
+                stats[k] = int(stats[k]) + int(v)
+        skills = list(alien.get("skills") or [])
+        talents = list(alien.get("talents") or [])
+        weapons = list(alien.get("weapons") or [])
+        armour = alien.get("armour") or armour
+        equipment = list(alien.get("equipment") or []) or equipment
+        faction_traits = list(alien.get("traits") or [])
+        wounds_bonus_extra = int(alien.get("wounds_bonus", 0) or 0)
+        money = int(alien.get("money", 0) or 0)
+        currency = alien.get("currency", "Нет")
+        if alien.get("archetype_name"):
+            cr_name = alien["archetype_name"]
     else:
         kit = get_starting_kit(_kit_key)
         weapons = [dict(w) for w in kit.get("weapons", [])]
@@ -273,30 +183,17 @@ def build_character(
         money = int(kit.get("money", 100) or 100)
         currency = kit.get("currency", "Троны")
 
-    # 5) Раны и судьба
     tb = stats.get("T", 30) // 10
     wounds_max = random.randint(1, 5) + 1 + 2 * tb + wounds_bonus_extra
     fate_max = 2 if random.randint(1, 10) >= 8 else 1
 
-    # 6) Субфракция
     faction = FACTIONS[faction_id]
     sub_key = subfaction_id
     if sub_key and sub_key not in faction.get("subfactions", []):
         sub_key = None
     sub_display = SUBFACTION_NAMES.get(sub_key, sub_key or "")
 
-    # 7) Архетип
-    archetype_id = career_id if faction_id in ("necrons", "tyranids") else None
-    if archetype_id:
-        try:
-            if faction_id == "necrons":
-                from services.necrons import get_archetype
-            else:
-                from services.tyranids import get_archetype
-            arch = get_archetype(archetype_id) or {}
-            cr_name = arch.get("name", cr_name)
-        except Exception:
-            pass
+    archetype_id_final = career_id if alien_builder is not None else None
 
     now = datetime.now().isoformat(timespec="microseconds")
 
@@ -305,7 +202,7 @@ def build_character(
         or subfaction_id == "rogue_trader"
     )
 
-    char = {  # PATCH_59: has_ship
+    char = {
         "has_ship": _has_ship,
         "name": name, "gender": gender, "age": age,
         "appearance": appearance,
@@ -317,8 +214,8 @@ def build_character(
         "home_world_name": hw_name,
         "career_id": career_id or "",
         "career_name": cr_name,
-        "archetype": archetype_id or "",
-        "archetype_id": archetype_id or "",
+        "archetype": archetype_id_final or "",
+        "archetype_id": archetype_id_final or "",
         "extra_choices": {},
         "characteristics": stats,
         "bonuses": {k: 0 for k in CHARACTERISTIC_KEYS},
@@ -346,16 +243,15 @@ def build_character(
         "generation_method": "roll+distribute",
         "xp": 300, "rank": 1, "created_at": now,
         "alien_traits": faction_traits,
+        # Поля ниже — для обратной совместимости со старыми сохранениями
+        # и кодом, который мог их читать. Заполняются только для своей фракции.
         "necron_traits": faction_traits if faction_id == "necrons" else [],
         "tyranid_traits": faction_traits if faction_id == "tyranids" else [],
     }
 
-    # PATCH_87: авто-инициализация психосил по архетипу
     try:
         from services.psy_archetypes import ensure_psy_fields
         ensure_psy_fields(char)
-        # Если у псайкера есть psy_rating, но не заданы силы —
-        # дадим стартовый набор доступных ему сил.
         _pr = int(char.get("psy_rating", 0) or 0)
         if _pr > 0 and not char.get("psychic_powers"):
             try:

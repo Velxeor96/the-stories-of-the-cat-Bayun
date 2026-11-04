@@ -1,0 +1,337 @@
+{
+  "disciplines": {
+    "biomancy": "Биомантия",
+    "pyromancy": "Пиромантия",
+    "telekinesis": "Телекинез",
+    "telepathy": "Телепатия",
+    "divination": "Прорицание",
+    "demonology": "Демонология (запретна для Империума)"
+  },
+  "powers": {
+    "iron_arm": {
+      "name": "Железная плоть",
+      "discipline": "biomancy",
+      "desc": "+10 к Выносливости на сцену.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "T": 10
+      }
+    },
+    "warp_speed": {
+      "name": "Варп-скорость",
+      "discipline": "biomancy",
+      "desc": "+10 к Ловкости на сцену.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "Ag": 10
+      }
+    },
+    "endurance": {
+      "name": "Живучесть",
+      "discipline": "biomancy",
+      "desc": "Восстанавливает 1d5 ран.",
+      "cost": 2,
+      "type": "heal",
+      "min_rating": 1,
+      "heal": "1d5"
+    },
+    "regenerate": {
+      "name": "Регенерация",
+      "discipline": "biomancy",
+      "desc": "Восстанавливает 2d5 ран.",
+      "cost": 4,
+      "type": "heal",
+      "min_rating": 3,
+      "heal": "2d5"
+    },
+    "blood_boil": {
+      "name": "Кровяное вскипание",
+      "discipline": "biomancy",
+      "desc": "Атака: 2d10+5 E.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "2d10+5",
+      "self_damage_on_fail": 1
+    },
+    "haemorrhage": {
+      "name": "Кровотечение",
+      "discipline": "biomancy",
+      "desc": "Атака: 3d10 E, вызывает длительное кровотечение.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10"
+    },
+    "fireball": {
+      "name": "Огненный шар",
+      "discipline": "pyromancy",
+      "desc": "Атака огнём: 1d10+5 E.",
+      "cost": 2,
+      "type": "attack",
+      "min_rating": 1,
+      "damage": "1d10+5"
+    },
+    "flame_storm": {
+      "name": "Пламенный шторм",
+      "discipline": "pyromancy",
+      "desc": "Область огня: 2d10 E.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10"
+    },
+    "fire_shield": {
+      "name": "Огненный щит",
+      "discipline": "pyromancy",
+      "desc": "+2 AP на сцену.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "AP": 2
+      }
+    },
+    "burning_blade": {
+      "name": "Огненный клинок",
+      "discipline": "pyromancy",
+      "desc": "+1d10 E к урону в рукопашной.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "damage_bonus": "1d10 E"
+      }
+    },
+    "inferno": {
+      "name": "Инферно",
+      "discipline": "pyromancy",
+      "desc": "Мощный огненный взрыв: 3d10+10 E.",
+      "cost": 6,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+10"
+    },
+    "molten_beam": {
+      "name": "Расплавленный луч",
+      "discipline": "pyromancy",
+      "desc": "Атака: 2d10+8 E, игнорирует 4 AP.",
+      "cost": 4,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+8"
+    },
+    "sunburst": {
+      "name": "Солнечный взрыв",
+      "discipline": "pyromancy",
+      "desc": "Область: 4d10 E, все в зоне получают урон.",
+      "cost": 6,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "4d10"
+    },
+    "tele_blow": {
+      "name": "Телекинетический удар",
+      "discipline": "telekinesis",
+      "desc": "Силовой удар: 1d10+5 I.",
+      "cost": 2,
+      "type": "attack",
+      "min_rating": 1,
+      "damage": "1d10+5"
+    },
+    "tele_shield": {
+      "name": "Телекинетический щит",
+      "discipline": "telekinesis",
+      "desc": "+3 AP на сцену.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "AP": 3
+      }
+    },
+    "precision": {
+      "name": "Точность",
+      "discipline": "telekinesis",
+      "desc": "+10 к BS на следующую атаку.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "BS": 10
+      }
+    },
+    "flight": {
+      "name": "Левитация",
+      "discipline": "telekinesis",
+      "desc": "Полёт до сцены.",
+      "cost": 3,
+      "type": "utility",
+      "min_rating": 3
+    },
+    "push": {
+      "name": "Телекинетический толчок",
+      "discipline": "telekinesis",
+      "desc": "Отбрасывает цель.",
+      "cost": 3,
+      "type": "control",
+      "min_rating": 3
+    },
+    "objuration_mechanicum": {
+      "name": "Запрет механизмов",
+      "discipline": "telekinesis",
+      "desc": "Отключает технику или оружие в радиусе.",
+      "cost": 3,
+      "type": "control",
+      "min_rating": 3
+    },
+    "mind_link": {
+      "name": "Мысленная связь",
+      "discipline": "telepathy",
+      "desc": "Телепатический контакт.",
+      "cost": 1,
+      "type": "utility",
+      "min_rating": 1
+    },
+    "mind_scan": {
+      "name": "Чтение мыслей",
+      "discipline": "telepathy",
+      "desc": "Читает поверхностные мысли.",
+      "cost": 2,
+      "type": "utility",
+      "min_rating": 1
+    },
+    "dominate": {
+      "name": "Внушение",
+      "discipline": "telepathy",
+      "desc": "Подавляет волю цели.",
+      "cost": 4,
+      "type": "control",
+      "min_rating": 3
+    },
+    "terrify": {
+      "name": "Ужас",
+      "discipline": "telepathy",
+      "desc": "Наводит сверхъестественный страх.",
+      "cost": 3,
+      "type": "control",
+      "min_rating": 3
+    },
+    "astral_proj": {
+      "name": "Астральная проекция",
+      "discipline": "telepathy",
+      "desc": "Дух покидает тело для разведки.",
+      "cost": 5,
+      "type": "utility",
+      "min_rating": 5
+    },
+    "psychic_shriek": {
+      "name": "Психический вопль",
+      "discipline": "telepathy",
+      "desc": "Атака: 2d10+5 I, оглушает.",
+      "cost": 3,
+      "type": "attack",
+      "min_rating": 3,
+      "damage": "2d10+5"
+    },
+    "puppet_master": {
+      "name": "Кукловод",
+      "discipline": "telepathy",
+      "desc": "Полный контроль над целью на раунд.",
+      "cost": 6,
+      "type": "control",
+      "min_rating": 5
+    },
+    "foreboding": {
+      "name": "Предчувствие",
+      "discipline": "divination",
+      "desc": "+20 к следующему броску.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "next_roll": 20
+      }
+    },
+    "soul_sight": {
+      "name": "Духовное зрение",
+      "discipline": "divination",
+      "desc": "Видит невидимое, духов, скрытое.",
+      "cost": 2,
+      "type": "utility",
+      "min_rating": 1
+    },
+    "fates_vision": {
+      "name": "Взор судьбы",
+      "discipline": "divination",
+      "desc": "Показывает вероятный исход.",
+      "cost": 4,
+      "type": "utility",
+      "min_rating": 5
+    },
+    "insight": {
+      "name": "Прозрение",
+      "discipline": "divination",
+      "desc": "+10 к Интеллекту на сцену.",
+      "cost": 2,
+      "type": "buff",
+      "min_rating": 1,
+      "buff": {
+        "Int": 10
+      }
+    },
+    "precognition": {
+      "name": "Предвидение",
+      "discipline": "divination",
+      "desc": "+10 к инициативе и уклонению.",
+      "cost": 3,
+      "type": "buff",
+      "min_rating": 3,
+      "buff": {
+        "Ag": 10
+      }
+    },
+    "misfortune": {
+      "name": "Злой рок",
+      "discipline": "divination",
+      "desc": "Цель получает -20 на все броски.",
+      "cost": 4,
+      "type": "control",
+      "min_rating": 5
+    },
+    "summon_daemon": {
+      "name": "Призыв демона",
+      "discipline": "demonology",
+      "desc": "Призывает малого демона. Опасно.",
+      "cost": 5,
+      "type": "utility",
+      "min_rating": 3,
+      "corruption": 1
+    },
+    "banish_daemon": {
+      "name": "Изгнание демона",
+      "discipline": "demonology",
+      "desc": "Изгоняет демоническую сущность.",
+      "cost": 5,
+      "type": "control",
+      "min_rating": 5
+    },
+    "corruption_bolt": {
+      "name": "Луч порчи",
+      "discipline": "demonology",
+      "desc": "Атака: 3d10+8 E, заражает Порчей.",
+      "cost": 5,
+      "type": "attack",
+      "min_rating": 5,
+      "damage": "3d10+8",
+      "corruption": 1
+    }
+  },
+  "config": {
+    "fail_effect": "insanity"
+  }
+}

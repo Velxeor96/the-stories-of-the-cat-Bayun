@@ -50,7 +50,8 @@ def test_full_20_turns():
         assert "Вы идете по коридору" in res.narrative
         
         # Применяем [STATE], как это делает ui/screens/game.py
-        clean_text, applied = parse_and_apply(res.narrative, char)
+        clean_text, applied, updated_char = parse_and_apply(res.narrative, char)
+        char = updated_char
         
         # Проверяем, что изменения применились
         assert "xp" in applied

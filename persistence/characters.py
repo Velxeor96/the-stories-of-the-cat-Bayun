@@ -1,9 +1,12 @@
-"""persistence/characters.py — сохранение персонажей (cloud-aware)."""
+"""persistence/characters.py — сохранение персонажей (SQLite)."""
 from __future__ import annotations
+
 import json
 import re
+from contextlib import closing
 from pathlib import Path
-from persistence import cloud_store
+
+from persistence.db import get_conn, init_db
 
 _ROOT = Path(__file__).resolve().parents[1]
 _USERS_DIR = _ROOT / "data" / "users"
@@ -20,10 +23,6 @@ def _chars_dir(login: str) -> Path:
     return d
 
 
-def _cloud_ns(login: str) -> str:
-    return "chars:" + login
-
-
 def validate_name(name: str) -> tuple:
     if not name or not name.strip():
         return False, "Имя не может быть пустым"
@@ -33,9 +32,13 @@ def validate_name(name: str) -> tuple:
 
 
 def list_characters(login: str) -> list:
-    if cloud_store.is_configured():
-        return sorted(cloud_store.hkeys(_cloud_ns(login)))
-    return sorted(p.stem for p in _chars_dir(login).glob("*.json"))
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        rows = conn.execute(
+            "SELECT name FROM characters WHERE login = ? ORDER BY name",
+            (login,),
+        ).fetchall()
+    return [row["name"] for row in rows]
 
 
 def character_path(login: str, name: str) -> Path:
@@ -43,38 +46,41 @@ def character_path(login: str, name: str) -> Path:
 
 
 def load_character(login: str, name: str) -> dict:
-    if cloud_store.is_configured():
-        data = cloud_store.hget_json(_cloud_ns(login), name)
-        if data is None:
-            raise CharacterError("Персонаж " + repr(name) + " не найден")
-        return data
-    p = character_path(login, name)
-    if not p.exists():
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        row = conn.execute(
+            "SELECT data FROM characters WHERE login = ? AND name = ?",
+            (login, name),
+        ).fetchone()
+    if row is None:
         raise CharacterError("Персонаж " + repr(name) + " не найден")
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        return json.loads(row["data"])
     except Exception as e:
-        raise CharacterError("Не читается " + p.name + ": " + str(e)) from e
+        raise CharacterError("Не читается персонаж " + repr(name) + ": " + str(e)) from e
 
 
 def save_character(login: str, name: str, data: dict) -> None:
     ok, err = validate_name(name)
     if not ok:
         raise CharacterError(err)
-    if cloud_store.is_configured():
-        if cloud_store.hset_json(_cloud_ns(login), name, data):
-            return
-        print("[characters] cloud fail → local")
-    p = character_path(login, name)
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    payload = json.dumps(data, ensure_ascii=False)
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO characters(login, name, data) VALUES (?, ?, ?)",
+            (login, name, payload),
+        )
 
 
 def delete_character(login: str, name: str) -> None:
-    if cloud_store.is_configured():
-        cloud_store.hdel(_cloud_ns(login), name)
-    p = character_path(login, name)
-    if p.exists():
-        p.unlink()
+    init_db()
+    with closing(get_conn()) as conn, conn:
+        conn.execute(
+            "DELETE FROM characters WHERE login = ? AND name = ?",
+            (login, name),
+        )
 
 
 def has_any(login: str) -> bool:

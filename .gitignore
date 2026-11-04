@@ -122,3 +122,7 @@ scripts/_diag*.txt
 dump_*.txt
 _trash_*/
 hf_cache_part*.zip
+
+# VK Bot
+.env
+bot_sessions.json

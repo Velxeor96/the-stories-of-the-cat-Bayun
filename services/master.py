@@ -110,19 +110,8 @@ class Master:
             max_delay=retries.get("max_delay", 30.0),
         )
 
-    def _get_max_tokens(self) -> int:
-        try:
-            import streamlit as _st
-            lg = _st.session_state.get("user_login")
-            if lg:
-                from services.settings_game import max_tokens_for
-                return max_tokens_for(lg)
-        except Exception:
-            pass
-        return 700
-
     def narrate(self, state, command, *, roll=None, history=None,
-                extra_context=""):
+                extra_context="", max_tokens=700):
         msg = self._build_message(state=state, command=command, roll=roll,
                                   history=history or [],
                                   extra_context=extra_context)
@@ -131,7 +120,7 @@ class Master:
             r = self.llm.call(
                 system_prompt=self.system_prompt, user_message=msg,
                 model=self.model.id, temperature=0.85,
-                max_tokens=self._get_max_tokens())
+                max_tokens=max_tokens)
             text = self._extract_text(r)
             if _is_gigachat_refusal(text):
                 print("[master] GigaChat refused — fallback")
@@ -236,15 +225,18 @@ class Master:
             fid = str(state.get("faction_id") or "imperium")
             sp = get_story_profile(fid)
             if sp:
-                lines = ["=== СЮЖЕТНЫЙ ПРОФИЛЬ (СКРЫТО ОТ ИГРОКА) ==="]
+                lines = ["=== ФОНОВЫЕ СОБЫТИЯ И СЛУХИ МИРА (СКРЫТО ОТ ИГРОКА) ==="]
+                lines.append("ВАЖНО: Это ОТКРЫТЫЙ МИР (ПЕСОЧНИЦА). Не веди игрока по рельсам и не заставляй брать эти квесты. Используй их как слухи, фоновые события и угрозы, чтобы мир казался живым.")
                 if sp.get("opening_hooks"):
-                    lines.append("Крючки: " + "; ".join(sp["opening_hooks"]))
+                    lines.append("Слухи/События (игрок может их проигнорировать): " + "; ".join(sp["opening_hooks"]))
                 if sp.get("starting_goals"):
-                    lines.append("Цели: " + "; ".join(sp["starting_goals"]))
+                    lines.append("Возможные локальные цели: " + "; ".join(sp["starting_goals"]))
                 if sp.get("immediate_threats"):
-                    lines.append("Угрозы: " + "; ".join(sp["immediate_threats"]))
+                    lines.append("Фоновые угрозы: " + "; ".join(sp["immediate_threats"]))
                 if sp.get("narrative_arc"):
-                    lines.append("Арка: " + str(sp["narrative_arc"]))
+                    lines.append("Общий тон арки (не сюжет): " + str(sp["narrative_arc"]))
+                if sp.get("taboo_topics"):
+                    lines.append("ЗАПРЕТНЫЕ ТЕМЫ (НЕ НАРУШАТЬ): " + "; ".join(sp["taboo_topics"]))
                 parts.append("\n".join(lines))
         except Exception as e:
             print("[master] story profile fail: " + type(e).__name__)

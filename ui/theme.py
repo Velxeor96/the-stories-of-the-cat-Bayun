@@ -569,3 +569,32 @@ def render_theme_strip(key_prefix='__theme_strip', label='Тема'):
     if choice != cur:
         _st.session_state.ui_theme = choice
         _st.rerun()
+
+# PATCH_106: Mobile Adaptation
+_MOBILE_CSS = """
+<style>
+@media (max-width: 768px) {
+    /* Увеличиваем кнопки для удобного нажатия пальцем */
+    .stButton > button {
+        width: 100% !important;
+        padding: 12px 20px !important;
+        font-size: 16px !important;
+    }
+    /* Уменьшаем отступы, чтобы текст не сжимался */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+    /* Увеличиваем шрифт в чате */
+    .stMarkdown p {
+        font-size: 15px !important;
+        line-height: 1.5 !important;
+    }
+}
+</style>
+"""
+import streamlit as _st
+_st.markdown(_MOBILE_CSS, unsafe_allow_html=True)
+# /PATCH_106

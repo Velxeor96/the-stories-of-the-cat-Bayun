@@ -1,0 +1,44 @@
+{
+  "id": "tyranids",
+  "name": "Тираниды",
+  "home_worlds": [
+    {
+      "id": "behemoth",
+      "name": "Флот-улей Бегемот"
+    },
+    {
+      "id": "kraken",
+      "name": "Флот-улей Кракен"
+    },
+    {
+      "id": "leviathan",
+      "name": "Флот-улей Левиафан"
+    },
+    {
+      "id": "jormungandr",
+      "name": "Флот-улей Йормунгандр"
+    }
+  ],
+  "archetypes": [
+    {
+      "id": "warrior",
+      "name": "Воин Улья"
+    },
+    {
+      "id": "genestealer",
+      "name": "Генокрад"
+    },
+    {
+      "id": "carnifex",
+      "name": "Карнифекс"
+    },
+    {
+      "id": "lichter",
+      "name": "Ликтор"
+    },
+    {
+      "id": "hive_tyrant",
+      "name": "Тиран Улья"
+    }
+  ]
+}

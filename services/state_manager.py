@@ -1,22 +1,18 @@
-"""services/state_manager.py — парсинг [STATE] и применение к персонажу.
-
-PATCH_97: Объединяет state_parser и state_applier в единый менеджер.
-"""
+"""services/state_manager.py — парсинг [STATE] и применение к персонажу."""
 from __future__ import annotations
-import re
 
-# --- Из state_parser ---
-_BLOCK_RE = re.compile(
-    r"\[STATE\](.*?)\[/STATE\]",
-    re.DOTALL | re.IGNORECASE,
-)
+import copy
+import re
+from core.logger import get_logger
+from schemas import StateChanges
+from pydantic import ValidationError
+
+logger = get_logger(__name__)
+
+_BLOCK_RE = re.compile(r"\[STATE\](.*?)\[/STATE\]", re.DOTALL | re.IGNORECASE)
 
 
 def parse_state(text):
-    # Возвращает (clean_text, changes_dict).
-    # clean_text — нарратив без блока [STATE] и без лишних пустых строк.
-    # changes_dict — словарь {key: value}. При повторяющихся ключах
-    # (напр. armour_unequip=arms дважды) значение становится списком.
     if not text:
         return text, {}
 
@@ -47,7 +43,7 @@ def parse_state(text):
     clean = re.sub(r"\n{3,}", "\n\n", clean).strip()
     return clean, changes
 
-# --- Из state_applier ---
+
 def _to_int(v, default=0):
     try:
         return int(str(v).strip())
@@ -56,7 +52,6 @@ def _to_int(v, default=0):
 
 
 def _delta(v):
-    # Парсит '+N' / '-N' / 'N' -> (is_delta, N).
     s = str(v).strip()
     if s.startswith("+") or s.startswith("-"):
         try:
@@ -73,7 +68,6 @@ def _as_list(v):
 
 
 def _split_multi(v):
-    # 'Кинжал; Камни Души' -> ['Кинжал', 'Камни Души'].
     out = []
     for chunk in _as_list(v):
         for piece in str(chunk).split(";"):
@@ -140,89 +134,66 @@ def _apply_armour_zone(char, zone, do_equip):
 
 
 def apply_changes(char, changes):
-    # Мутирует char по changes. Возвращает список применённых ключей.
-    if not isinstance(char, dict):
-        return []
-    if not isinstance(changes, dict):
+    if not isinstance(char, dict) or not isinstance(changes, dict):
         return []
 
+    new_char = copy.deepcopy(char)
     applied = []
 
-    # PATCH_88: wounds/fate/xp вынесены ниже как "дельта или абсолют".
-    # insanity/corruption/rank остаются абсолютными.
-    simple_abs = {
-        "insanity": (None, "insanity"),
-        "corruption": (None, "corruption"),
-        "rank": (None, "rank"),
-    }
-    for key, (sub_dict, sub_key) in simple_abs.items():
+    simple_abs = {"insanity": "insanity", "corruption": "corruption", "rank": "rank"}
+    for key, sub_key in simple_abs.items():
         if key not in changes:
             continue
         val = _to_int(changes[key], None)
         if val is None:
             continue
-        if sub_dict:
-            d = _ensure_dict(char, sub_dict)
-            d[sub_key] = val
-        else:
-            char[sub_key] = val
+        new_char[sub_key] = val
         applied.append(key)
 
-    # PATCH_88: wounds / fate / xp — дельта, если начинается с +/-,
-    # иначе абсолют. Убирает двойной подсчёт xp=+50.
     if "wounds" in changes:
-        w = _ensure_dict(char, "wounds")
+        w = _ensure_dict(new_char, "wounds")
         is_d, v = _delta(changes["wounds"])
         cur = int(w.get("current", 0) or 0)
         new_val = (cur + v) if is_d else _to_int(changes["wounds"], cur)
-        if new_val < 0:
-            new_val = 0
-        w["current"] = new_val
+        w["current"] = max(0, new_val)
         applied.append("wounds")
 
     if "fate" in changes:
-        fp = _ensure_dict(char, "fate_points")
+        fp = _ensure_dict(new_char, "fate_points")
         is_d, v = _delta(changes["fate"])
         cur = int(fp.get("current", 0) or 0)
         new_val = (cur + v) if is_d else _to_int(changes["fate"], cur)
-        if new_val < 0:
-            new_val = 0
-        fp["current"] = new_val
+        fp["current"] = max(0, new_val)
         applied.append("fate")
 
     if "xp" in changes:
         is_d, v = _delta(changes["xp"])
-        cur = int(char.get("xp", 0) or 0)
-        char["xp"] = (cur + v) if is_d else _to_int(changes["xp"], cur)
+        cur = int(new_char.get("xp", 0) or 0)
+        new_char["xp"] = (cur + v) if is_d else _to_int(changes["xp"], cur)
         applied.append("xp")
 
     if "money" in changes:
-        # PATCH_75: clamp negative + log
         raw = changes["money"]
         is_d, v = _delta(raw)
-        _old = int(char.get("money", 0) or 0)
-        if is_d:
-            _new = _old + v
-        else:
-            _new = _to_int(raw, _old)
+        _old = int(new_char.get("money", 0) or 0)
+        _new = (_old + v) if is_d else _to_int(raw, _old)
         if _new < 0:
-            print("[state_applier] money clamped: " + str(_old)
-                  + " → " + str(_new) + " → 0")
+            logger.info(f"money clamped: {_old} -> {_new} -> 0")
             _new = 0
-        char["money"] = _new
+        new_char["money"] = _new
         if _new != _old:
-            print("[state_applier] money: " + str(_old) + " → " + str(_new))
+            logger.info(f"money: {_old} -> {_new}")
         applied.append("money")
 
     if "location" in changes:
-        char["location"] = {"place": str(changes["location"]).strip()}
+        new_char["location"] = {"place": str(changes["location"]).strip()}
         applied.append("location")
     if "date" in changes:
-        char["game_date"] = str(changes["date"]).strip()
+        new_char["game_date"] = str(changes["date"]).strip()
         applied.append("date")
 
     if "journal" in changes:
-        journal = _ensure_list(char, "journal")
+        journal = _ensure_list(new_char, "journal")
         for entry in _split_multi(changes["journal"]):
             journal.append(entry)
         applied.append("journal")
@@ -233,19 +204,20 @@ def apply_changes(char, changes):
     if "inventory_add" in changes:
         adds += _split_multi(changes["inventory_add"])
     if adds:
-        _append_unique(_ensure_list(char, "equipment"), adds)
+        _append_unique(_ensure_list(new_char, "equipment"), adds)
         applied.append("equipment_add")
+    
     rems = []
     if "equipment_remove" in changes:
         rems += _split_multi(changes["equipment_remove"])
     if "inventory_remove" in changes:
         rems += _split_multi(changes["inventory_remove"])
     if rems:
-        char["equipment"] = _remove_by_name(_ensure_list(char, "equipment"), rems)
+        new_char["equipment"] = _remove_by_name(_ensure_list(new_char, "equipment"), rems)
         applied.append("equipment_remove")
 
     if "weapon_add" in changes:
-        weapons = _ensure_list(char, "weapons")
+        weapons = _ensure_list(new_char, "weapons")
         for spec in _split_multi(changes["weapon_add"]):
             if "|" in spec:
                 name, _, stats = spec.partition("|")
@@ -254,149 +226,128 @@ def apply_changes(char, changes):
                 weapons.append({"name": spec})
         applied.append("weapon_add")
     if "weapon_lost" in changes:
-        char["weapons"] = _remove_by_name(
-            _ensure_list(char, "weapons"),
+        new_char["weapons"] = _remove_by_name(
+            _ensure_list(new_char, "weapons"),
             _split_multi(changes["weapon_lost"]),
         )
         applied.append("weapon_lost")
 
     for key, value in list(changes.items()):
         if key.startswith("armour_equip_"):
-            zone = key[len("armour_equip_"):]
-            if _apply_armour_zone(char, zone, True):
+            if _apply_armour_zone(new_char, key[len("armour_equip_"):], True):
                 applied.append(key)
         elif key.startswith("armour_unequip_"):
-            zone = key[len("armour_unequip_"):]
-            if _apply_armour_zone(char, zone, False):
+            if _apply_armour_zone(new_char, key[len("armour_unequip_"):], False):
                 applied.append(key)
         elif key == "armour_equip":
             for zone in _split_multi(value):
-                if _apply_armour_zone(char, zone, True):
+                if _apply_armour_zone(new_char, zone, True):
                     applied.append(key)
         elif key == "armour_unequip":
             for zone in _split_multi(value):
-                if _apply_armour_zone(char, zone, False):
+                if _apply_armour_zone(new_char, zone, False):
                     applied.append(key)
 
     if "npc_add" in changes:
-        _append_unique(_ensure_list(char, "npcs"), _split_multi(changes["npc_add"]))
+        _append_unique(_ensure_list(new_char, "npcs"), _split_multi(changes["npc_add"]))
         applied.append("npc_add")
     if "npc_remove" in changes:
-        char["npcs"] = _remove_by_name(_ensure_list(char, "npcs"),
-                                       _split_multi(changes["npc_remove"]))
+        new_char["npcs"] = _remove_by_name(_ensure_list(new_char, "npcs"), _split_multi(changes["npc_remove"]))
         applied.append("npc_remove")
-
     if "quest_add" in changes:
-        _append_unique(_ensure_list(char, "quests"),
-                       _split_multi(changes["quest_add"]))
+        _append_unique(_ensure_list(new_char, "quests"), _split_multi(changes["quest_add"]))
         applied.append("quest_add")
     if "quest_remove" in changes:
-        char["quests"] = _remove_by_name(_ensure_list(char, "quests"),
-                                         _split_multi(changes["quest_remove"]))
+        new_char["quests"] = _remove_by_name(_ensure_list(new_char, "quests"), _split_multi(changes["quest_remove"]))
         applied.append("quest_remove")
-
     if "companion_add" in changes:
-        _append_unique(_ensure_list(char, "companions"),
-                       _split_multi(changes["companion_add"]))
+        _append_unique(_ensure_list(new_char, "companions"), _split_multi(changes["companion_add"]))
         applied.append("companion_add")
     if "companion_remove" in changes:
-        char["companions"] = _remove_by_name(
-            _ensure_list(char, "companions"),
-            _split_multi(changes["companion_remove"]))
+        new_char["companions"] = _remove_by_name(_ensure_list(new_char, "companions"), _split_multi(changes["companion_remove"]))
         applied.append("companion_remove")
-
     if "effect_add" in changes:
-        _append_unique(_ensure_list(char, "effects"),
-                       _split_multi(changes["effect_add"]))
+        _append_unique(_ensure_list(new_char, "effects"), _split_multi(changes["effect_add"]))
         applied.append("effect_add")
     if "effect_remove" in changes:
-        char["effects"] = _remove_by_name(
-            _ensure_list(char, "effects"),
-            _split_multi(changes["effect_remove"]))
+        new_char["effects"] = _remove_by_name(_ensure_list(new_char, "effects"), _split_multi(changes["effect_remove"]))
         applied.append("effect_remove")
 
-    rep = _ensure_dict(char, "reputation")
+    rep = _ensure_dict(new_char, "reputation")
     for key, value in list(changes.items()):
         if key.startswith("reputation_"):
             name = key[len("reputation_"):]
             is_d, v = _delta(value)
-            if is_d:
-                rep[name] = int(rep.get(name, 0) or 0) + v
-            else:
-                rep[name] = _to_int(value, int(rep.get(name, 0) or 0))
+            rep[name] = (int(rep.get(name, 0) or 0) + v) if is_d else _to_int(value, int(rep.get(name, 0) or 0))
             applied.append(key)
 
-    specials = _ensure_dict(char, "special")
+    specials = _ensure_dict(new_char, "special")
     for key, value in list(changes.items()):
         if key.startswith("special_"):
             name = key[len("special_"):]
             is_d, v = _delta(value)
-            if is_d:
-                specials[name] = int(specials.get(name, 0) or 0) + v
-            else:
-                specials[name] = _to_int(value, int(specials.get(name, 0) or 0))
+            specials[name] = (int(specials.get(name, 0) or 0) + v) if is_d else _to_int(value, int(specials.get(name, 0) or 0))
             applied.append(key)
 
-    chars = _ensure_dict(char, "characteristics")
+    chars = _ensure_dict(new_char, "characteristics")
     for key, value in list(changes.items()):
         if key.startswith("characteristic_"):
             code = key[len("characteristic_"):]
-            code_map = {
-                "ws": "WS", "bs": "BS", "s": "S", "t": "T",
-                "ag": "Ag", "int": "Int", "per": "Per",
-                "wp": "WP", "fel": "Fel",
-            }
+            code_map = {"ws": "WS", "bs": "BS", "s": "S", "t": "T", "ag": "Ag", "int": "Int", "per": "Per", "wp": "WP", "fel": "Fel"}
             canon = code_map.get(code.lower())
-            if not canon:
-                continue
-            chars[canon] = _to_int(value, int(chars.get(canon, 0) or 0))
-            applied.append(key)
+            if canon:
+                chars[canon] = _to_int(value, int(chars.get(canon, 0) or 0))
+                applied.append(key)
 
     for ship_key in ("ship_hull", "ship_crew", "ship_status", "ship_note"):
         if ship_key in changes:
-            char[ship_key] = str(changes[ship_key]).strip()
+            new_char[ship_key] = str(changes[ship_key]).strip()
             applied.append(ship_key)
 
-    # PATCH_61: корабль и сюжетные флаги
     if "ship_acquired" in changes:
-        char["has_ship"] = True
+        new_char["has_ship"] = True
         notes = _split_multi(changes["ship_acquired"])
-        ship = _ensure_dict(char, "ship")
+        ship = _ensure_dict(new_char, "ship")
         if notes and not ship.get("name"):
             ship["name"] = notes[0]
             if len(notes) > 1:
                 ship["description"] = "; ".join(notes[1:])
         applied.append("ship_acquired")
     if "ship_lost" in changes:
-        char["has_ship"] = False
-        prev_ship = char.get("ship") or {}
+        new_char["has_ship"] = False
+        prev_ship = new_char.get("ship") or {}
         if isinstance(prev_ship, dict):
             prev_ship["status"] = "потерян: " + str(changes["ship_lost"]).strip()
         else:
             prev_ship = {"status": "потерян: " + str(changes["ship_lost"]).strip()}
-        char["ship"] = prev_ship
+        new_char["ship"] = prev_ship
         applied.append("ship_lost")
 
-    flags = _ensure_dict(char, "flags")
+    flags = _ensure_dict(new_char, "flags")
     for key, value in list(changes.items()):
         if key.startswith("flag_"):
             name = key[len("flag_"):].strip()
-            sval = str(value).strip().lower()
-            flags[name] = sval in ("1", "true", "yes", "on", "да",
-                                    "истина", "y")
+            flags[name] = str(value).strip().lower() in ("1", "true", "yes", "on", "да", "истина", "y")
             applied.append(key)
         elif key.startswith("unflag_"):
             name = key[len("unflag_"):].strip()
             flags.pop(name, None)
             applied.append(key)
 
-    return applied
+    return new_char, applied
 
 
-def parse_and_apply(narrative: str, char: dict) -> tuple[str, list[str]]:
-    """Парсит [STATE] и сразу применяет к персонажу."""
+def parse_and_apply(narrative: str, char: dict) -> tuple[str, list[str], dict]:
     clean_text, changes = parse_state(narrative)
     if not changes:
-        return clean_text, []
-    applied = apply_changes(char, changes)
-    return clean_text, applied
+        return clean_text, [], char
+
+    try:
+        validated = StateChanges(**changes)
+        valid_dict = validated.model_dump(exclude_unset=True)
+    except ValidationError as e:
+        logger.error(f"State validation failed: {e}")
+        return clean_text, [], char
+
+    new_char, applied = apply_changes(char, valid_dict)
+    return clean_text, applied, new_char

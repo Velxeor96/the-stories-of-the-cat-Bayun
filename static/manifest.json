@@ -1,0 +1,16 @@
+{
+  "name": "WH40K RPG: The Stories of Cat Bayun",
+  "short_name": "WH40K RPG",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1117",
+  "theme_color": "#0e1117",
+  "description": "Текстовая RPG по вселенной Warhammer 40,000",
+  "icons": [
+    {
+      "src": "/static/sigils/imperial.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

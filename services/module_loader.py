@@ -72,3 +72,9 @@ def get_story_profile(faction_id: str) -> dict:
     """Загружает сюжетный профиль фракции."""
     p = MODULES_DIR / ACTIVE_MODULE / "story" / f"{faction_id}.json"
     return _load_json(p)
+
+
+def get_manifest() -> dict:
+    """Возвращает манифест активного модуля (capabilities, механики и т.д.)."""
+    p = MODULES_DIR / ACTIVE_MODULE / "manifest.json"
+    return _load_json(p)

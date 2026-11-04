@@ -6,5 +6,6 @@
   "engine_version": "1.x",
   "factions": ["imperium"],
   "unique_mechanics": ["trade", "profit_factor", "ship_management"],
+  "capabilities": ["trade", "ship", "psy", "combat"],
   "disabled_features": ["chaos_favor", "infamy"]
 }
