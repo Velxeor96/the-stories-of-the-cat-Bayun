@@ -71,7 +71,21 @@ def render() -> None:
             for nm in existing:
                 c1, c2 = st.columns([4, 1])
                 with c1:
-                    st.markdown("**" + nm + "**")
+                    # PATCH_123: Показываем аватарку
+                    try:
+                        from persistence.characters import load_character
+                        _cd = load_character(login, nm)
+                        _av = _cd.get("avatar_url")
+                        if _av:
+                            c_img, c_txt = st.columns([1, 4])
+                            with c_img:
+                                st.image(_av, width=60)
+                            with c_txt:
+                                st.markdown("**" + nm + "**")
+                        else:
+                            st.markdown("**" + nm + "**")
+                    except Exception:
+                        st.markdown("**" + nm + "**")
                 with c2:
                     if st.button("Играть", key="play_" + nm, width="stretch"):
                         st.session_state.active_character = nm
@@ -310,6 +324,12 @@ def render() -> None:
                 home_world_id=home_world_id, career_id=career_id,
                 stats_dict=raw,
             )
+            
+            # PATCH_123: Генерация аватарки
+            from services.image_service import generate_avatar_url
+            with st.spinner("🎨 Создаем портрет..."):
+                data["avatar_url"] = generate_avatar_url(data)
+                
             save_character(login, name.strip(), data)
             st.session_state.active_character = name.strip()
             st.session_state["_game_loading_pending"] = True

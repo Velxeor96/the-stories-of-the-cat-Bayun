@@ -549,6 +549,11 @@ def _render_abilities(char: dict) -> None:
 # =====================================================================
 def _render_sidebar(char: dict, login: str, char_name: str) -> None:
     with st.sidebar:
+        # PATCH_123: Аватарка в сайдбаре
+        _av = char.get("avatar_url")
+        if _av:
+            st.image(_av, width=100)
+        
         st.markdown("### " + str(char.get("name", "—")))
         st.caption(str(char.get("faction", "")) + " · "
                    + str(char.get("subfaction", "")))
