@@ -126,3 +126,10 @@ hf_cache_part*.zip
 # VK Bot
 .env
 bot_sessions.json
+
+# PATCH_CLEANUP: Защита от мусора и баз данных
+* — копия/
+*_audit.txt
+*_services.txt
+data/game.db
+data/users/
