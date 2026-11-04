@@ -9,6 +9,7 @@ from core.llm_client import LLMClient
 from core.llm_factory import make_client
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+from services.world_memory import get_memory
 
 
 
@@ -219,6 +220,17 @@ class Master:
         except Exception:
             pass
 
+        # PATCH_121: World Memory
+        try:
+            login = __import__("streamlit").session_state.get("user_login")
+            char_name = state.get("name") if isinstance(state, dict) else None
+            if login and char_name:
+                mem = get_memory(login, char_name, limit=8)
+                if mem:
+                    parts.append("=== ПАМЯТЬ МИРА (ФАКТЫ, НЕ ИЗМЕНЯТЬ) ===\n" + "\n".join("- " + m for m in mem))
+        except Exception as e:
+            print("[master] world memory fail: " + type(e).__name__)
+
         # PATCH_102: Story Profiles
         try:
             from services.module_loader import get_story_profile
@@ -299,6 +311,31 @@ class Master:
         parts.append("=== НАПОМИНАНИЕ ===\nИгрок — НЕ человек по умолчанию. "
                      "Его раса — из блока ПЕРСОНАЖ. НЕ называй его чужой расой.")
         return "\n\n".join(parts)
+
+
+    def narrate_stream(self, state, command, *, roll=None, history=None,
+                       extra_context="", max_tokens=700):
+        """Генератор для стриминга ответа."""
+        msg = self._build_message(state=state, command=command, roll=roll,
+                                  history=history or [], extra_context=extra_context)
+        client = make_client(provider_key=self.model.provider,
+                             api_key=self.api_key, base_url=self.base_url)
+        try:
+            response = client.chat.completions.create(
+                model=self.model.id,
+                messages=[
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": msg},
+                ],
+                temperature=0.85, max_tokens=max_tokens,
+                stream=True
+            )
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            print("[master] stream fail: " + type(e).__name__)
+            yield "[fallback-мастер] Попробуй переформулировать ход."
 
     def _do_request(self, *, system_prompt, user_message, model,
                     temperature, max_tokens):

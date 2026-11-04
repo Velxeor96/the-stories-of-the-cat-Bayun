@@ -1056,13 +1056,25 @@ def render() -> None:
             with st.status("⚙️ Дух-машины обрабатывают запрос...",
                            expanded=True) as _status:
                 st.write("Анализ действия игрока...")
+                meta = {}
                 try:
                     orch = _get_orch()
                     game_service = GameService(orch)
                     _max_tokens = max_tokens_for(login)
-                    clean_text, roll_dict, applied, char, cmd = game_service.process_player_action(
-                        login, char_name, prompt, history, _max_tokens
+                    
+                    # Стриминг текста
+                    response_placeholder = st.empty()
+                    full_text = ""
+                    stream = game_service.process_player_action_stream(
+                        login, char_name, prompt, history, _max_tokens, meta
                     )
+                    import re
+                    for chunk in stream:
+                        full_text += chunk
+                        # Прячем [STATE] от пользователя во время печати
+                        display_text = re.sub(r'\[STATE\].*?(?:\[/STATE\]|$)', '', full_text, flags=re.DOTALL)
+                        response_placeholder.markdown(display_text)
+                    
                     _status.update(label="✔ Ответ получен",
                                    state="complete", expanded=False)
                 except Exception as _e:
@@ -1071,9 +1083,23 @@ def render() -> None:
                         state="error", expanded=True,
                     )
                     st.error("Мастер не смог обработать действие: " + str(_e))
-                    if st.button("🔄 Повторить ход", key="retry_turn"):
-                        st.rerun()
                     return
+            
+            # После стрима забираем данные из meta
+            clean_text = meta.get('clean_text', response_text)
+            roll_dict = meta.get('roll').to_dict() if meta.get('roll') else None
+            char = meta.get('updated_char', char)
+            cmd = meta.get('command')
+            
+            # Добавляем кнопку генерации картинки (PATCH_122)
+            if st.button("🎨 Иллюстрация к сцене", key="gen_img_" + str(hash(clean_text))):
+                from services.image_service import generate_image
+                import random
+                st.session_state["_img_seed"] = random.randint(1, 100000)
+                # Берем последние 300 символов как промпт
+                img_prompt = clean_text[-300:]
+                img_url = generate_image(img_prompt)
+                st.image(img_url, caption="Сцена", use_container_width=True)
 
         _evt_text = ""
         try:

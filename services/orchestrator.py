@@ -195,6 +195,59 @@ class Orchestrator:
             rag_sources=rag_sources, rag_chunks=rag_n,
         )
 
+
+    def process_turn_stream(self, player_input: str, state: Any,
+                            *, history: Optional[list] = None,
+                            max_tokens: int = 700, meta_out: dict = None):
+        """Генератор хода для стриминга."""
+        if meta_out is None:
+            meta_out = {}
+            
+        mod = self.moderator.check(player_input)
+        meta_out['moderation'] = mod
+        if mod.verdict != "ALLOW":
+            redirect = (mod.redirect or "").strip() or "Ты возвращаешься к сцене."
+            yield ensure_action_variants(redirect)
+            return
+
+        command = self.analyst.parse(player_input)
+        meta_out['command'] = command
+        
+        roll = None
+        if command.roll_needed:
+            skill = command.skill or "Per"
+            base = self._lookup_skill(state, skill)
+            roll = roll_check(base, difficulty=command.difficulty, reason=skill)
+        meta_out['roll'] = roll
+
+        rag_ctx = ""
+        rag_sources: list = []
+        rag_n = 0
+        faction = state.get("faction_id") if isinstance(state, dict) else None
+        
+        if self.kb is not None:
+            enriched = self._enrich_query(player_input, command, state=state)
+            try:
+                chunks = self.kb.search(enriched, top_k=4, faction=faction) or []
+                rag_n = len(chunks)
+                if chunks:
+                    rag_ctx = self.kb.format_context(enriched, top_k=4, faction=faction)
+                    rag_sources = self._extract_sources(chunks)
+            except Exception as e:
+                print("[orchestrator] RAG ошибка: " + str(e))
+        
+        meta_out['rag_chunks'] = rag_n
+        meta_out['rag_sources'] = rag_sources
+
+        choice_hint = _choice_hint_for(player_input, history or [])
+        full_ctx = (rag_ctx or "") + choice_hint
+
+        for chunk in self.master.narrate_stream(
+            state, command, roll=roll, history=history or [],
+            extra_context=full_ctx, max_tokens=max_tokens
+        ):
+            yield chunk
+
     @staticmethod
     def _enrich_query(player_input: str, command: ParsedCommand,
                       state: Any = None) -> str:

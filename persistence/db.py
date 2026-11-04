@@ -41,3 +41,10 @@ def init_db():
                 login TEXT PRIMARY KEY, data TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS world_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character TEXT, login TEXT, event_text TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
