@@ -15,9 +15,14 @@ class GameService:
                               max_tokens: int):
         char = load_character(login, char_name)
 
-        result = self.orch.process_turn(
-            player_input, char, history=history, max_tokens=max_tokens
-        )
+        try:
+            result = self.orch.process_turn(
+                player_input, char, history=history, max_tokens=max_tokens
+            )
+        except Exception as e:
+            logger.error(f"Orchestrator failed: {e}")
+            # Возвращаем безопасный фоллбек, чтобы UI не падал
+            return "[Ошибка Мастера] Произошла системная ошибка. Попробуйте еще раз.", None, [], char, None
 
         clean_text, applied_changes, updated_char = parse_and_apply(
             result.narrative, char

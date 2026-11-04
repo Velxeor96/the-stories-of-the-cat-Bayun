@@ -3,32 +3,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 def update_release():
-    print("=== Подготовка релиза 2.2.0 ===")
+    print("=== Подготовка релиза 2.2.1 (Hotfix) ===")
     
     # Обновляем VERSION
-    version_path = ROOT / "VERSION"
-    version_path.write_text("2.2.0\n", encoding="utf-8")
-    print("[+] VERSION обновлен до 2.2.0")
+    (ROOT / "VERSION").write_text("2.2.1\n", encoding="utf-8")
+    print("[+] VERSION обновлен до 2.2.1")
     
     # Обновляем CHANGELOG.md
     changelog_path = ROOT / "CHANGELOG.md"
-    old_content = ""
-    if changelog_path.exists():
-        old_content = changelog_path.read_text(encoding="utf-8")
+    old_content = changelog_path.read_text(encoding="utf-8") if changelog_path.exists() else ""
         
-    new_entry = """# 2.2.0 — Xenos DLC & Mobile Architecture (04.11.2026)
+    new_entry = """# 2.2.1 — System Stability Hotfix (04.11.2026)
 
-## 🚀 Новые фракции (DLC)
-- Активированы **Эльдары**, **Тау**, **Некроны** и **Тираниды**.
-- Созданы файлы-фасады (`factions/*.json`) и песочные сюжетные профили (`story/*.json`).
-- Обновлены пути в `services/necrons.py` и `services/tyranids.py` (убран `_inactive`).
-- В `wizard.py` и `character_creation.py` добавлены 4 новые расы для выбора.
-
-## 🏗 Архитектура, UI и Мобильная версия
-- **PWA:** Добавлен `static/manifest.json` и мобильный CSS в `ui/theme.py` (кнопки на всю ширину, адаптивные отступы).
-- **VK-бот:** Создан каркас `bot_vk.py` с интеграцией `Orchestrator` и SQLite.
-- **Песочница:** Переписаны промпты в `master.py`. Сюжетные профили теперь передаются как «фоновые слухи», ИИ больше не ведет игрока по рельсам.
-- **UI Capabilities:** В `manifest.json` добавлена секция `"capabilities"`. В `app.py` внедрена фильтрация экранов (если нет `combat`, экран боя скрывается).
+## 🛠 Исправления после фидбека тестеров
+- **Кэширование (PATCH_119-120):** Внедрен `@st.cache_resource` для `init_project()` и `init_db()`. Устранены задержки 3-7 секунд при переключении экранов.
+- **Защита от вылетов (PATCH_119):** В `ui/screens/game.py` и `services/game_service.py` добавлены `try/except`. Если Мастер (GigaChat) падает или RAG выдает ошибку, игрок видит понятное сообщение и кнопку «Попробовать снова», а не красный экран.
+- **Локализация (PATCH_119):** В `ui/screens/wizard.py` добавлена функция `_safe_subname`. Теперь Инквизиция и другие субфракции переводятся на русский язык автоматически, даже если их нет в словаре.
 
 ## 📋 Тесты
 - `pytest tests/` -> **50 passed**.
@@ -37,7 +27,7 @@ def update_release():
 
 """
     changelog_path.write_text(new_entry + old_content, encoding="utf-8")
-    print("[+] CHANGELOG.md обновлен (добавлена запись 2.2.0)")
+    print("[+] CHANGELOG.md обновлен (добавлена запись 2.2.1)")
 
 if __name__ == "__main__":
     update_release()

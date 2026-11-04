@@ -15,6 +15,16 @@ FACTION_LORE = {
     "imperium": "Ветераны и бюрократы, сражающиеся за Императора.",
 }
 
+
+def _safe_subname(x):
+    if x in SUBFACTION_NAMES:
+        return SUBFACTION_NAMES[x]
+    try:
+        from services.module_loader import get_faction_data
+        return get_faction_data(x).get("name", x.title())
+    except Exception:
+        return x.title()
+
 def _goto(screen: str) -> None:
     st.session_state.screen = screen
 
@@ -109,7 +119,7 @@ def render() -> None:
     if subfaction_options:
         subfaction_id = st.selectbox(
             "Субфракция", options=subfaction_options,
-            format_func=lambda x: SUBFACTION_NAMES.get(x, x),
+            format_func=_safe_subname,
             key="wz_subfaction_" + faction_id,
         )
 

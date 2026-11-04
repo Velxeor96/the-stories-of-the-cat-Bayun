@@ -8,6 +8,18 @@ init_project()
 
 import streamlit as st
 
+# PATCH_120: Кэширование тяжелой инициализации (выполняется 1 раз при старте)
+@st.cache_resource
+def _bootstrap_init():
+    from scripts.bootstrap import init_project
+    from persistence.db import init_db
+    init_project()
+    init_db()
+
+_bootstrap_init()
+# /PATCH_120
+
+
 st.set_page_config(
     page_title="Warhammer 40K RPG",
     page_icon="XB",

@@ -992,6 +992,13 @@ def render() -> None:
                     "естественно вплелась в обстановку и NPC её знали."
                 )
             result = orch.process_turn(_intro, char, history=[])
+        except Exception as _e:
+            placeholder.empty()
+            st.error("⚠ Мастер не смог начать игру: " + type(_e).__name__ + ": " + str(_e))
+            if st.button("🔄 Попробовать снова", key="retry_init"):
+                st.session_state.pop(init_key, None)
+                st.rerun()
+            return
         finally:
             placeholder.empty()
         roll_dict = result.roll.to_dict() if result.roll else None
@@ -1063,7 +1070,10 @@ def render() -> None:
                         label="⚠ Ошибка: " + type(_e).__name__,
                         state="error", expanded=True,
                     )
-                    raise
+                    st.error("Мастер не смог обработать действие: " + str(_e))
+                    if st.button("🔄 Повторить ход", key="retry_turn"):
+                        st.rerun()
+                    return
 
         _evt_text = ""
         try:
