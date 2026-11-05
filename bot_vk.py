@@ -28,7 +28,7 @@ vk = vk_session.get_api()
 longpoll = VkLongPoll(vk_session)
 
 config = Config.load()
-orchestrator = Orchestrator(config, use_rag=False)
+orchestrator = Orchestrator(config, use_rag=True)
 game_service = GameService(orchestrator)
 
 USER_STATES = {}

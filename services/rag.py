@@ -130,6 +130,8 @@ class KnowledgeBase:
             self._fallback_chunks = _load_fallback_chunks()
 
     def _try_init_vector_mode(self) -> None:
+        # PATCH_133: принудительно fallback (экономим память)
+        return
         try:
             if chromadb is None:
                 return
