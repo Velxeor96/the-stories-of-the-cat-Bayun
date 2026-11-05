@@ -4,6 +4,11 @@ import json
 from pathlib import Path
 
 def _ensure_hf_cache() -> None:
+    try:
+        import sentence_transformers
+    except ImportError:
+        print('[bootstrap] sentence-transformers не установлен -> HF-кэш не нужен')
+        return
     root = Path(__file__).resolve().parents[1]
     hub_root = Path.home() / ".cache" / "huggingface" / "hub"
     model_dir = hub_root / "models--intfloat--multilingual-e5-small"

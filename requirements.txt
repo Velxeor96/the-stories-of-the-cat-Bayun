@@ -1,7 +1,5 @@
---extra-index-url https://download.pytorch.org/whl/cpu
 streamlit
 gigachat==0.2.1
-chromadb
 curl_cffi
 beautifulsoup4
 streamlit-local-storage
@@ -11,8 +9,6 @@ pytest-watch
 plotly
 upstash-redis>=1.0.0
 requests>=2.31.0
-torch
-sentence-transformers
 
 vk_api
 python-dotenv

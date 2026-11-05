@@ -4,53 +4,68 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-def apply_patch_131():
-    print("=== PATCH_131: Memory Optimization for Streamlit Cloud ===")
+def apply_patch_132():
+    print("=== PATCH_132: SSL Fix & Requirements Slimming ===")
 
-    # 1. Отключаем предзагрузку RAG в app.py
+    # 1. Глобальный фикс SSL для GigaChat
     app_path = ROOT / "app.py"
     if app_path.exists():
         content = app_path.read_text(encoding="utf-8")
-        
-        old_rag_load = '''    # 3. RAG (самое тяжелое)
-    logger.info("Загрузка RAG (ChromaDB + модель)...")
-    try:
-        get_kb()  # Прогревает кэш
-        logger.info("RAG загружен в память.")
-    except Exception as e:
-        logger.error(f"RAG failed: {e}")'''
-        
-        new_rag_load = '''    # 3. RAG (ОТКЛЮЧЕНО для экономии памяти на Streamlit Cloud)
-    logger.info("Пропуск загрузки RAG (экономия ОЗУ). Используется текстовый fallback.")'''
-        
-        if old_rag_load in content:
-            content = content.replace(old_rag_load, new_rag_load)
+        if "SSL_CERT_FILE" not in content:
+            ssl_fix = '''
+import os
+from pathlib import Path
+_SSL_CERT = str(Path(__file__).resolve().parent / "static" / "certs" / "gigachat_ca_bundle.pem")
+os.environ["SSL_CERT_FILE"] = _SSL_CERT
+os.environ["REQUESTS_CA_BUNDLE"] = _SSL_CERT
+'''
+            content = ssl_fix + content
             app_path.write_text(content, encoding="utf-8")
-            print("[+] app.py: предзагрузка RAG отключена (спасение от OOM)")
+            print("[+] app.py: добавлен путь к сертификату (фикс GigaChat)")
 
-    # 2. Убеждаемся, что Orchestrator запускается без RAG в game.py
-    game_path = ROOT / "ui" / "screens" / "game.py"
-    if game_path.exists():
-        content = game_path.read_text(encoding="utf-8")
-        
-        old_orch = 'st.session_state.orchestrator = Orchestrator(cfg, use_rag=True)'
-        new_orch = 'st.session_state.orchestrator = Orchestrator(cfg, use_rag=False)  # PATCH_131: RAG отключен для стабильности'
-        
-        if old_orch in content:
-            content = content.replace(old_orch, new_orch)
-            game_path.write_text(content, encoding="utf-8")
-            print("[+] game.py: Orchestrator переведен на use_rag=False")
+    # 2. Убираем тяжелые библиотеки из requirements.txt
+    req_path = ROOT / "requirements.txt"
+    if req_path.exists():
+        content = req_path.read_text(encoding="utf-8")
+        lines = content.split("\n")
+        new_lines = []
+        for line in lines:
+            if any(x in line for x in ["torch", "sentence-transformers", "chromadb"]):
+                continue
+            new_lines.append(line)
+        req_path.write_text("\n".join(new_lines), encoding="utf-8")
+        print("[+] requirements.txt: удалены torch, sentence-transformers, chromadb")
 
-    # 3. Проверяем, что в bot_vk.py тоже отключено (чтобы бот не падал)
-    bot_path = ROOT / "bot_vk.py"
-    if bot_path.exists():
-        content = bot_path.read_text(encoding="utf-8")
-        if "Orchestrator(config)" in content:
-            content = content.replace("Orchestrator(config)", "Orchestrator(config, use_rag=False)")
-            bot_path.write_text(content, encoding="utf-8")
-            print("[+] bot_vk.py: RAG отключен для бота")
+    # 3. Безопасный импорт chromadb (чтобы код не падал, если библиотеки нет)
+    rag_path = ROOT / "services" / "rag.py"
+    if rag_path.exists():
+        content = rag_path.read_text(encoding="utf-8")
+        if "chromadb = None" not in content:
+            content = content.replace(
+                "import chromadb",
+                "try:\n    import chromadb\nexcept ImportError:\n    chromadb = None"
+            )
+            if "if chromadb is None:" not in content:
+                content = content.replace(
+                    "    def _try_init_vector_mode(self) -> None:\n        try:\n            if not os.path.isdir(CHROMA_DIR):\n                return",
+                    "    def _try_init_vector_mode(self) -> None:\n        try:\n            if chromadb is None:\n                return\n            if not os.path.isdir(CHROMA_DIR):\n                return"
+                )
+            rag_path.write_text(content, encoding="utf-8")
+            print("[+] rag.py: безопасный импорт chromadb")
+
+    # 4. Пропускаем распаковку HF-кэша, если нет sentence-transformers
+    boot_path = ROOT / "scripts" / "bootstrap.py"
+    if boot_path.exists():
+        content = boot_path.read_text(encoding="utf-8")
+        if "import sentence_transformers" not in content:
+            content = content.replace(
+                "def _ensure_hf_cache() -> None:\n    root = Path(__file__).resolve().parents[1]",
+                "def _ensure_hf_cache() -> None:\n    try:\n        import sentence_transformers\n    except ImportError:\n        print('[bootstrap] sentence-transformers не установлен -> HF-кэш не нужен')\n        return\n    root = Path(__file__).resolve().parents[1]"
+            )
+            boot_path.write_text(content, encoding="utf-8")
+            print("[+] bootstrap.py: пропуск HF-кэша, если нет sentence-transformers")
 
     print("\n=== Готово ===")
 
 if __name__ == "__main__":
-    apply_patch_131()
+    apply_patch_132()

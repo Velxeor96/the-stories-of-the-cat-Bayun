@@ -131,9 +131,14 @@ class KnowledgeBase:
 
     def _try_init_vector_mode(self) -> None:
         try:
+            if chromadb is None:
+                return
             if not os.path.isdir(CHROMA_DIR):
                 return
-            import chromadb
+            try:
+    import chromadb
+except ImportError:
+    chromadb = None
             client = chromadb.PersistentClient(path=CHROMA_DIR)
             collection = client.get_collection(name=COLLECTION_NAME)
             if collection.count() == 0:

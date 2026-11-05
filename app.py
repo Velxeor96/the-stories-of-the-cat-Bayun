@@ -1,3 +1,9 @@
+
+import os
+from pathlib import Path
+_SSL_CERT = str(Path(__file__).resolve().parent / "static" / "certs" / "gigachat_ca_bundle.pem")
+os.environ["SSL_CERT_FILE"] = _SSL_CERT
+os.environ["REQUESTS_CA_BUNDLE"] = _SSL_CERT
 # app.py — точка входа и маршрутизация (HARD ROUTER + LANDING GUARD).
 import os as _os
 _os.environ.setdefault("HF_HUB_OFFLINE", "1")
