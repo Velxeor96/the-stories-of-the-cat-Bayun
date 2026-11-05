@@ -26,7 +26,7 @@ def chat_path(login: str, character: str) -> Path:
 
 
 def load_history(login: str, character: str) -> list:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         rows = conn.execute(
             "SELECT role, text FROM chats "
@@ -37,7 +37,7 @@ def load_history(login: str, character: str) -> list:
 
 
 def save_history(login: str, character: str, history: list) -> None:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         conn.execute(
             "DELETE FROM chats WHERE login = ? AND character = ?",

@@ -9,12 +9,29 @@ init_project()
 import streamlit as st
 
 # PATCH_120: Кэширование тяжелой инициализации (выполняется 1 раз при старте)
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def _bootstrap_init():
     from scripts.bootstrap import init_project
     from persistence.db import init_db
+    from services.rag import get_kb
+    from core.logger import get_logger
+    
+    logger = get_logger(__name__)
+    logger.info("Инициализация проекта (1 раз)...")
+    
+    # 1. Распаковка архивов
     init_project()
+    
+    # 2. База данных
     init_db()
+    
+    # 3. RAG (самое тяжелое)
+    logger.info("Загрузка RAG (ChromaDB + модель)...")
+    try:
+        get_kb()  # Прогревает кэш
+        logger.info("RAG загружен в память.")
+    except Exception as e:
+        logger.error(f"RAG failed: {e}")
 
 _bootstrap_init()
 # /PATCH_120

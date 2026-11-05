@@ -17,7 +17,7 @@ LETHALITY_MODS = {"Лёгкая": 0.5, "Норма": 1.0, "Хардкор": 1.5}
 
 
 def get_settings(login: str) -> dict:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         row = conn.execute(
             "SELECT data FROM settings WHERE login = ?",
@@ -43,7 +43,7 @@ def save_settings(login: str, data: dict) -> bool:
         merged.update(data or {})
         payload = json.dumps(merged, ensure_ascii=False)
 
-        init_db()
+        # init_db()  # PATCH_130: moved to app startup
         with closing(get_conn()) as conn, conn:
             conn.execute(
                 "INSERT OR REPLACE INTO settings(login, data) VALUES (?, ?)",

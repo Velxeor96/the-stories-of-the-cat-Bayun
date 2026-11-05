@@ -5,6 +5,9 @@ DB_PATH = Path(__file__).resolve().parents[1] / "data" / "game.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
+import streamlit as st
+
+@st.cache_resource
 def get_conn():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row

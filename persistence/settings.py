@@ -8,7 +8,7 @@ from persistence.db import get_conn, init_db
 
 
 def get_settings(login: str) -> dict:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         row = conn.execute(
             "SELECT data FROM user_settings WHERE login = ?", (login,)
@@ -29,7 +29,7 @@ def get_setting(login: str, key: str, default=None):
 def set_setting(login: str, key: str, value) -> None:
     data = get_settings(login)
     data[key] = value
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         conn.execute(
             "INSERT OR REPLACE INTO user_settings (login, data) VALUES (?, ?)",

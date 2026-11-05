@@ -10,7 +10,7 @@ def add_memory(login: str, character: str, event_text: str) -> None:
     if not event_text or len(event_text) < 5:
         return
     try:
-        init_db()
+        # init_db()  # PATCH_130: moved to app startup
         with closing(get_conn()) as conn, conn:
             conn.execute(
                 "INSERT INTO world_memory (login, character, event_text) VALUES (?, ?, ?)",
@@ -22,7 +22,7 @@ def add_memory(login: str, character: str, event_text: str) -> None:
 
 def get_memory(login: str, character: str, limit: int = 10) -> list[str]:
     try:
-        init_db()
+        # init_db()  # PATCH_130: moved to app startup
         with closing(get_conn()) as conn, conn:
             rows = conn.execute(
                 "SELECT event_text FROM world_memory WHERE login=? AND character=? ORDER BY id DESC LIMIT ?",

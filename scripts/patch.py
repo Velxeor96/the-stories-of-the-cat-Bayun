@@ -4,80 +4,85 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-def apply_patch_129():
-    print("=== PATCH_129: Stability, Performance & Avatars ===")
+def apply_patch_130():
+    print("=== PATCH_130: Global Caching & Startup Loading ===")
 
-    # ===== 1. ФИКС NameError В game.py =====
-    game_path = ROOT / "ui" / "screens" / "game.py"
-    if game_path.exists():
-        content = game_path.read_text(encoding="utf-8")
-        # Ищем проблемную строку и заменяем на безопасный fallback
-        old_str = "clean_text = meta.get('clean_text', response_text)"
-        new_str = "clean_text = meta.get('clean_text', '')"
-        if old_str in content:
-            content = content.replace(old_str, new_str)
-            print("[+] game.py: исправлен NameError (response_text -> '')")
+    # ===== 1. УБИРАЕМ init_db() ИЗ ВСЕХ ВЫЗОВОВ =====
+    # База должна инициализироваться ОДИН раз в app.py, а не при каждом клике
+    db_users = [
+        ROOT / "persistence" / "characters.py",
+        ROOT / "persistence" / "chats.py",
+        ROOT / "persistence" / "accounts.py",
+        ROOT / "persistence" / "settings.py",
+        ROOT / "services" / "settings_game.py",
+        ROOT / "services" / "world_memory.py"
+    ]
+    
+    for f in db_users:
+        if f.exists():
+            content = f.read_text(encoding="utf-8")
+            # Заменяем "init_db()" на комментарий (безопасно)
+            if "init_db()" in content:
+                content = content.replace("init_db()", "# init_db()  # PATCH_130: moved to app startup")
+                f.write_text(content, encoding="utf-8")
+                print(f"[+] {f.name}: убрана инициализация БД при каждом вызове")
+
+    # ===== 2. ГЛОБАЛЬНАЯ ЗАГРУЗКА В app.py =====
+    app_path = ROOT / "app.py"
+    if app_path.exists():
+        content = app_path.read_text(encoding="utf-8")
+        
+        old_init = '''@st.cache_resource
+def _bootstrap_init():
+    from scripts.bootstrap import init_project
+    from persistence.db import init_db
+    init_project()
+    init_db()'''
+        
+        new_init = '''@st.cache_resource(show_spinner=False)
+def _bootstrap_init():
+    from scripts.bootstrap import init_project
+    from persistence.db import init_db
+    from services.rag import get_kb
+    from core.logger import get_logger
+    
+    logger = get_logger(__name__)
+    logger.info("Инициализация проекта (1 раз)...")
+    
+    # 1. Распаковка архивов
+    init_project()
+    
+    # 2. База данных
+    init_db()
+    
+    # 3. RAG (самое тяжелое)
+    logger.info("Загрузка RAG (ChromaDB + модель)...")
+    try:
+        get_kb()  # Прогревает кэш
+        logger.info("RAG загружен в память.")
+    except Exception as e:
+        logger.error(f"RAG failed: {e}")'''
+        
+        if old_init in content and "show_spinner=False" not in content:
+            content = content.replace(old_init, new_init)
+            app_path.write_text(content, encoding="utf-8")
+            print("[+] app.py: добавлена предзагрузка RAG (теперь клики будут быстрыми)")
         else:
-            print("[!] game.py: строка с response_text не найдена (возможно, уже исправлена)")
-        game_path.write_text(content, encoding="utf-8")
+            print("[!] app.py: блок инициализации не найден или уже обновлен")
 
-    # ===== 2. КЭШИРОВАНИЕ RAG ДЛЯ СКОРОСТИ =====
-    rag_path = ROOT / "services" / "rag.py"
-    if rag_path.exists():
-        content = rag_path.read_text(encoding="utf-8")
-        # Добавляем st.cache_resource, если его нет
+    # ===== 3. КЭШИРОВАНИЕ ПОДКЛЮЧЕНИЯ К БД =====
+    db_path = ROOT / "persistence" / "db.py"
+    if db_path.exists():
+        content = db_path.read_text(encoding="utf-8")
+        # Делаем get_conn кэшированным (безопасно для SQLite)
         if "@st.cache_resource" not in content:
-            # Ищем функцию get_kb и добавляем декоратор
-            old_kb = "def get_kb() -> KnowledgeBase:"
-            new_kb = "import streamlit as st\n\n@st.cache_resource\ndef get_kb() -> KnowledgeBase:"
-            if old_kb in content:
-                content = content.replace(old_kb, new_kb)
-                print("[+] rag.py: добавлено кэширование RAG (ускорит клики)")
-            else:
-                print("[-] rag.py: не найдена функция get_kb")
-        else:
-            print("[!] rag.py: кэширование уже есть")
-        rag_path.write_text(content, encoding="utf-8")
-
-    # ===== 3. УЛУЧШЕНИЕ АВАТАРОК =====
-    img_path = ROOT / "services" / "image_service.py"
-    if img_path.exists():
-        content = img_path.read_text(encoding="utf-8")
-        old_prompt = 'prompt = "Portrait of a " + race + " " + gender + " named " + name + ", " + appearance + ", Warhammer 40k, grimdark"'
-        
-        new_prompt = r'''    # Специфичные промпты для рас
-    race_lower = race.lower()
-    race_desc = "human"
-    if "eldar" in race_lower:
-        race_desc = "slender alien Eldar with pointed ears and elegant bone armor"
-    elif "necron" in race_lower:
-        race_desc = "skeletal robot Necron with glowing green eyes and metallic body"
-    elif "tau" in race_lower:
-        race_desc = "blue-skinned alien Tau with hooves and smooth armor"
-    elif "tyranid" in race_lower:
-        race_desc = "monstrous insectoid alien Tyranid with chitin armor and claws"
-
-    prompt = "Portrait of a " + race_desc + ", " + gender + ", named " + name + ", " + appearance + ", Warhammer 40k style, grimdark, highly detailed character art"'''
-        
-        if old_prompt in content:
-            content = content.replace(old_prompt, new_prompt)
-            print("[+] image_service.py: обновлены промпты для рас (Эльдары, Некроны и т.д.)")
-        else:
-            print("[-] image_service.py: старый промпт не найден")
-        img_path.write_text(content, encoding="utf-8")
-
-    # 4. УВЕЛИЧЕНИЕ РАЗМЕРА АВАТАРКИ В САЙДБАРЕ
-    if game_path.exists():
-        content = game_path.read_text(encoding="utf-8")
-        old_img = 'st.image(_av, width=100)'
-        new_img = 'st.image(_av, use_container_width=True)'
-        if old_img in content:
-            content = content.replace(old_img, new_img)
-            game_path.write_text(content, encoding="utf-8")
-            print("[+] game.py: аватарка растянута на всю ширину сайдбара")
+            old_conn = "def get_conn():"
+            new_conn = "import streamlit as st\n\n@st.cache_resource\ndef get_conn():"
+            content = content.replace(old_conn, new_conn)
+            db_path.write_text(content, encoding="utf-8")
+            print("[+] db.py: подключение к базе закэшировано")
 
     print("\n=== Готово ===")
-    print("ПРОВЕРЬ СИНТАКСИС: python -c \"compile(open('ui/screens/game.py', encoding='utf-8').read(), 'game.py', 'exec')\"")
 
 if __name__ == "__main__":
-    apply_patch_129()
+    apply_patch_130()

@@ -32,7 +32,7 @@ def validate_name(name: str) -> tuple:
 
 
 def list_characters(login: str) -> list:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         rows = conn.execute(
             "SELECT name FROM characters WHERE login = ? ORDER BY name",
@@ -46,7 +46,7 @@ def character_path(login: str, name: str) -> Path:
 
 
 def load_character(login: str, name: str) -> dict:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         row = conn.execute(
             "SELECT data FROM characters WHERE login = ? AND name = ?",
@@ -66,7 +66,7 @@ def save_character(login: str, name: str, data: dict) -> None:
         raise CharacterError(err)
 
     payload = json.dumps(data, ensure_ascii=False)
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         conn.execute(
             "INSERT OR REPLACE INTO characters(login, name, data) VALUES (?, ?, ?)",
@@ -75,7 +75,7 @@ def save_character(login: str, name: str, data: dict) -> None:
 
 
 def delete_character(login: str, name: str) -> None:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         conn.execute(
             "DELETE FROM characters WHERE login = ? AND name = ?",

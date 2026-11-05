@@ -47,7 +47,7 @@ def validate_password(password: str) -> tuple:
 
 
 def account_exists(login: str) -> bool:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         row = conn.execute(
             "SELECT 1 FROM accounts WHERE login = ?", (login,)
@@ -56,7 +56,7 @@ def account_exists(login: str) -> bool:
 
 
 def get_account(login: str):
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         row = conn.execute(
             "SELECT data FROM accounts WHERE login = ?", (login,)
@@ -88,7 +88,7 @@ def register_user(login: str, password: str) -> None:
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         conn.execute(
             "INSERT OR REPLACE INTO accounts (login, data) VALUES (?, ?)",
@@ -121,7 +121,7 @@ def user_dir_for(login: str) -> Path:
 
 
 def list_accounts() -> list:
-    init_db()
+    # init_db()  # PATCH_130: moved to app startup
     with closing(get_conn()) as conn, conn:
         rows = conn.execute(
             "SELECT login FROM accounts ORDER BY login"
