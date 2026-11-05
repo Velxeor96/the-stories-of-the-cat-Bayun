@@ -313,6 +313,9 @@ class KnowledgeBase:
 _INSTANCE: KnowledgeBase | None = None
 
 
+import streamlit as st
+
+@st.cache_resource
 def get_kb() -> KnowledgeBase:
     global _INSTANCE
     if _INSTANCE is None:

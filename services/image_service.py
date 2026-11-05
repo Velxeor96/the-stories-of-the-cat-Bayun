@@ -27,6 +27,18 @@ def generate_avatar_url(char_data) -> str:
     race = char_data.get("faction", "imperium")
     gender = char_data.get("gender", "male")
     appearance = char_data.get("appearance", "")
-    prompt = "Portrait of a " + race + " " + gender + " named " + name + ", " + appearance + ", Warhammer 40k, grimdark"
+        # Специфичные промпты для рас
+    race_lower = race.lower()
+    race_desc = "human"
+    if "eldar" in race_lower:
+        race_desc = "slender alien Eldar with pointed ears and elegant bone armor"
+    elif "necron" in race_lower:
+        race_desc = "skeletal robot Necron with glowing green eyes and metallic body"
+    elif "tau" in race_lower:
+        race_desc = "blue-skinned alien Tau with hooves and smooth armor"
+    elif "tyranid" in race_lower:
+        race_desc = "monstrous insectoid alien Tyranid with chitin armor and claws"
+
+    prompt = "Portrait of a " + race_desc + ", " + gender + ", named " + name + ", " + appearance + ", Warhammer 40k style, grimdark, highly detailed character art"
     seed = int(hashlib.md5(name.encode()).hexdigest()[:8], 16) % 100000
     return generate_image(prompt, seed=seed)

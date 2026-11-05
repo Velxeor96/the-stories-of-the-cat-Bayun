@@ -552,7 +552,7 @@ def _render_sidebar(char: dict, login: str, char_name: str) -> None:
         # PATCH_123: Аватарка в сайдбаре
         _av = char.get("avatar_url")
         if _av:
-            st.image(_av, width=100)
+            st.image(_av, use_container_width=True)
         
         st.markdown("### " + str(char.get("name", "—")))
         st.caption(str(char.get("faction", "")) + " · "
@@ -1091,7 +1091,7 @@ def render() -> None:
                     return
             
             # После стрима забираем данные из meta
-            clean_text = meta.get('clean_text', response_text)
+            clean_text = meta.get('clean_text', '')
             roll_dict = meta.get('roll').to_dict() if meta.get('roll') else None
             char = meta.get('updated_char', char)
             cmd = meta.get('command')
