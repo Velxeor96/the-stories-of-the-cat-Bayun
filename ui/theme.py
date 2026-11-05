@@ -600,3 +600,17 @@ _MOBILE_CSS = """
 import streamlit as _st
 _st.markdown(_MOBILE_CSS, unsafe_allow_html=True)
 # /PATCH_106
+
+import streamlit as _st
+_st.markdown('<style>
+/* PATCH_127: Полноэкранный режим для Splash */
+.block-container {
+    padding-top: 0rem !important;
+    padding-bottom: 0rem !important;
+    margin-top: 0rem !important;
+    max-width: 100% !important;
+}
+header[data-testid="stHeader"] {
+    display: none !important;
+}
+</style>', unsafe_allow_html=True)

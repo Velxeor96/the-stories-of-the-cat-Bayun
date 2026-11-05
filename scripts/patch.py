@@ -1,161 +1,98 @@
 import sys
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-def apply_patch_123():
-    print("=== PATCH_123: Multimedia 2.0 — Avatars ===")
+def apply_patch_127():
+    print("=== PATCH_127: UI Fix & VK Bot Regex Fix ===")
 
-    # 1. Обновляем services/image_service.py
-    img_path = ROOT / "services" / "image_service.py"
-    if img_path.exists():
-        content = img_path.read_text(encoding="utf-8")
-        
-        # Добавляем функцию generate_avatar_url и обновляем generate_image
-        new_code = r'''"""services/image_service.py — Генерация иллюстраций."""
-import urllib.parse
-import hashlib
-import streamlit as st
+    # ===== 1. ФИКС UI (убираем отступ сверху и скрываем хедер) =====
+    theme_path = ROOT / "ui" / "theme.py"
+    if theme_path.exists():
+        content = theme_path.read_text(encoding="utf-8")
+        css_fix = """
+/* PATCH_127: Полноэкранный режим для Splash */
+.block-container {
+    padding-top: 0rem !important;
+    padding-bottom: 0rem !important;
+    margin-top: 0rem !important;
+    max-width: 100% !important;
+}
+header[data-testid="stHeader"] {
+    display: none !important;
+}
+"""
+        if "PATCH_127" not in content:
+            # Добавляем в конец файла, чтобы переопределить старые стили
+            content += f"\nimport streamlit as _st\n_st.markdown('<style>{css_fix}</style>', unsafe_allow_html=True)\n"
+            theme_path.write_text(content, encoding="utf-8")
+            print("[+] theme.py: убраны отступы сверху (фикс Splash)")
+        else:
+            print("[!] theme.py: фикс уже применен")
 
-def generate_image(prompt: str, seed: int = None) -> str:
-    """Генерирует изображение и возвращает URL. 
-    По умолчанию использует Pollinations.ai (бесплатно, без ключей).
-    
-    PATCH_123: Для перехода на Kandinsky замените реализацию этой функции 
-    на вызов API Сбера (например, через requests.post).
-    """
-    clean_prompt = "Warhammer 40k, grimdark, " + prompt.replace('[', '').replace(']', '')
-    encoded = urllib.parse.quote(clean_prompt[:400])
-    
-    if seed is None:
-        seed = st.session_state.get("_img_seed", 42)
-    
-    return f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=576&nologo=true&seed={seed}"
+    # ===== 2. ФИКС BOT_VK.PY (через регулярки) =====
+    bot_path = ROOT / "bot_vk.py"
+    if not bot_path.exists():
+        print("[-] bot_vk.py не найден!")
+        return
+        
+    content = bot_path.read_text(encoding="utf-8")
+    changes = 0
 
-def generate_avatar_url(char_data: dict) -> str:
-    """Генерирует URL аватарки для персонажа."""
-    name = char_data.get("name", "hero")
-    race = char_data.get("faction", "imperium")
-    gender = char_data.get("gender", "male")
-    appearance = char_data.get("appearance", "")
-    
-    prompt = f"Portrait of a {race} {gender} named {name}, {appearance}, Warhammer 40k style, grimdark, highly detailed, character portrait"
-    
-    # Уникальный seed на основе имени, чтобы картинка была стабильной
-    seed = int(hashlib.md5(name.encode()).hexdigest()[:8], 16) % 100000
-    return generate_image(prompt, seed=seed)
-'''
-        img_path.write_text(new_code, encoding="utf-8")
-        print("[+] image_service.py обновлен (добавлен generate_avatar_url)")
+    # 2.1 Тираниды в FACTIONS (ищем словарь)
+    if '"Тираниды"' not in content:
+        content = re.sub(
+            r'("Некроны":\s*"necrons",?)',
+            r'\1\n    "Тираниды":  "tyranids",',
+            content
+        )
+        changes += 1
+        print("[+] Тираниды добавлены в FACTIONS")
 
-    # 2. Обновляем ui/screens/wizard.py
-    wiz_path = ROOT / "ui" / "screens" / "wizard.py"
-    if wiz_path.exists():
-        content = wiz_path.read_text(encoding="utf-8")
-        
-        # 2.1. Генерация аватарки при сохранении
-        old_save = r'''            data = validate_and_build(
-                name=name.strip(), gender=gender, age=str(age),
-                appearance=appearance, user_background=user_background,
-                faction_id=faction_id, subfaction_id=subfaction_id,
-                home_world_id=home_world_id, career_id=career_id,
-                stats_dict=raw,
-            )
-            save_character(login, name.strip(), data)'''
-        
-        new_save = r'''            data = validate_and_build(
-                name=name.strip(), gender=gender, age=str(age),
-                appearance=appearance, user_background=user_background,
-                faction_id=faction_id, subfaction_id=subfaction_id,
-                home_world_id=home_world_id, career_id=career_id,
-                stats_dict=raw,
-            )
-            
-            # PATCH_123: Генерация аватарки
-            from services.image_service import generate_avatar_url
-            with st.spinner("🎨 Создаем портрет..."):
-                data["avatar_url"] = generate_avatar_url(data)
-                
-            save_character(login, name.strip(), data)'''
-        
-        if "generate_avatar_url" not in content:
-            if old_save in content:
-                content = content.replace(old_save, new_save)
-                print("[+] wizard.py: добавлена генерация аватарки при сохранении")
-            else:
-                print("[-] wizard.py: не найден блок сохранения персонажа")
-        
-        # 2.2. Отображение аватарок в списке персонажей
-        old_list = r'''        with st.expander("Персонажи (" + str(len(existing)) + ")"):
-            for nm in existing:
-                c1, c2 = st.columns([4, 1])
-                with c1:
-                    st.markdown("**" + nm + "**")
-                with c2:
-                    if st.button("Играть", key="play_" + nm, width="stretch"):
-                        st.session_state.active_character = nm
-                        _goto("game")
-                        st.rerun()'''
-        
-        new_list = r'''        with st.expander("Персонажи (" + str(len(existing)) + ")"):
-            for nm in existing:
-                c1, c2 = st.columns([4, 1])
-                with c1:
-                    # PATCH_123: Показываем аватарку
-                    try:
-                        from persistence.characters import load_character
-                        _cd = load_character(login, nm)
-                        _av = _cd.get("avatar_url")
-                        if _av:
-                            c_img, c_txt = st.columns([1, 4])
-                            with c_img:
-                                st.image(_av, width=60)
-                            with c_txt:
-                                st.markdown("**" + nm + "**")
-                        else:
-                            st.markdown("**" + nm + "**")
-                    except Exception:
-                        st.markdown("**" + nm + "**")
-                with c2:
-                    if st.button("Играть", key="play_" + nm, width="stretch"):
-                        st.session_state.active_character = nm
-                        _goto("game")
-                        st.rerun()'''
-        
-        if "PATCH_123: Показываем аватарку" not in content:
-            if old_list in content:
-                content = content.replace(old_list, new_list)
-                print("[+] wizard.py: добавлено отображение аватарок в списке")
-            else:
-                print("[-] wizard.py: не найден блок списка персонажей")
-        
-        wiz_path.write_text(content, encoding="utf-8")
+    # 2.2 Статы 30 -> 22 (ищем любой словарь со статами)
+    # Ищем: stats = {"WS": 30, ...}
+    if '"WS": 30' in content:
+        content = re.sub(
+            r'stats\s*=\s*\{[^\}]+\}',
+            'stats = {"WS": 22, "BS": 22, "S": 22, "T": 22, "Ag": 22, "Int": 22, "Per": 22, "WP": 22, "Fel": 22}',
+            content
+        )
+        changes += 1
+        print("[+] Статы заменены на 22 (лимит 200)")
 
-    # 3. Обновляем ui/screens/game.py (сайдбар)
-    game_path = ROOT / "ui" / "screens" / "game.py"
-    if game_path.exists():
-        content = game_path.read_text(encoding="utf-8")
-        
-        old_sidebar = r'''    with st.sidebar:
-        st.markdown("### " + str(char.get("name", "—")))'''
-        
-        new_sidebar = r'''    with st.sidebar:
-        # PATCH_123: Аватарка в сайдбаре
-        _av = char.get("avatar_url")
-        if _av:
-            st.image(_av, width=100)
-        
-        st.markdown("### " + str(char.get("name", "—")))'''
-        
-        if "PATCH_123: Аватарка" not in content:
-            if old_sidebar in content:
-                content = content.replace(old_sidebar, new_sidebar)
-                game_path.write_text(content, encoding="utf-8")
-                print("[+] game.py: добавлена аватарка в сайдбар")
-            else:
-                print("[-] game.py: не найден блок сайдбара")
+    # 2.3 Проверка isinstance (защита от строки)
+    if "isinstance(char_data, dict)" not in content:
+        # Ищем вызов generate_avatar_url и вставляем проверку перед ним
+        pattern = r'(send_msg\(user_id,\s*"🎨 Создаем портрет персонажа\.\.\."\))'
+        replacement = (
+            'if not isinstance(char_data, dict):\n'
+            '                    send_msg(user_id, f"⚠️ Ошибка создания: {char_data}")\n'
+            '                    USER_STATES[user_id] = {"step": "idle"}\n'
+            '                    continue\n'
+            '                \\1'
+        )
+        content = re.sub(pattern, replacement, content, count=1)
+        changes += 1
+        print("[+] Добавлена проверка isinstance(char_data, dict)")
+
+    # 2.4 Обработка кнопки Настройки
+    if 'if text == "⚙️ Настройки":' not in content:
+        pattern = r'(if text == "🎒 Инвентарь":)'
+        replacement = (
+            'if text == "⚙️ Настройки":\n'
+            '            send_msg(user_id, "⚙️ Настройки в разработке. Скоро!")\n'
+            '            continue\n\n'
+            '        \\1'
+        )
+        content = re.sub(pattern, replacement, content, count=1)
+        changes += 1
+        print("[+] Обработка кнопки Настройки")
+
+    bot_path.write_text(content, encoding="utf-8")
+    print(f"[+] bot_vk.py сохранён (изменений: {changes})")
+    print("=== Готово ===")
 
 if __name__ == "__main__":
-    apply_patch_123()
-    print("=== Готово ===")
+    apply_patch_127()
