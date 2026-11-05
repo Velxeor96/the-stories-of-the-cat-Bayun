@@ -4,58 +4,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-def apply_patch_130():
-    print("=== PATCH_130: Global Caching & Startup Loading ===")
+def apply_patch_131():
+    print("=== PATCH_131: Memory Optimization for Streamlit Cloud ===")
 
-    # ===== 1. УБИРАЕМ init_db() ИЗ ВСЕХ ВЫЗОВОВ =====
-    # База должна инициализироваться ОДИН раз в app.py, а не при каждом клике
-    db_users = [
-        ROOT / "persistence" / "characters.py",
-        ROOT / "persistence" / "chats.py",
-        ROOT / "persistence" / "accounts.py",
-        ROOT / "persistence" / "settings.py",
-        ROOT / "services" / "settings_game.py",
-        ROOT / "services" / "world_memory.py"
-    ]
-    
-    for f in db_users:
-        if f.exists():
-            content = f.read_text(encoding="utf-8")
-            # Заменяем "init_db()" на комментарий (безопасно)
-            if "init_db()" in content:
-                content = content.replace("init_db()", "# init_db()  # PATCH_130: moved to app startup")
-                f.write_text(content, encoding="utf-8")
-                print(f"[+] {f.name}: убрана инициализация БД при каждом вызове")
-
-    # ===== 2. ГЛОБАЛЬНАЯ ЗАГРУЗКА В app.py =====
+    # 1. Отключаем предзагрузку RAG в app.py
     app_path = ROOT / "app.py"
     if app_path.exists():
         content = app_path.read_text(encoding="utf-8")
         
-        old_init = '''@st.cache_resource
-def _bootstrap_init():
-    from scripts.bootstrap import init_project
-    from persistence.db import init_db
-    init_project()
-    init_db()'''
-        
-        new_init = '''@st.cache_resource(show_spinner=False)
-def _bootstrap_init():
-    from scripts.bootstrap import init_project
-    from persistence.db import init_db
-    from services.rag import get_kb
-    from core.logger import get_logger
-    
-    logger = get_logger(__name__)
-    logger.info("Инициализация проекта (1 раз)...")
-    
-    # 1. Распаковка архивов
-    init_project()
-    
-    # 2. База данных
-    init_db()
-    
-    # 3. RAG (самое тяжелое)
+        old_rag_load = '''    # 3. RAG (самое тяжелое)
     logger.info("Загрузка RAG (ChromaDB + модель)...")
     try:
         get_kb()  # Прогревает кэш
@@ -63,26 +20,37 @@ def _bootstrap_init():
     except Exception as e:
         logger.error(f"RAG failed: {e}")'''
         
-        if old_init in content and "show_spinner=False" not in content:
-            content = content.replace(old_init, new_init)
+        new_rag_load = '''    # 3. RAG (ОТКЛЮЧЕНО для экономии памяти на Streamlit Cloud)
+    logger.info("Пропуск загрузки RAG (экономия ОЗУ). Используется текстовый fallback.")'''
+        
+        if old_rag_load in content:
+            content = content.replace(old_rag_load, new_rag_load)
             app_path.write_text(content, encoding="utf-8")
-            print("[+] app.py: добавлена предзагрузка RAG (теперь клики будут быстрыми)")
-        else:
-            print("[!] app.py: блок инициализации не найден или уже обновлен")
+            print("[+] app.py: предзагрузка RAG отключена (спасение от OOM)")
 
-    # ===== 3. КЭШИРОВАНИЕ ПОДКЛЮЧЕНИЯ К БД =====
-    db_path = ROOT / "persistence" / "db.py"
-    if db_path.exists():
-        content = db_path.read_text(encoding="utf-8")
-        # Делаем get_conn кэшированным (безопасно для SQLite)
-        if "@st.cache_resource" not in content:
-            old_conn = "def get_conn():"
-            new_conn = "import streamlit as st\n\n@st.cache_resource\ndef get_conn():"
-            content = content.replace(old_conn, new_conn)
-            db_path.write_text(content, encoding="utf-8")
-            print("[+] db.py: подключение к базе закэшировано")
+    # 2. Убеждаемся, что Orchestrator запускается без RAG в game.py
+    game_path = ROOT / "ui" / "screens" / "game.py"
+    if game_path.exists():
+        content = game_path.read_text(encoding="utf-8")
+        
+        old_orch = 'st.session_state.orchestrator = Orchestrator(cfg, use_rag=True)'
+        new_orch = 'st.session_state.orchestrator = Orchestrator(cfg, use_rag=False)  # PATCH_131: RAG отключен для стабильности'
+        
+        if old_orch in content:
+            content = content.replace(old_orch, new_orch)
+            game_path.write_text(content, encoding="utf-8")
+            print("[+] game.py: Orchestrator переведен на use_rag=False")
+
+    # 3. Проверяем, что в bot_vk.py тоже отключено (чтобы бот не падал)
+    bot_path = ROOT / "bot_vk.py"
+    if bot_path.exists():
+        content = bot_path.read_text(encoding="utf-8")
+        if "Orchestrator(config)" in content:
+            content = content.replace("Orchestrator(config)", "Orchestrator(config, use_rag=False)")
+            bot_path.write_text(content, encoding="utf-8")
+            print("[+] bot_vk.py: RAG отключен для бота")
 
     print("\n=== Готово ===")
 
 if __name__ == "__main__":
-    apply_patch_130()
+    apply_patch_131()

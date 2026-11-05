@@ -25,13 +25,8 @@ def _bootstrap_init():
     # 2. База данных
     init_db()
     
-    # 3. RAG (самое тяжелое)
-    logger.info("Загрузка RAG (ChromaDB + модель)...")
-    try:
-        get_kb()  # Прогревает кэш
-        logger.info("RAG загружен в память.")
-    except Exception as e:
-        logger.error(f"RAG failed: {e}")
+    # 3. RAG (ОТКЛЮЧЕНО для экономии памяти на Streamlit Cloud)
+    logger.info("Пропуск загрузки RAG (экономия ОЗУ). Используется текстовый fallback.")
 
 _bootstrap_init()
 # /PATCH_120

@@ -803,7 +803,7 @@ def _get_orch() -> Orchestrator:
     if "orchestrator" not in st.session_state:
         from core.config import Config
         cfg = Config.load()
-        st.session_state.orchestrator = Orchestrator(cfg, use_rag=True)
+        st.session_state.orchestrator = Orchestrator(cfg, use_rag=False)  # PATCH_131: RAG отключен для стабильности
     return st.session_state.orchestrator
 
 
